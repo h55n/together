@@ -1,0 +1,42 @@
+{
+  "name": "together",
+  "version": "2.0.0-dev",
+  "private": true,
+  "description": "Together V1 — Amaya Bay, a persistent multiplayer cozy life simulator",
+  "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @together/shared build && concurrently -n client,server -c auto \"pnpm --filter @together/client dev\" \"pnpm --filter @together/server dev\"",
+    "dev:client": "pnpm --filter @together/client dev",
+    "dev:server": "pnpm --filter @together/server dev",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "eslint .",
+    "test": "pnpm -r --if-present test",
+    "validate": "pnpm --filter @together/content validate",
+    "build": "pnpm -r --if-present build",
+    "test:e2e": "pnpm --filter @together/client test:e2e",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm validate && pnpm build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "clean": "pnpm -r --if-present clean",
+    "verify:pure": "node tools/verify-pure.mjs",
+    "validate:repo": "node tools/validate-repository.mjs",
+    "verify:sandbox": "node tools/verify-sandbox.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.10.0",
+    "@types/node": "^24.5.2",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.5",
+    "typescript": "^7.0.2",
+    "vitest": "^4.0.0"
+  },
+  "type": "module"
+}

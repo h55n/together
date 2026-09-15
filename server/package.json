@@ -1,0 +1,36 @@
+{
+  "name": "@together/server",
+  "version": "2.0.0-dev",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "@together/shared": "workspace:*",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "drizzle-orm": "^0.44.5",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "pg": "^8.16.3",
+    "socket.io": "^4.8.1",
+    "zod": "^4.1.8",
+    "@together/content": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.23",
+    "@types/pg": "^8.15.5",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.5",
+    "typescript": "^7.0.2",
+    "vitest": "^4.0.0"
+  }
+}

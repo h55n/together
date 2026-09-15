@@ -1,0 +1,34 @@
+{
+  "id": "new_neighbour_01",
+  "title": "New Neighbour",
+  "icon": "👋",
+  "path_filter": ["couple", "friends", "open"],
+  "trigger": {
+    "type": "scheduled",
+    "condition": "household_days_active >= 7",
+    "min_day": 7,
+    "once_only": true
+  },
+  "intro_text": "There's a moving van outside. Someone is wrestling a sofa through a door that is clearly too narrow. You know this feeling.",
+  "tasks": [
+    { "id": "task_bake_cake", "type": "minigame",    "label": "Bake a welcome cake",         "optional": false, "resolves_event": false },
+    { "id": "task_deliver",   "type": "interaction", "label": "Knock on their door",          "optional": false, "resolves_event": true  }
+  ],
+  "resolution_condition": "all_of: [task_bake_cake, task_deliver]",
+  "outcomes": {
+    "delivered_cake": {
+      "vibe_delta": 10,
+      "relationship_delta": 5,
+      "neighbour_relationship_delta": 20,
+      "memory": true,
+      "memory_caption_default": "We met the neighbours.",
+      "text": "They open the door. When they see the cake, something in them visibly relaxes."
+    },
+    "no_cake": {
+      "vibe_delta": 5,
+      "neighbour_relationship_delta": 5,
+      "memory": false,
+      "text": "You knock with nothing but goodwill. They seem pleasant. A little reserved."
+    }
+  }
+}

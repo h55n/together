@@ -1,0 +1,38 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "../.verify-dist",
+    "rootDir": "..",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "../shared/src/**/*.ts",
+    "verification/**/*.ts",
+    "../content/src/**/*.ts",
+    "../server/src/db/GameRepository.ts",
+    "../server/src/db/LocalGameRepository.ts",
+    "../server/src/game/HouseholdService.ts",
+    "../server/src/game/PropertySelectionService.ts",
+    "../server/src/game/EconomyService.ts",
+    "../server/src/game/JobSessionService.ts",
+    "../server/src/game/StoryService.ts",
+    "../server/src/game/MemoryService.ts",
+    "../server/src/game/InventoryService.ts",
+    "../server/src/game/CookingService.ts",
+    "../server/src/game/NPCStateService.ts",
+    "../server/src/game/MovingService.ts",
+    "../server/src/game/RenovationService.ts",
+    "../server/src/game/NoteService.ts",
+    "../server/src/game/ProfileService.ts",
+    "../server/src/game/TransitService.ts",
+    "../server/src/storage/MemoryImageStore.ts"
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "project": "Together",
+  "city": "Amaya Bay",
+  "prd": "docs/PRD.md",
+  "branch": "build/amaya-bay-v1",
+  "head": "9f355fd6607902c2dbe035102a014c5abc1e9466",
+  "head_note": "This is the implementation commit. Final handoff documentation is committed after it; use git rev-parse HEAD for the documentation-only final HEAD.",
+  "last_completed_phase": "Phase 13 — Home Growth + Moving (complete with known limitations)",
+  "active_phase": "Phase 16 — Performance + Accessibility + Release Quality",
+  "verification": {
+    "sandbox_safe": "PASS",
+    "automated_tests": { "passed": 161, "failed": 0 },
+    "client_typecheck": "PASS",
+    "shared_typecheck": "PASS",
+    "content_typecheck": "PASS",
+    "content_validation": "PASS",
+    "repository_integrity": "PASS",
+    "clean_pnpm_install": "BLOCKED: registry DNS unavailable and pnpm absent",
+    "server_clean_typecheck": "BLOCKED: copied dependency tree missing declared types/current Drizzle",
+    "lint": "BLOCKED: copied dependency tree missing declared TypeScript ESLint plugin",
+    "production_build": "BLOCKED: copied dependency tree missing Linux Rollup optional package",
+    "playwright": "BLOCKED: clean dependency/browser environment unavailable",
+    "target_hardware_performance": "NOT RUN"
+  },
+  "completed_systems": [
+    "data-driven story engine and 36-story V1 library",
+    "active-play life-stage progression",
+    "server-authoritative moving and renovation rules",
+    "server-authoritative economy/idempotency rules",
+    "server-authoritative home mutation and furniture ownership rules",
+    "persistent co-op cooking rule engine",
+    "private Memory metadata and image storage abstractions",
+    "household voting/invite/permission rules",
+    "quality profile gameplay-invariance rules"
+  ],
+  "partial_systems": [
+    "WebGPU-first runtime pending clean browser build verification",
+    "Amaya Bay procedural/development art pending production asset replacement",
+    "procedural avatar/micro-motion pending production rig, clips and IK",
+    "five home shells pending final interior art",
+    "jobs and leisure pending production props/animation/audio polish",
+    "named NPC simulation pending production navmesh/pathing/facial animation",
+    "automatic Memory capture pending framing playtest",
+    "WebRTC voice pending production TURN/device soak",
+    "quality/performance pending target-hardware measurement",
+    "accessibility/controller pending full UI/device matrix"
+  ],
+  "missing_systems": [
+    "production humanoid art/animation/IK package",
+    "production Amaya Bay environment/vegetation/furniture/food/transport art package",
+    "production district/interaction audio library",
+    "baked per-chunk NPC navmesh/path batching/door-link system",
+    "production observability/rate-limit hardening",
+    "complete PRD developer-debug editor suite",
+    "clean generated pnpm-lock.yaml from connected Node 24 install"
+  ],
+  "known_issues": [
+    "sandbox Node is v22.16.0 while project requires Node 24",
+    "sandbox cannot resolve registry.npmjs.org so Corepack cannot fetch pnpm",
+    "uploaded node_modules is platform-stale and must not be reused",
+    "production Vite/server/Playwright verification remains outstanding",
+    "development procedural art does not satisfy final shipping art bar"
+  ],
+  "external_setup": [
+    "Node 24 LTS + pnpm 12.4.1 clean install",
+    "Supabase project, database migrations 001-009, Auth and private Storage bucket",
+    "production TURN service for WebRTC",
+    "final licensed/original GLB/KTX2/audio asset pipeline"
+  ],
+  "next_tasks": [
+    "run first connected Node 24 pnpm install, generate and commit pnpm-lock.yaml",
+    "run full pnpm typecheck/lint/test/validate/build and Playwright",
+    "run two-browser Couple and multi-client Friends acceptance/soak tests",
+    "replace procedural avatar with final rig/animations/IK",
+    "replace hero-route procedural art with final Amaya Bay assets and tune LOD/compression",
+    "implement production NPC navmesh/path batching",
+    "production-test Supabase private Memories and TURN voice",
+    "profile Medium/Low on PRD target hardware and tune performance",
+    "execute PRD Quiet Walk, Shared Kitchen, Money, Rain, Moving, Memory and No-HUD acceptance tests"
+  ]
+}

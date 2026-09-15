@@ -1,0 +1,49 @@
+{
+  "id": "pipe_burst_01",
+  "title": "The Great Pipe Disaster",
+  "icon": "💧",
+  "path_filter": ["couple", "friends", "open"],
+  "trigger": {
+    "type": "random",
+    "weight": 0.06,
+    "season": "winter",
+    "weather": ["heavy_rain", "any"],
+    "min_day": 5,
+    "once_only": false
+  },
+  "intro_text": "A terrible gurgling sound from the bathroom. Then the dripping starts. Then the torrent.",
+  "tasks": [
+    { "id": "task_mop",          "type": "interaction", "label": "Mop up the water",       "optional": true,  "resolves_event": false },
+    { "id": "task_fix_diy",      "type": "minigame",    "label": "Fix the pipe yourself",  "optional": false, "resolves_event": true },
+    { "id": "task_call_plumber", "type": "choice",      "label": "Call a plumber (80 ⌘)", "optional": false, "resolves_event": true, "cost": 80 }
+  ],
+  "resolution_condition": "any_of: [task_fix_diy, task_call_plumber]",
+  "outcomes": {
+    "repaired_self": {
+      "trigger": "task_fix_diy",
+      "vibe_delta": 18,
+      "wallet_delta": 0,
+      "relationship_delta": 10,
+      "memory": true,
+      "memory_caption_default": "The night we became plumbers.",
+      "text": "The pipe is fixed. It took forty-five minutes and an argument about which way to turn the wrench. But it's fixed."
+    },
+    "called_plumber": {
+      "trigger": "task_call_plumber",
+      "vibe_delta": 10,
+      "wallet_delta": -80,
+      "relationship_delta": 3,
+      "memory": true,
+      "memory_caption_default": "The plumber charged exactly what we didn't have.",
+      "text": "The plumber arrives, fixes it in eight minutes, and charges 80 ⌘ with a serene smile."
+    },
+    "ignored_48h": {
+      "trigger": "auto",
+      "vibe_delta": -25,
+      "wallet_delta": -120,
+      "relationship_delta": -8,
+      "memory": false,
+      "text": "The landlord calls. The bathroom is now structurally interesting."
+    }
+  }
+}

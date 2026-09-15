@@ -1,0 +1,10 @@
+{
+  "project": "Together V1 — Amaya Bay",
+  "branch": "build/amaya-bay-v1",
+  "final_git_head": "90d4b82a00683629d8219748a734da3ad7f7c41c",
+  "implementation_head": "9f355fd6607902c2dbe035102a014c5abc1e9466",
+  "verification": "node tools/verify-sandbox.mjs PASS: 161/161 tests + client/shared/content TypeScript + repository integrity",
+  "production_build": "BLOCKED in source sandbox by missing pnpm/registry DNS/platform-native Rollup dependency; see docs/VERIFICATION.md",
+  "archive_policy": "tracked files only; excludes .git, node_modules, caches, build outputs, secret .env files",
+  "created_date": "2026-09-15"
+}

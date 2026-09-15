@@ -1,0 +1,36 @@
+{
+  "id": "power_cut_01",
+  "title": "The Power Cut",
+  "icon": "🕯️",
+  "path_filter": ["couple", "friends", "open"],
+  "trigger": {
+    "type": "random",
+    "weight": 0.08,
+    "weather": ["heavy_rain"],
+    "min_day": 2,
+    "once_only": false
+  },
+  "intro_text": "The lights go out. The refrigerator stops humming. The apartment is very, very dark. And oddly nice.",
+  "tasks": [
+    { "id": "task_find_candles", "type": "interaction", "label": "Find the candles",            "optional": false, "resolves_event": false },
+    { "id": "task_light_candles","type": "interaction", "label": "Light the candles",            "optional": false, "resolves_event": false, "vibe_delta_on_complete": 5 },
+    { "id": "task_board_game",   "type": "minigame",    "label": "Play a board game together",  "optional": true,  "resolves_event": false, "relationship_delta_on_complete": 10 },
+    { "id": "task_power_returns","type": "auto_resolve", "label": "Wait for power",             "optional": false, "resolves_event": true,  "delay_game_hours": 3 }
+  ],
+  "resolution_condition": "task_power_returns",
+  "outcomes": {
+    "with_board_game": {
+      "vibe_delta": 12,
+      "relationship_delta": 15,
+      "memory": true,
+      "memory_caption_default": "The night the lights went out.",
+      "text": "When the lights come back on, there's a moment where both of you almost wish they hadn't."
+    },
+    "basic": {
+      "vibe_delta": 5,
+      "relationship_delta": 5,
+      "memory": false,
+      "text": "The lights come back on. The refrigerator hums. The world resumes its normal pace."
+    }
+  }
+}
