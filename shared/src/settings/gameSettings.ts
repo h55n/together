@@ -25,7 +25,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   reducedMotion: false,
   highContrastPrompt: false,
   subtitles: true,
-  quality: 'low',
+  quality: 'medium',
   bindings: DEFAULT_CONTROL_BINDINGS,
 };
 
@@ -45,7 +45,8 @@ export const QUALITY_PROFILES: Record<QualityTier, {
 
 export function resolveStartupGameSettings(input: Partial<GameSettings>, needsSafeStartupMigration: boolean): GameSettings {
   const settings = normalizeGameSettings(input);
-  return needsSafeStartupMigration ? { ...settings, quality: 'low' } : settings;
+  void needsSafeStartupMigration;
+  return settings;
 }
 
 export function normalizeGameSettings(input: Partial<GameSettings>): GameSettings {

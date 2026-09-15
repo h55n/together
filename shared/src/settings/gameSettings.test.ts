@@ -32,11 +32,11 @@ test('keyboard bindings are remappable but invalid/duplicate critical bindings f
   assert.equal(invalid.bindings.interact, DEFAULT_CONTROL_BINDINGS.interact);
 });
 
-test('new players start with the lightweight graphics profile', () => {
-  assert.equal(normalizeGameSettings({}).quality, 'low');
+test('new players start with the intended Medium graphics profile', () => {
+  assert.equal(normalizeGameSettings({}).quality, 'medium');
 });
 
-test('legacy saved medium settings receive the safe startup profile once', () => {
-  assert.equal(resolveStartupGameSettings({ quality: 'medium' }, true).quality, 'low');
+test('saved Medium settings remain Medium after the staged-streaming migration', () => {
+  assert.equal(resolveStartupGameSettings({ quality: 'medium' }, true).quality, 'medium');
   assert.equal(resolveStartupGameSettings({ quality: 'medium' }, false).quality, 'medium');
 });
