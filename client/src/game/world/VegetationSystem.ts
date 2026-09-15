@@ -11,11 +11,26 @@ type TreeOptions = { species: VegetationSpecies; seed: number; scale?: number };
  * Final Blender-authored LOD assets can replace each returned tree group without changing placement data.
  */
 export class VegetationSystem {
+  private readonly treeVariants = new Map<string, THREE.Group>();
+
   constructor(private readonly materials: MaterialLibrary) {}
 
   createTree(options: TreeOptions): THREE.Group {
+    const variantSeed = Math.abs(options.seed % 8);
+    const key = `${options.species}:${variantSeed}`;
+    let template = this.treeVariants.get(key);
+    if (!template) {
+      template = this.compileTree({ species: options.species, seed: variantSeed });
+      this.treeVariants.set(key, template);
+    }
+    const instance = template.clone(true);
+    instance.scale.setScalar(options.scale ?? 1);
+    return instance;
+  }
+
+  private compileTree(options: TreeOptions): THREE.Group {
     const random = createSeededRandom(options.seed);
-    const scale = options.scale ?? 1;
+    const scale = 1;
     const group = new THREE.Group();
     group.name = `vegetation:${options.species}`;
 
