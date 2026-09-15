@@ -14,4 +14,12 @@ describe('VegetationSystem', () => {
     expect(firstGeometry.geometry).toBe(secondGeometry.geometry);
     expect(firstGeometry.geometry.userData.togetherShared).toBe(true);
   });
+
+  it('reports one compiled registry asset for a reused variant', () => {
+    const vegetation = new VegetationSystem(materials);
+    vegetation.createTree({ species: 'rain_tree', seed: 1 });
+    vegetation.createTree({ species: 'rain_tree', seed: 9 });
+
+    expect(vegetation.metrics()).toMatchObject({ compiledAssets: 1 });
+  });
 });

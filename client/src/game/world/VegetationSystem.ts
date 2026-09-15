@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createSeededRandom } from '@together/shared';
 import type { MaterialLibrary } from './MaterialLibrary';
+import { AssetRegistry, type AssetRegistryMetrics } from '../assets/runtime/AssetRegistry';
 
 export type VegetationSpecies = 'rain_tree' | 'gulmohar' | 'ficus' | 'palm' | 'ornamental';
 
@@ -11,23 +12,23 @@ type TreeOptions = { species: VegetationSpecies; seed: number; scale?: number };
  * Final Blender-authored LOD assets can replace each returned tree group without changing placement data.
  */
 export class VegetationSystem {
-  private readonly treeVariants = new Map<string, THREE.Group>();
+  private readonly assets: AssetRegistry;
 
-  constructor(private readonly materials: MaterialLibrary) {}
+  constructor(private readonly materials: MaterialLibrary) {
+    this.assets = new AssetRegistry((assetId) => {
+      const [, species, seed] = assetId.split(':');
+      return { assetId, root: this.compileTree({ species: species as VegetationSpecies, seed: Number(seed) }) };
+    });
+  }
 
   createTree(options: TreeOptions): THREE.Group {
     const variantSeed = Math.abs(options.seed % 8);
-    const key = `${options.species}:${variantSeed}`;
-    let template = this.treeVariants.get(key);
-    if (!template) {
-      template = this.compileTree({ species: options.species, seed: variantSeed });
-      template.traverse((object) => { if (object instanceof THREE.Mesh) object.geometry.userData.togetherShared = true; });
-      this.treeVariants.set(key, template);
-    }
-    const instance = template.clone(true);
+    const asset = this.assets.acquire(`tree:${options.species}:${variantSeed}`);
+    const instance = asset.root.clone(true) as THREE.Group;
     instance.scale.setScalar(options.scale ?? 1);
     return instance;
   }
+  metrics(): AssetRegistryMetrics { return this.assets.metrics(); }
 
   private compileTree(options: TreeOptions): THREE.Group {
     const random = createSeededRandom(options.seed);
