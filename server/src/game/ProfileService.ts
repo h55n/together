@@ -5,7 +5,7 @@ import type { GameRepository, UserProfileRecord } from '../db/GameRepository.js'
 const profileInputSchema = z.object({
   displayName: z.string().trim().min(1).max(32),
   avatarConfig: avatarConfigSchema,
-  settings: z.record(z.unknown()).default({}),
+  settings: z.record(z.string(), z.unknown()).default({}),
 }).strict();
 
 export class ProfileService {

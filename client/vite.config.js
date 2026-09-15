@@ -25,10 +25,10 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          three: ['three'],
-          react: ['react', 'react-dom'],
-          vendor: ['zustand', 'socket.io-client'],
+        manualChunks(id) {
+          if (id.includes('/three/')) return 'three';
+          if (id.includes('/react-dom/') || id.includes('/react/')) return 'react';
+          if (id.includes('/zustand/') || id.includes('/socket.io-client/')) return 'vendor';
         },
       },
     },
@@ -36,7 +36,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/test/setup.js'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
