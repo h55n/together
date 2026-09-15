@@ -3,3 +3,5 @@ packages:
   - server
   - shared
   - content
+allowBuilds:
+  esbuild: true
