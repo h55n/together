@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, QUALITY_PROFILES, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueGameplayRole, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type Placement2D, type VenueGameplayRole, type RecipeAction } from '@together/shared';
+import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueGameplayRole, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type Placement2D, type VenueGameplayRole, type RecipeAction } from '@together/shared';
 import { Renderer } from './core/Renderer';
 import { GameLoop } from './core/GameLoop';
 import { InputManager } from './core/InputManager';
@@ -17,6 +17,7 @@ import { WeatherSystem } from './weather/WeatherSystem';
 import { AmbientNPCSystem } from './npc/AmbientNPCSystem';
 import { NamedNPCSystem } from './npc/NamedNPCSystem';
 import { PerformanceMonitor } from './debug/PerformanceMonitor';
+import { AdaptiveQualityController, type AdaptiveVisualBudget } from './performance/AdaptiveQualityController';
 import { DebugOverlay } from './debug/DebugOverlay';
 import { AudioZoneManager } from './audio/AudioZoneManager';
 import { RemotePlayerSystem } from './network/RemotePlayerSystem';
@@ -74,6 +75,7 @@ export class GameEngine {
   private homeCenter = { x: 0, z: 0 };
   private homeReserveRadius = 0;
   private autoRide: { start: THREE.Vector3; end: THREE.Vector3; elapsed: number; duration: number } | null = null;
+  private adaptiveQuality = new AdaptiveQualityController('medium');
 
   private constructor(
     readonly scene: THREE.Scene,
@@ -282,10 +284,8 @@ export class GameEngine {
     this.camera.headBobAmount = settings.reducedMotion ? 0 : settings.headBob;
     this.audio.setMasterVolume(settings.masterVolume);
     this.input.setBindings(settings.bindings);
-    const quality = QUALITY_PROFILES[settings.quality];
-    this.renderer.setPixelRatioCap(quality.pixelRatioCap);
-    this.renderer.setShadowsEnabled(quality.shadowsEnabled);
-    this.worldStreamer.setResidencyRadiusChunks(quality.streamRadiusChunks);
+    this.adaptiveQuality = new AdaptiveQualityController(settings.quality);
+    this.applyVisualBudget(this.adaptiveQuality.sample(this.performance.read()));
   }
 
   getPlayerPosition(): { x: number; y: number; z: number } { return this.player.getPosition(); }
@@ -481,7 +481,14 @@ export class GameEngine {
     const info = this.renderer.renderer.info.render;
     this.performance.recordRenderer(info.calls, info.triangles);
     this.performance.recordFrame(performance.now() - start);
+    this.applyVisualBudget(this.adaptiveQuality.sample(this.performance.read()));
     this.debug.update(deltaSeconds, { weather: this.weather.state, gameTime: formatGameTime(this.gameMinutes) });
+  }
+
+  private applyVisualBudget(budget: AdaptiveVisualBudget): void {
+    this.renderer.setPixelRatioCap(budget.pixelRatioCap);
+    this.renderer.setShadowsEnabled(budget.shadowsEnabled);
+    this.worldStreamer.setResidencyRadiusChunks(budget.streamRadiusChunks);
   }
 
   private updateAutoRide(deltaSeconds: number): void {
