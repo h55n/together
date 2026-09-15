@@ -40,7 +40,9 @@ export class WorldStreamer {
   }
 
   setResidencyRadiusChunks(radius: number): void {
-    this.residencyRadiusChunks = Math.max(3, Math.min(6, Math.round(radius)));
+    const nextRadius = Math.max(3, Math.min(6, Math.round(radius)));
+    if (nextRadius === this.residencyRadiusChunks) return;
+    this.residencyRadiusChunks = nextRadius;
     this.updateElapsed = Number.POSITIVE_INFINITY;
   }
 
