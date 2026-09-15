@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { detectRendererCapabilities, selectRendererBackend, type RendererBackend } from './rendererBackend';
 
 export type RendererRuntimeInfo = {
+  requestedBackend: RendererBackend;
   backend: RendererBackend;
+  fallbackReason?: string;
   webgpuDetected: boolean;
   webgl2Detected: boolean;
   universalRendererLoaded: boolean;
@@ -40,9 +42,9 @@ export class Renderer {
     this.info = info;
   }
 
-  static async create(canvas: HTMLCanvasElement): Promise<Renderer> {
+  static async create(canvas: HTMLCanvasElement, options: { forceBackend?: 'webgl2' } = {}): Promise<Renderer> {
     const capabilities = detectRendererCapabilities(canvas);
-    const preferredBackend = selectRendererBackend(capabilities);
+    const preferredBackend = selectRendererBackend(capabilities, options.forceBackend);
     if (preferredBackend === 'unsupported') {
       throw new Error('Together requires WebGPU or WebGL2 support.');
     }
@@ -50,13 +52,13 @@ export class Renderer {
     let renderer: RuntimeRenderer | undefined;
     let backend: RendererBackend = preferredBackend;
     let universalRendererLoaded = false;
+    let fallbackReason: string | undefined;
 
     // Keep the import indirect so a stale local dependency tree can still run the
     // WebGL2 compatibility profile. Fresh installs on the declared Three.js
     // version resolve `three/webgpu` and use the universal WebGPURenderer.
-    const moduleId = 'three/webgpu';
     try {
-      const universalModule = (await import(/* @vite-ignore */ moduleId)) as unknown as {
+      const universalModule = (await import('three/webgpu')) as unknown as {
         WebGPURenderer: UniversalRendererConstructor;
       };
       renderer = new universalModule.WebGPURenderer({
@@ -68,7 +70,8 @@ export class Renderer {
       if (renderer.init) await renderer.init();
       universalRendererLoaded = true;
     } catch (error) {
-      if (!capabilities.webgl2) throw error;
+      if (!capabilities.webgl2 || options.forceBackend === 'webgl2') throw error;
+      fallbackReason = error instanceof Error ? error.message : String(error);
       backend = 'webgl2';
       renderer = new THREE.WebGLRenderer({
         canvas,
@@ -85,7 +88,9 @@ export class Renderer {
     renderer.shadowMap.enabled = true;
 
     return new Renderer(renderer, {
+      requestedBackend: preferredBackend,
       backend,
+      ...(fallbackReason ? { fallbackReason } : {}),
       webgpuDetected: capabilities.webgpu,
       webgl2Detected: capabilities.webgl2,
       universalRendererLoaded,
