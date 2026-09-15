@@ -25,4 +25,14 @@ describe('HouseholdService', () => {
     for (let i = 1; i < 6; i += 1) await service.joinHousehold(`u${i}`, household.inviteCode);
     await expect(service.joinHousehold('u6', household.inviteCode)).rejects.toThrow('Friends households are limited to 6 members');
   });
+
+  it('creates a solo explorer with a server-assigned home and normal starting funds', async () => {
+    const service = new HouseholdService(new LocalGameRepository(), () => 0.3);
+    const household = await service.createSoloExplorer('user-a');
+    expect(household.type).toBe('friends');
+    expect(household.propertyId).toBe('one_bhk');
+    expect(household.sharedWallet).toBe(8000);
+    expect(household.hiddenState).toMatchObject({ soloExplorer: true });
+    expect(household.members).toHaveLength(1);
+  });
 });

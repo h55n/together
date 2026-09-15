@@ -78,4 +78,16 @@ describe('app', () => {
     expect(response.status).toBe(201);
     expect(response.body.sharedWallet).toBe(8000);
   });
+
+  it('creates a ready-to-explore solo session without client-controlled setup', async () => {
+    const repository = new LocalGameRepository();
+    const app = createApp(deps(repository, new HouseholdService(repository, () => 0.1)));
+    const response = await request(app)
+      .post('/api/solo-explorer')
+      .set('x-dev-user-id', 'user-a')
+      .send({ propertyId: 'hostel_floor', sharedWallet: 999999 });
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({ type: 'friends', propertyId: 'one_bhk', sharedWallet: 8000, hiddenState: { soloExplorer: true } });
+    expect(response.body.members).toHaveLength(1);
+  });
 });

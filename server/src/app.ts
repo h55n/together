@@ -111,6 +111,15 @@ export function createApp(dependencies: AppDependencies) {
     }
   });
 
+  app.post('/api/solo-explorer', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const household = await dependencies.householdService.createSoloExplorer(request.identity!.userId);
+      response.status(201).json(household);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/api/households/join/:code', authenticate, async (request: AuthenticatedRequest, response, next) => {
     try {
       const code = normalizeInviteCode(routeParam(request, 'code') ?? '');

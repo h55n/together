@@ -15,6 +15,7 @@ export type HouseholdSummary = {
   inviteCode: string;
   propertyId?: string;
   sharedWallet: number;
+  hiddenState?: Record<string, unknown>;
   members: HouseholdMemberSummary[];
 };
 
@@ -79,6 +80,17 @@ export default function App(): ReactElement {
     });
   }, [displayName, household, refreshHousehold]);
 
+  const startSoloExplorer = async () => {
+    setBusy(true); setMessage(null);
+    try {
+      const response = await fetch('/api/solo-explorer', { method: 'POST', headers: authHeaders, body: '{}' });
+      const data = await readJson<HouseholdSummary>(response);
+      setHousehold(data); localStorage.setItem('together:household-id', data.id); setStep('home');
+    } catch (error) { setMessage(errorMessage(error)); }
+    finally { setBusy(false); }
+  };
+  const isSoloExplorer = household?.hiddenState?.soloExplorer === true;
+
   if (step === 'game' && household) {
     return <GameCanvas networkSession={{ userId, householdId: household.id }} avatarConfig={avatarConfig} {...(household.propertyId ? { propertyId: household.propertyId } : {})} onPropertyChanged={(propertyId) => setHousehold((current) => current ? { ...current, propertyId } : current)} />;
   }
@@ -126,6 +138,7 @@ export default function App(): ReactElement {
         } catch (error) { setMessage(errorMessage(error)); }
         finally { setBusy(false); }
       }}
+      onExplore={startSoloExplorer}
       onJoin={async (code) => {
         setBusy(true); setMessage(null);
         try {
@@ -139,14 +152,14 @@ export default function App(): ReactElement {
   }
 
   return (
-    <EntryShell eyebrow={`${household?.type === 'couple' ? 'Couple' : 'Friends'} household`} title={household?.name ?? 'Your household'} copy="People first, then home. Nobody silently decides the shared life alone.">
+    <EntryShell eyebrow={isSoloExplorer ? 'Solo Explorer' : `${household?.type === 'couple' ? 'Couple' : 'Friends'} household`} title={isSoloExplorer ? 'Explore Amaya Bay' : household?.name ?? 'Your household'} copy={isSoloExplorer ? 'A one-person world session with a ready home. Walk the bay, meet the town, and try the daily systems at your own pace.' : 'People first, then home. Nobody silently decides the shared life alone.'}>
       {household && (
         <div className="home-selection">
-          <div className="invite-strip">
+          {!isSoloExplorer && <div className="invite-strip">
             <span>Invite code</span><strong>{household.inviteCode}</strong>
             <button className="quiet-action" onClick={() => void navigator.clipboard?.writeText(household.inviteCode)}>Copy</button>
-          </div>
-          <p className="member-line">{household.members.filter((member) => member.membershipState === 'active').length} member{household.members.length === 1 ? '' : 's'} present · shared ₹{household.sharedWallet.toLocaleString('en-IN')}</p>
+          </div>}
+          <p className="member-line">{isSoloExplorer ? 'One explorer · ready home' : `${household.members.filter((member) => member.membershipState === 'active').length} member${household.members.length === 1 ? '' : 's'} present`} · shared ₹{household.sharedWallet.toLocaleString('en-IN')}</p>
           {message && <p className="status-copy">{message}</p>}
           {!household.propertyId && household.members.filter((member) => member.membershipState === 'active').length >= 2 && (
             <PropertySelection properties={properties} vote={propertyVote} userId={userId} busy={busy}
@@ -172,8 +185,9 @@ export default function App(): ReactElement {
             />
           )}
           <div className="entry-actions">
-            <button className="secondary-action" disabled={busy} onClick={() => void refreshHousehold(household.id)}>Refresh household</button>
-            {household.propertyId && <button className="primary-action" onClick={() => setStep('game')}>Unlock the door · Enter Amaya Bay</button>}
+            {!isSoloExplorer && <button className="secondary-action" disabled={busy} onClick={() => void refreshHousehold(household.id)}>Refresh household</button>}
+            {isSoloExplorer && <button className="secondary-action" disabled={busy} onClick={() => void startSoloExplorer()}>Start a fresh explorer</button>}
+            {household.propertyId && <button className="primary-action" onClick={() => setStep('game')}>{isSoloExplorer ? 'Explore Amaya Bay' : 'Unlock the door · Enter Amaya Bay'}</button>}
           </div>
         </div>
       )}
@@ -185,6 +199,7 @@ function HouseholdEntry(props: {
   displayName: string; busy: boolean; message: string | null;
   onCreate: (name: string, type: HouseholdType) => Promise<void>;
   onJoin: (code: string) => Promise<void>;
+  onExplore: () => Promise<void>;
 }): ReactElement {
   const [mode, setMode] = useState<'create' | 'join'>('create');
   const [name, setName] = useState(`${props.displayName}'s home`);
@@ -205,6 +220,8 @@ function HouseholdEntry(props: {
         {props.message && <p className="status-copy error-copy">{props.message}</p>}
         <button className="primary-action" disabled={props.busy || (mode === 'create' ? !name.trim() : code.trim().length !== 6)}>{props.busy ? 'Working…' : mode === 'create' ? 'Create household' : 'Join household'}</button>
       </form>
+      <div className="entry-actions"><button className="secondary-action" disabled={props.busy} onClick={() => void props.onExplore()}>Explore Amaya Bay solo</button></div>
+      <p className="status-copy">Start with a ready home and explore the complete world without an invite. You can begin a fresh explorer session at any time.</p>
     </EntryShell>
   );
 }

@@ -47,6 +47,14 @@ export class HouseholdService {
     return household;
   }
 
+  async createSoloExplorer(creatorUserId: string): Promise<HouseholdRecord> {
+    const household = await this.createHousehold(creatorUserId, { name: 'Solo Explorer', type: 'friends' });
+    household.propertyId = 'one_bhk';
+    household.hiddenState = { ...household.hiddenState, soloExplorer: true };
+    await this.repository.saveHousehold(household);
+    return household;
+  }
+
   async joinHousehold(userId: string, inviteCode: string): Promise<HouseholdRecord> {
     const code = normalizeInviteCode(inviteCode);
     const household = await this.repository.getHouseholdByInviteCode(code);
