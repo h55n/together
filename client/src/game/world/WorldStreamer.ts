@@ -128,7 +128,7 @@ function disposeGroup(root: THREE.Object3D): void {
   if (typeof disposeChunk === 'function') disposeChunk();
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh || object instanceof THREE.Points)) return;
-    object.geometry.dispose();
+    if (!object.geometry.userData.togetherShared) object.geometry.dispose();
     const material = object.material;
     if (Array.isArray(material)) material.forEach((entry) => { if (!entry.userData.togetherShared) entry.dispose(); });
     else if (!material.userData.togetherShared) material.dispose();

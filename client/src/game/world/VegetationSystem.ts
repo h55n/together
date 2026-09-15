@@ -21,6 +21,7 @@ export class VegetationSystem {
     let template = this.treeVariants.get(key);
     if (!template) {
       template = this.compileTree({ species: options.species, seed: variantSeed });
+      template.traverse((object) => { if (object instanceof THREE.Mesh) object.geometry.userData.togetherShared = true; });
       this.treeVariants.set(key, template);
     }
     const instance = template.clone(true);

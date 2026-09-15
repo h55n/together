@@ -12,5 +12,6 @@ describe('VegetationSystem', () => {
     const firstGeometry = first.getObjectByProperty('isMesh', true) as THREE.Mesh;
     const secondGeometry = second.getObjectByProperty('isMesh', true) as THREE.Mesh;
     expect(firstGeometry.geometry).toBe(secondGeometry.geometry);
+    expect(firstGeometry.geometry.userData.togetherShared).toBe(true);
   });
 });
