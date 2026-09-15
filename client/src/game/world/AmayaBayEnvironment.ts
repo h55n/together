@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AMAYA_BAY_CITY, cityHeightAt, locationAnchor } from '@together/shared';
+import { cityHeightAt, locationAnchor } from '@together/shared';
 import type { MaterialLibrary } from './MaterialLibrary';
 import { VegetationSystem } from './VegetationSystem';
 
@@ -8,7 +8,6 @@ export class AmayaBayEnvironment {
 
   constructor(private readonly materials: MaterialLibrary) {
     this.root.name = 'amaya-bay-authored-environment';
-    this.root.add(this.createRoadNetwork());
     this.root.add(this.createMograCourt());
     this.root.add(this.createMograPark());
     this.root.add(this.createBaySteps());
@@ -17,18 +16,6 @@ export class AmayaBayEnvironment {
     this.root.add(this.createHillGarden());
   }
 
-  private createRoadNetwork(): THREE.Group {
-    const root = new THREE.Group();
-    root.name = 'amaya-road-network';
-    const routes: Array<Array<[number, number]>> = [
-      [[-225,160],[-150,135],[-80,105],[-30,75],[40,20],[75,-100],[75,-285]],
-      [[-210,-95],[-130,-35],[-30,75],[80,90],[185,110],[265,275]],
-      [[-30,75],[90,15],[215,-80]],
-      [[-225,160],[-240,60],[-210,-95],[0,-165],[75,-285]],
-    ];
-    for (const points of routes) root.add(createRibbon(points, 7.5, this.materials.get('asphalt')));
-    return root;
-  }
 
   private createMograCourt(): THREE.Group {
     const root = new THREE.Group();
@@ -125,11 +112,5 @@ export class AmayaBayEnvironment {
   }
 }
 
-function createRibbon(points:Array<[number,number]>, width:number, material:THREE.Material):THREE.Mesh{
-  const curve=new THREE.CatmullRomCurve3(points.map(([x,z])=>new THREE.Vector3(x,0,z)),false,'catmullrom',.2);
-  const samples=curve.getPoints(Math.max(16,points.length*12)); const vertices:number[]=[]; const indices:number[]=[];
-  for(let i=0;i<samples.length;i+=1){const p=samples[i]!; const prev=samples[Math.max(0,i-1)]!; const next=samples[Math.min(samples.length-1,i+1)]!; const tx=next.x-prev.x,tz=next.z-prev.z; const len=Math.hypot(tx,tz)||1; const nx=-tz/len,nz=tx/len; const y=cityHeightAt(p.x,p.z)+.06; vertices.push(p.x+nx*width/2,y,p.z+nz*width/2,p.x-nx*width/2,y,p.z-nz*width/2); if(i<samples.length-1){const b=i*2;indices.push(b,b+1,b+2,b+1,b+3,b+2);}}
-  const geometry=new THREE.BufferGeometry(); geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3)); geometry.setIndex(indices); geometry.computeVertexNormals(); const mesh=new THREE.Mesh(geometry,material); mesh.receiveShadow=true; return mesh;
-}
 
 function addBox(group:THREE.Group,size:[number,number,number],position:[number,number,number],material:THREE.Material,cast=true):THREE.Mesh{const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),material);mesh.position.set(...position);mesh.castShadow=cast;mesh.receiveShadow=true;group.add(mesh);return mesh;}
