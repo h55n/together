@@ -14,6 +14,13 @@ describe('StreamingScheduler', () => {
     expect(scheduler.metrics().pendingJobs).toBe(1);
   });
 
+  it('keeps previously queued work when new jobs arrive', () => {
+    const scheduler = new StreamingScheduler();
+    scheduler.reconcile([{ key: '0:0', x: 0, z: 0, ring: 'active', priority: 0 }]);
+    scheduler.enqueue([{ key: '1:0', x: 1, z: 0, ring: 'visual', priority: 10 }]);
+    expect(scheduler.takeFrameBudget(10, () => 1).map((job) => job.key)).toEqual(['0:0', '1:0']);
+  });
+
   it('does not start another job after a commit consumes the frame budget', () => {
     const scheduler = new StreamingScheduler();
     scheduler.reconcile([

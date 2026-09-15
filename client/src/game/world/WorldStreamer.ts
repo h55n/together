@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CHUNK_SIZE_METRES, chunkDistance, chunkKey, residencyRing, worldToChunk, type ResidencyRing } from '@together/shared';
 import type { PerformanceMonitor } from '../debug/PerformanceMonitor';
+import { StreamingScheduler, type StreamingJob } from './StreamingScheduler';
 
 export type ChunkVisualFactory = (chunkX: number, chunkZ: number, ring: Exclude<ResidencyRing, 'unloaded'>) => THREE.Group;
 
@@ -12,9 +13,13 @@ type ResidentChunk = {
   group: THREE.Group;
 };
 
+type DesiredChunk = Omit<StreamingJob, 'priority'>;
+
 export class WorldStreamer {
   readonly root = new THREE.Group();
   private readonly residents = new Map<string, ResidentChunk>();
+  private readonly queued = new Map<string, Exclude<ResidencyRing, 'unloaded'>>();
+  private readonly scheduler = new StreamingScheduler();
   private updateElapsed = Number.POSITIVE_INFINITY;
   private residencyRadiusChunks = 5;
 
@@ -24,11 +29,31 @@ export class WorldStreamer {
 
   update(deltaSeconds: number, playerPosition: THREE.Vector3): void {
     this.updateElapsed += deltaSeconds;
-    if (this.updateElapsed < 0.3) return;
-    this.updateElapsed = 0;
+    if (this.updateElapsed >= 0.3) {
+      this.updateElapsed = 0;
+      this.queueResidency(playerPosition);
+    }
+    const commitStarted = performance.now();
+    this.scheduler.takeFrameBudget(8, (job) => this.commitJob(job), 1);
+    const commitMs = performance.now() - commitStarted;
+    this.recordMetrics(commitMs);
+  }
 
+  setResidencyRadiusChunks(radius: number): void {
+    this.residencyRadiusChunks = Math.max(3, Math.min(6, Math.round(radius)));
+    this.updateElapsed = Number.POSITIVE_INFINITY;
+  }
+
+  dispose(): void {
+    for (const resident of this.residents.values()) disposeGroup(resident.group);
+    this.residents.clear();
+    this.queued.clear();
+    this.root.clear();
+  }
+
+  private queueResidency(playerPosition: THREE.Vector3): void {
     const playerChunk = worldToChunk({ x: playerPosition.x, z: playerPosition.z });
-    const required = new Map<string, { x: number; z: number; ring: Exclude<ResidencyRing, 'unloaded'> }>();
+    const required = new Map<string, DesiredChunk>();
     const radius = this.residencyRadiusChunks;
     for (let dz = -radius; dz <= radius; dz += 1) {
       for (let dx = -radius; dx <= radius; dx += 1) {
@@ -39,7 +64,7 @@ export class WorldStreamer {
         if (Math.abs(centerX) > 520 || Math.abs(centerZ) > 520) continue;
         const ring = residencyRing(chunkDistance(playerChunk, { x, z }));
         if (ring === 'unloaded') continue;
-        required.set(chunkKey({ x, z }), { x, z, ring });
+        required.set(chunkKey({ x, z }), { key: chunkKey({ x, z }), x, z, ring });
       }
     }
 
@@ -51,40 +76,51 @@ export class WorldStreamer {
       }
     }
 
-    for (const [key, next] of required) {
-      const current = this.residents.get(key);
-      if (current?.ring === next.ring) continue;
-      if (current) {
-        this.root.remove(current.group);
-        disposeGroup(current.group);
-      }
-      const group = this.createVisual(next.x, next.z, next.ring);
-      group.name = `chunk:${key}:${next.ring}`;
-      this.root.add(group);
-      this.residents.set(key, { key, ...next, group });
+    const jobs: StreamingJob[] = [];
+    for (const desired of required.values()) {
+      const current = this.residents.get(desired.key);
+      const pendingRing = this.queued.get(desired.key);
+      if (current?.ring === desired.ring || pendingRing === desired.ring) continue;
+      this.queued.set(desired.key, desired.ring);
+      const distance = chunkDistance(playerChunk, desired);
+      jobs.push({ ...desired, priority: priorityFor(desired.ring, distance, playerChunk, desired) });
     }
+    if (jobs.length > 0) this.scheduler.enqueue(jobs);
+  }
 
-    if (this.performance) {
-      let active = 0; let visual = 0; let horizon = 0;
-      for (const resident of this.residents.values()) {
-        if (resident.ring === 'active') active += 1;
-        else if (resident.ring === 'visual') visual += 1;
-        else horizon += 1;
-      }
-      this.performance.recordChunks(active, visual, horizon);
+  private commitJob(job: StreamingJob): number {
+    const started = performance.now();
+    const expectedRing = this.queued.get(job.key);
+    if (expectedRing !== job.ring) return performance.now() - started;
+    const group = this.createVisual(job.x, job.z, job.ring);
+    group.name = `chunk:${job.key}:${job.ring}`;
+    const current = this.residents.get(job.key);
+    if (current) {
+      this.root.remove(current.group);
+      disposeGroup(current.group);
     }
+    this.root.add(group);
+    this.residents.set(job.key, { key: job.key, x: job.x, z: job.z, ring: job.ring, group });
+    this.queued.delete(job.key);
+    return performance.now() - started;
   }
 
-  setResidencyRadiusChunks(radius: number): void {
-    this.residencyRadiusChunks = Math.max(3, Math.min(6, Math.round(radius)));
-    this.updateElapsed = Number.POSITIVE_INFINITY;
+  private recordMetrics(commitMs: number): void {
+    let active = 0; let visual = 0; let horizon = 0;
+    for (const resident of this.residents.values()) {
+      if (resident.ring === 'active') active += 1;
+      else if (resident.ring === 'visual') visual += 1;
+      else horizon += 1;
+    }
+    this.performance?.recordChunks(active, visual, horizon);
+    this.performance?.recordStreaming(this.scheduler.metrics().pendingJobs, 0, commitMs);
   }
+}
 
-  dispose(): void {
-    for (const resident of this.residents.values()) disposeGroup(resident.group);
-    this.residents.clear();
-    this.root.clear();
-  }
+function priorityFor(ring: Exclude<ResidencyRing, 'unloaded'>, distance: number, player: { x: number; z: number }, chunk: { x: number; z: number }): number {
+  const ringWeight = ring === 'active' ? 0 : ring === 'visual' ? 100 : 200;
+  const directionBias = (chunk.x - player.x) + (chunk.z - player.z);
+  return ringWeight + distance * 10 - directionBias * 0.01;
 }
 
 function disposeGroup(root: THREE.Object3D): void {
