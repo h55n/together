@@ -25,7 +25,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   reducedMotion: false,
   highContrastPrompt: false,
   subtitles: true,
-  quality: 'medium',
+  quality: 'low',
   bindings: DEFAULT_CONTROL_BINDINGS,
 };
 

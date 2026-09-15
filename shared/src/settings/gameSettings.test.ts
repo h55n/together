@@ -31,3 +31,7 @@ test('keyboard bindings are remappable but invalid/duplicate critical bindings f
   const invalid = normalizeGameSettings({ bindings: { ...DEFAULT_CONTROL_BINDINGS, interact: 'DefinitelyNotAKeyboardCode' } });
   assert.equal(invalid.bindings.interact, DEFAULT_CONTROL_BINDINGS.interact);
 });
+
+test('new players start with the lightweight graphics profile', () => {
+  assert.equal(normalizeGameSettings({}).quality, 'low');
+});
