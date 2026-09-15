@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import { DEFAULT_GAME_SETTINGS, normalizeGameSettings, scoreMemoryCapture, shouldAutoCapture, type ActivityId, type ActivityStep, type AvatarConfig, type GameSettings, type HomeAction, type JobId, type Placement2D, type RecipeStep, type StoryDefinition, type StoryTaskStateValue, type VoiceMode } from '@together/shared';
+import { DEFAULT_GAME_SETTINGS, normalizeGameSettings, resolveStartupGameSettings, scoreMemoryCapture, shouldAutoCapture, type ActivityId, type ActivityStep, type AvatarConfig, type GameSettings, type HomeAction, type JobId, type Placement2D, type RecipeStep, type StoryDefinition, type StoryTaskStateValue, type VoiceMode } from '@together/shared';
 import { GameEngine } from '../../game/GameEngine';
 import type { WeatherState } from '../../game/weather/weatherModel';
 import type { NetworkSession } from '../../network/GameSocketClient';
@@ -812,7 +812,9 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 function loadGameSettings(): GameSettings {
   try {
     const raw = localStorage.getItem('together:game-settings');
-    return raw ? normalizeGameSettings(JSON.parse(raw) as Partial<GameSettings>) : DEFAULT_GAME_SETTINGS;
+    const hasSafeStartupProfile = localStorage.getItem('together:safe-startup-profile-v1') === 'applied';
+    localStorage.setItem('together:safe-startup-profile-v1', 'applied');
+    return raw ? resolveStartupGameSettings(JSON.parse(raw) as Partial<GameSettings>, !hasSafeStartupProfile) : DEFAULT_GAME_SETTINGS;
   } catch {
     return DEFAULT_GAME_SETTINGS;
   }

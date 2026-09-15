@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeGameSettings, QUALITY_PROFILES } from './gameSettings.js';
+import { normalizeGameSettings, QUALITY_PROFILES, resolveStartupGameSettings } from './gameSettings.js';
 
 test('accessibility settings clamp FOV, motion, UI scale and audio to safe ranges', () => {
   const settings = normalizeGameSettings({ fov: 120, headBob: -1, uiScale: 3, masterVolume: 2, reducedMotion: true });
@@ -34,4 +34,9 @@ test('keyboard bindings are remappable but invalid/duplicate critical bindings f
 
 test('new players start with the lightweight graphics profile', () => {
   assert.equal(normalizeGameSettings({}).quality, 'low');
+});
+
+test('legacy saved medium settings receive the safe startup profile once', () => {
+  assert.equal(resolveStartupGameSettings({ quality: 'medium' }, true).quality, 'low');
+  assert.equal(resolveStartupGameSettings({ quality: 'medium' }, false).quality, 'medium');
 });

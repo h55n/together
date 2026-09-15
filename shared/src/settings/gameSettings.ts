@@ -43,6 +43,11 @@ export const QUALITY_PROFILES: Record<QualityTier, {
   capture: { pixelRatioCap: 2, shadowScale: 1.45, vegetationScale: 1.35, shadowsEnabled: true, streamRadiusChunks: 6, gameplayScale: 1 },
 };
 
+export function resolveStartupGameSettings(input: Partial<GameSettings>, needsSafeStartupMigration: boolean): GameSettings {
+  const settings = normalizeGameSettings(input);
+  return needsSafeStartupMigration ? { ...settings, quality: 'low' } : settings;
+}
+
 export function normalizeGameSettings(input: Partial<GameSettings>): GameSettings {
   const quality: QualityTier = input.quality && input.quality in QUALITY_PROFILES ? input.quality : DEFAULT_GAME_SETTINGS.quality;
   return {
