@@ -237,3 +237,7 @@ Future work must not undo these:
 - Failure creates alternate stories/memories rather than harsh game-over.
 - Stable content IDs must survive asset replacement and save migration.
 - Quality tiers may change render cost, never gameplay collision/interaction behavior.
+
+## V3.1 technical-direction supersession
+
+As of 2026-09-15, `docs/PRD.md` V3.1 is the authoritative product and technical direction. Together V1 remains a browser-only TypeScript/Three.js product: WebGPU-first via `three/webgpu`, with WebGL2 compatibility fallback, Rapier, React for application UI only, Socket.IO, and the existing server/shared/content architecture. Core Amaya Bay art is code-authored, compiled once into shared immutable runtime assets, then rendered through measured merging, instancing, LOD, and streaming. Blender/Maya/hand-authored GLB/KTX2 exports are optional future inputs only and are not a V1 production dependency. Medium is the normal supported-desktop baseline; Low is a complete fallback. Hardware FPS claims remain unverified until a real browser profile is recorded.

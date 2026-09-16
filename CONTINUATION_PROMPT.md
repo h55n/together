@@ -179,3 +179,7 @@ Read `docs/KNOWN_LIMITATIONS.md`. In particular, do not claim 60fps target, TURN
 ## Execution rule
 
 Continue phase-by-phase. Before changing a system, inspect its current implementation and tests. Do not redo verified completed work. Use failing tests for behavior changes. Run relevant local tests after each atomic change and global verification at coherent checkpoints. Update `docs/IMPLEMENTATION_STATUS.md`, `HANDOFF.md` and `PROJECT_STATE.json` whenever the actual state materially changes.
+
+## V3.1 technical-direction supersession
+
+As of 2026-09-15, `docs/PRD.md` V3.1 is the authoritative product and technical direction. Together V1 remains a browser-only TypeScript/Three.js product: WebGPU-first via `three/webgpu`, with WebGL2 compatibility fallback, Rapier, React for application UI only, Socket.IO, and the existing server/shared/content architecture. Core Amaya Bay art is code-authored, compiled once into shared immutable runtime assets, then rendered through measured merging, instancing, LOD, and streaming. Blender/Maya/hand-authored GLB/KTX2 exports are optional future inputs only and are not a V1 production dependency. Medium is the normal supported-desktop baseline; Low is a complete fallback. Hardware FPS claims remain unverified until a real browser profile is recorded.

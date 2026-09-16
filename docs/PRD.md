@@ -3,8 +3,8 @@
 ### Single Source of Truth
 
 **Status:** Authoritative  
-**Version:** 3.0  
-**Date:** 2026-09-14  
+**Version:** 3.1  
+**Date:** 2026-09-15  
 **Product Type:** Browser-based multiplayer cozy life simulator  
 **Primary Platform:** Desktop web  
 **Rendering:** Three.js, WebGPU-first  
@@ -20,6 +20,17 @@
 This document supersedes every previous Together PRD, Game Bible, World Systems specification, Story Event specification, asset manifest decision, continuation prompt, prototype assumption, and implementation note wherever they conflict with this file.
 
 Previous documents remain useful as historical design input and content references, but they are not authoritative after this version.
+
+### V3.1 change scope
+
+Version 3.1 does **not** change Together's core game, city, household, story, economy, or interaction direction. It updates the authoritative visual-production and runtime-asset decisions after review of the four supplied visual reference videos.
+
+The V3.1 art/technology decision is:
+
+> **Together is a browser-only Three.js game whose V1 world art is authored in code, compiled into reusable runtime assets, and rendered through shared geometry, instancing, batching, LOD, streaming, and controlled materials. Blender, Maya, 3ds Max, or other external DCC tools are not required for the V1 world-production pipeline.**
+
+The supplied reference videos are the visual-direction source for world mood, shape language, vegetation density, color handling, lighting, and perceptual detail. They are references for qualities, not assets to copy literally.
+
 
 The current V1 direction is:
 
@@ -640,25 +651,215 @@ Seasonal mapping may follow real calendar, but V1 development builds must includ
 
 # 22. VISUAL DIRECTION
 
+## 22.0 Authoritative visual reference set
+
+The following four supplied videos are the reference set used for V1 art direction:
+
+- `ref-art-style-1(2).mp4` — bright residential/suburban street, strong blue-sky/green-foliage contrast, simplified house geometry, readable fences/porches/road furniture, long tree shadows, clean depth, strong cycling/traversal readability.
+- `ref-art-style-2(2).mp4` — lush quiet residential environment, muted atmospheric depth, soft stylized architecture, dense plant layering, flowers and close foliage used as foreground framing, restrained material complexity.
+- `ref-art-style-3(2).mp4` — dense roadside vegetation, coastal/distant-water atmosphere, strong ground/foliage material contrast, utility infrastructure, painterly natural color, rich frame despite economical geometry.
+- `ref-art-style-4(2).mp4` — highly expressive waterfront promenade, large illustrated cloud masses, warm sunset light, saturated warm/cool separation, simple but readable buildings/trees/railings, crowds and props used to create life.
+
+### Reference priority rule
+
+Traits shared across multiple references are **canonical**.
+
+Traits that appear strongly in only one reference are **optional stylistic tools**, not mandatory global rules.
+
+For example:
+
+- painterly color, strong silhouette, lush vegetation, clean geometry, atmospheric skies, and readable light/shadow are canonical;
+- heavy outline treatment or extreme sunset saturation may be used selectively, but the whole game is not required to use them everywhere.
+
+Together should feel like one coherent original game inspired by these qualities, not like four different rendering styles stitched together.
+
 ## 22.1 Canonical style
 
-The style is **calm stylized realism**.
+The canonical visual style is **painterly stylized realism for a browser-rendered world**.
 
-It is not pixel art, chunky primitive low-poly, flat-shaded toy geometry, or photoreal Unreal-style rendering.
+The four supplied visual reference videos are the primary visual-direction reference for V1. Across them, the common target is:
 
-It should have believable scale, believable materials, simplified but natural geometry, painterly color control, soft atmospheric depth, dense vegetation, warm surface variation, readable silhouettes, carefully authored lighting, and strong environmental composition.
+- readable, simplified-to-moderate geometry rather than photoreal scan density;
+- strong silhouettes and clear shape hierarchy;
+- rich environmental composition even when individual assets are efficient;
+- saturated but controlled color;
+- painterly material response rather than noisy photographic texture;
+- dense, layered vegetation;
+- clear directional sunlight and strong but soft-edged contact shadows;
+- atmospheric skies that contribute heavily to the frame;
+- warm/cool separation between light, shade, foliage, sky, sea, and architecture;
+- architecture with enough trim, setback, roof, window, porch, railing, sign, and ground-contact variation to read as a real place;
+- stylized people, vehicles, props, foliage, and buildings that share one visual language;
+- a world that looks intentionally illustrated without becoming flat-shaded, toy-like, or blocky.
+
+Together is **not** targeting photorealism.
+
+It is also not targeting raw low-poly/blockout aesthetics.
+
+The target is the point where efficient geometry becomes visually rich because composition, color, lighting, vegetation, material response, silhouette, and selective detail are working together.
 
 ## 22.2 Visual principle
 
-> **Geometry may be simplified. Perception may not feel simplified.**
+> **Geometry may be economical. The frame must not feel economical.**
 
-A tree can use stylized geometry, but it must still have trunk variation, branch logic, canopy layers, leaf mass hierarchy, color variation, wind response, contact shadow, species identity, and LOD behavior.
+The runtime should spend detail where the player perceives it:
 
-A building can be efficient, but it must still have facade depth, frames, awnings, ledges, wires, drain pipes, AC units, signs, balconies, curtains, interior glow, grime variation, plants, and contextual clutter.
+- silhouette;
+- foreground overlap;
+- windows/doors/rooflines;
+- vegetation layers;
+- ground contact;
+- shadow;
+- material breakup;
+- atmosphere;
+- motion;
+- human activity.
 
-No city block should look like colored boxes.
+Do not spend large geometry budgets on invisible internal complexity or repeated detail that can be represented through shared geometry, instances, vertex color, procedural material variation, or cheaper LODs.
 
----
+A tree may be built from a limited number of branch/canopy forms, but it must still read as a specific species through silhouette, branching, canopy masses, hue variation, scale variation, wind response, and lighting.
+
+A building may be built from reusable code-authored modules, but it must still read as a finished building through massing, roof shape, facade setbacks, inset windows, trim, awnings, balcony/porch structure, ground contact, service details, plants, signs, and selective clutter.
+
+No primary city block may read as colored boxes placed on a plane.
+
+## 22.3 Reference-derived frame language
+
+The supplied references establish these frame-level rules:
+
+### A. Clear large shapes first
+
+Every view needs an immediately readable hierarchy:
+
+1. sky / distant landscape;
+2. street, promenade, path, or terrain flow;
+3. primary buildings and tree masses;
+4. player/NPC/vehicle silhouettes;
+5. foreground props, flowers, railings, fences, benches, signs, clutter.
+
+Tiny detail must never substitute for strong large forms.
+
+### B. Vegetation is structural
+
+Trees and plants are not decorative scatter.
+
+They frame roads, soften architecture, hide repetition, break skyline rhythm, create foreground/midground overlap, catch sunlight, move in weather, and help conceal LOD/streaming transitions.
+
+The references consistently gain richness from large foliage masses and layered plant scales.
+
+### C. Sky and distance are part of the art
+
+The sky must contribute strongly to mood.
+
+Use large readable cloud masses, controlled haze, distant terrain/sea separation, sun direction, and time-of-day color.
+
+The environment should still look authored when the player points the camera above roof height.
+
+### D. Surface detail is selective
+
+Large surfaces should not rely on high-frequency photo textures.
+
+Prefer:
+
+- controlled color variation;
+- vertex color;
+- low-frequency procedural breakup;
+- roughness differences;
+- subtle edge/ground discoloration;
+- selective decals/markings generated or packed by the game;
+- light and shadow.
+
+The frame should remain clean and readable.
+
+### E. Stylization is coherent
+
+Trees, buildings, roads, people, props, sky, UI-adjacent world elements, and weather must look as though they belong to the same game.
+
+Do not combine realistic PBR assets with crude prototype boxes in the same hero view.
+
+## 22.4 Shape language
+
+Preferred shape language:
+
+- slightly simplified real-world proportions;
+- readable roof forms;
+- strong eaves and overhangs;
+- visible window recess;
+- balconies/porches with clear depth;
+- curved or beveled transition where silhouette benefits;
+- restrained exaggeration of important forms;
+- foliage built as layered masses rather than thousands of individual leaves;
+- vehicles and props recognizable by silhouette before fine detail.
+
+Avoid:
+
+- perfectly featureless cubes;
+- paper-thin building fronts;
+- identical tree spheres;
+- floating props;
+- arbitrary bevels everywhere;
+- hyper-detailed microgeometry invisible at gameplay distance.
+
+## 22.5 Material language
+
+The visual references rely more on **color design and lighting response** than on photoreal texture density.
+
+World materials should therefore prioritize:
+
+- stable base color families;
+- roughness variation;
+- controlled specular response;
+- subtle normal or generated surface variation where it has visible value;
+- vertex color tinting;
+- weather/wetness response;
+- ground-contact darkening;
+- limited emissive use for windows/signs/lights;
+- painterly hue/value variation.
+
+Do not require 4K texture sets for ordinary world assets.
+
+A well-shaped building with a strong shared material system is preferred over a weak shape carrying expensive textures.
+
+## 22.6 Lighting language
+
+The references show that lighting is a primary source of perceived quality.
+
+Together should emphasize:
+
+- strong readable sun direction;
+- broad sky fill;
+- warm sun / cooler shade separation when appropriate;
+- soft but visible contact shadows;
+- foliage shadow patterns;
+- warm evening practicals;
+- atmospheric depth;
+- bright but controlled sky;
+- reflective/wet accents after rain;
+- golden-hour hero states.
+
+Lighting must make efficient geometry look intentional.
+
+## 22.7 Fidelity hierarchy
+
+Spend the highest visual budget on:
+
+1. player hands/body and nearby characters;
+2. hero storefronts and home entrances;
+3. vegetation close to the player;
+4. the immediate street/ground;
+5. interactive props;
+6. major skyline/landmark silhouettes.
+
+Spend lower budgets on:
+
+- inaccessible roof detail;
+- distant rear facades;
+- hidden service geometry;
+- far props;
+- far windows;
+- far vegetation interiors.
+
+Perceptual importance, not asset category, determines fidelity.
 
 # 23. VISUAL FRAME QUALITY CHECKLIST
 
@@ -692,6 +893,27 @@ Required benefits: modern GPU pipeline, stronger future compute options, node/TS
 
 However, V1 must not hard-fail on a machine that only has supported WebGL2. Visual fallback may reduce vegetation density, shadow range, high-end post effects, and reflection quality. Gameplay must remain complete.
 
+## 24.3 Browser-only product rule
+
+Together V1 has one game client: the browser client.
+
+Do not create a parallel Electron/native renderer or a second PC build to solve performance problems. Browser performance must be solved inside the Three.js architecture through efficient assets, batching, instancing, LOD, streaming, workload scaling, and correct resource lifetime.
+
+The rendering system must remain valid in both:
+
+- WebGPU-first mode;
+- WebGL2 fallback mode.
+
+WebGPU-only optimizations may be added when they have a safe WebGL2 path or no correctness impact.
+
+## 24.4 Three.js-native world-art rule
+
+The V1 world-production pipeline must not depend on Blender, Maya, 3ds Max, or another external DCC package.
+
+Environment buildings, vegetation, roads, street props, home shells, furniture, and other ordinary world assets should be authored through TypeScript/Three.js asset definitions and asset generators.
+
+Optional imported third-party or future studio assets may be supported later, but they are not the foundation of V1 and must never block Codex from building the product.
+
 ---
 
 # 25. WORLD STREAMING
@@ -719,9 +941,17 @@ Chunks unload outside residency radius.
 
 ## 25.3 Compilation
 
-Chunk compilation tasks should use Web Workers where useful: static geometry merge, vegetation placement, instance matrices, collider metadata, and nav data preprocessing.
+Chunk preparation should operate primarily on placement/state data, not newly constructed Object3D trees.
 
-Old visible chunk remains until replacement is ready. Do not create or destroy large GPU resources repeatedly inside the frame loop.
+Web Workers should be used where useful for deterministic CPU-only tasks such as vegetation placement, instance matrices, collider metadata, semantic chunk data, and nav-data preprocessing.
+
+A chunk ring transition must not recursively dispose and reconstruct registry-owned geometries or materials.
+
+Old visible representation remains until the replacement representation is ready.
+
+Shared production assets stay resident in an asset registry/cache. Chunks own placements/instance slots and near collision state, not the canonical geometry/material resources.
+
+Do not create or destroy large GPU resources repeatedly inside the frame loop.
 
 ---
 
@@ -729,7 +959,7 @@ Old visible chunk remains until replacement is ready. Do not create or destroy l
 
 Borrow the principles of advanced streamed terrain systems, not unnecessary editor complexity.
 
-Amaya Bay uses authored terrain plus deterministic procedural dressing.
+Amaya Bay uses code-authored terrain definitions plus deterministic procedural dressing, compiled into efficient runtime geometry/instances.
 
 ## 26.1 Terrain sources
 
@@ -847,39 +1077,367 @@ These are budgets, not excuses to reduce art quality. Use batching, LOD, compres
 
 ---
 
-# 32. ASSET PIPELINE
+# 32. THREE.JS-NATIVE ASSET PRODUCTION PIPELINE
 
-Primary authoring tool: Blender.
+## 32.0 Non-negotiable production rule
 
-Exports: glTF / GLB.
+The canonical V1 world-art pipeline is **Three.js-native and code-authored**.
 
-Textures: KTX2/Basis compressed for runtime where appropriate.
+Blender, Maya, 3ds Max, or another external modelling package is not required to produce the shipping V1 environment.
 
-Geometry: Meshopt compression.
+Do not make V1 completion depend on manually authored GLB files.
 
-## 32.1 LOD
+The source of truth for ordinary world assets is TypeScript asset code plus deterministic asset metadata.
 
-Hero building: LOD0 near, LOD1 medium, LOD2 far, silhouette/horizon representation when needed.
+The pipeline is:
 
-Trees: LOD0 full, LOD1 simplified, LOD2 billboard/impostor, cull beyond useful range.
+> **TypeScript/Three.js asset definition → compile/build asset → merged/shared geometry + shared materials → packaged runtime asset → cached registry → instanced/batched/LOD placement**
 
-Props: instanced where repeated.
+The goal is to let Codex create and improve the art while ensuring the browser never pays the cost of rebuilding that art for every placement.
 
-## 32.2 Naming
+## 32.1 Authoring representation versus runtime representation
+
+These are deliberately different.
+
+### Authoring representation
+
+During asset generation, code may use understandable components such as:
+
+- boxes;
+- cylinders;
+- shapes;
+- extrusions;
+- curves;
+- tubes;
+- lathed forms;
+- planes;
+- custom BufferGeometry;
+- generated profiles;
+- procedural facade modules;
+- branch/canopy pieces;
+- generated color/material regions.
+
+This representation exists to make the asset understandable and editable.
+
+### Runtime representation
+
+Before ordinary gameplay rendering, compatible pieces must be compiled into the smallest practical runtime representation.
+
+Typical runtime asset:
+
+- one or a few `BufferGeometry` objects;
+- one or a few shared material references;
+- stable bounds;
+- stable LODs;
+- simple collision proxy;
+- interaction/socket metadata;
+- instance/batch eligibility.
+
+Do not preserve dozens of authoring child meshes merely because that was convenient while constructing the asset.
+
+## 32.2 Production asset definition
+
+Every reusable production asset must have a stable asset ID and metadata sufficient for runtime use.
+
+Required metadata where applicable:
+
+- `assetId`;
+- category;
+- deterministic variant ID;
+- LOD definitions;
+- geometry key(s);
+- material family key(s);
+- bounding box/sphere;
+- shadow behavior;
+- batching/instancing strategy;
+- collision strategy;
+- interaction sockets;
+- seat/hand/stance sockets;
+- semantic tags;
+- district/theme tags;
+- quality-tier behavior;
+- optional wind/weather parameters.
+
+Stable IDs must survive visual improvements so saves/content references do not break.
+
+## 32.3 Build-time compilation
+
+Prefer build-time compilation for expensive procedural assets.
+
+Create TypeScript build tools that can execute the same Three.js/custom geometry-generation logic outside the live game and emit compact runtime asset packs.
+
+The compiler should:
+
+1. construct the authoring geometry;
+2. bake local transforms into geometry attributes;
+3. merge compatible geometry by material;
+4. remove unnecessary duplicate vertices where safe;
+5. generate normals/tangents only when required;
+6. compute bounds;
+7. generate or validate LOD representations;
+8. record collision/socket metadata;
+9. serialize geometry attributes and metadata into loadable runtime packs;
+10. produce a manifest containing asset IDs and pack locations.
+
+A production page load should not need to generate the whole city asset library from primitive meshes before gameplay begins.
+
+Small/simple assets may still be generated once at initialization if measured cost is negligible.
+
+## 32.4 Runtime packaging format
+
+The runtime format does **not** need to be GLB.
+
+Use a code-owned format suitable for Three.js `BufferGeometry`, for example:
+
+- compact typed-array binary geometry packs;
+- generated manifest metadata;
+- small JSON only for metadata where size is insignificant;
+- browser/CDN Brotli or gzip compression;
+- lazy-loaded packs by district/category/LOD.
+
+Do not store giant uncompressed `BufferGeometry.toJSON()` dumps when a compact typed-array pack is practical.
+
+The asset system should be able to reconstruct `BufferGeometry` without recreating authoring primitives.
+
+Runtime packages should be split so the initial game does not need every district, furniture item, activity prop, and high-detail LOD before the player can enter.
+
+Suggested pack families:
+
+- `core-world`;
+- `mogra-court`;
+- `lantern-street`;
+- `mogra-park`;
+- `bay-steps`;
+- `rain-tree-lane`;
+- `the-common`;
+- `hill-garden`;
+- `vegetation-common`;
+- `home-common`;
+- `activity-common`.
+
+Exact pack boundaries may change after profiling.
+
+## 32.5 Shared geometry and material ownership
+
+A central asset registry owns reusable:
+
+- geometries;
+- materials;
+- generated textures;
+- LOD data;
+- immutable asset metadata.
+
+Chunks and placements do not own these resources.
+
+Unloading a chunk must not dispose shared geometry/materials used elsewhere.
+
+Asset-registry shutdown or deliberate cache eviction controls actual GPU resource disposal.
+
+This ownership rule must be explicit in code and tested.
+
+## 32.6 Rendering strategy
+
+Choose the runtime representation based on what the asset is.
+
+### InstancedMesh
+
+Use `THREE.InstancedMesh` for many copies of the same geometry/material, especially:
+
+- tree species/variant/LOD;
+- shrubs;
+- grass clumps;
+- benches;
+- lamps;
+- bins;
+- planters;
+- poles;
+- common signs;
+- repeated furniture;
+- repeated facade modules when kept independent.
+
+### BatchedMesh
+
+Evaluate `THREE.BatchedMesh` for collections of varied static geometry that share a material family.
+
+Use it only when profiling shows a clear benefit and both renderer backends remain correct.
+
+### Merged BufferGeometry
+
+Use merged `BufferGeometry` for unique/static structures whose many authoring pieces do not need independent runtime transforms.
+
+Hero buildings should normally render as a very small number of submissions, not one Mesh per window/sill/balcony/rail.
+
+### Individual Mesh
+
+Use ordinary individual Mesh objects only when the object genuinely requires independent transform, animation, interaction, visibility, material, or destruction.
+
+## 32.7 LOD standard
+
+Every medium/large visible world asset declares an LOD strategy.
+
+### Buildings
+
+- **LOD0:** hero gameplay representation with facade depth and selective detail;
+- **LOD1:** simplified facade depth, fewer service details/rails/clutter;
+- **LOD2:** major massing, windows/roof rhythm, simplified materials;
+- **Horizon:** silhouette/massing only when useful.
+
+### Trees
+
+- **LOD0:** species-defining trunk/branch/canopy masses;
+- **LOD1:** reduced branch and canopy geometry;
+- **LOD2:** strongly simplified clustered form;
+- **Horizon:** very cheap crossed planes, impostor, or simplified mass if it profiles better.
+
+### Props
+
+- near detailed representation where perceptually valuable;
+- simplified mid representation if needed;
+- cull or merged distant representation when the prop no longer contributes.
+
+LOD changes should use hysteresis to avoid rapid popping/thrashing.
+
+Do not switch LOD by destroying and recreating the canonical asset resource.
+
+## 32.8 Materials and generated textures
+
+The world should not depend on large unique texture sets for every asset.
+
+Prefer shared material families plus:
+
+- vertex color;
+- generated masks;
+- low-frequency procedural variation;
+- CanvasTexture/DataTexture where appropriate;
+- small reusable pattern/normal assets when they materially improve the look;
+- TSL-based weather/wetness/tint logic;
+- shared emissive/window treatment.
+
+Generated textures must be created once and cached.
+
+Do not create textures per placement or per chunk.
+
+## 32.9 Asset-family art rules
+
+### Buildings
+
+Build from code-authored modules and custom geometry, then compile/merge.
+
+Useful components include:
+
+- structural mass;
+- roof/eave;
+- recessed window module;
+- door/threshold;
+- balcony/porch;
+- railing;
+- awning;
+- sign frame;
+- drain/service pipe;
+- AC/exhaust silhouette;
+- planter/clutter anchor.
+
+Modules are authoring tools, not permission to render every component as a separate draw call.
+
+### Vegetation
+
+Generate several deterministic variants per species.
+
+Author trunks, branch groups, canopy masses, flowers, and major leaves as readable grouped forms.
+
+Compile each species/variant/LOD once.
+
+Place the result through instances.
+
+Do not build every tree again when a chunk loads.
+
+### Props and furniture
+
+Author recognisable silhouette first, secondary detail second.
+
+Use shared geometry and shared material families.
+
+Common repeated props should be instance-ready.
+
+## 32.10 Collision and interaction
+
+Render geometry and gameplay collision are separate.
+
+Every interactive/solid production asset must provide one of:
+
+- simple box/capsule/cylinder proxy;
+- small compound proxy;
+- specialized low-complexity collision where essential.
+
+Do not use detailed render geometry as routine collision.
+
+Sockets are metadata and should be stable across visual LOD changes.
+
+## 32.11 Asset budgets
+
+Budgets are measured by runtime cost, not by how many procedural authoring components were used.
+
+For every production asset family track:
+
+- triangles by LOD;
+- material count;
+- runtime draw submissions;
+- instance eligibility;
+- GPU geometry memory;
+- generated texture memory;
+- pack size;
+- compile time;
+- decode/load time.
+
+The correct target is not “minimum triangles at any cost.”
+
+The correct target is **the minimum runtime cost that preserves the intended frame**.
+
+## 32.12 Naming
+
+Use stable semantic IDs rather than filenames tied to a DCC export.
 
 Examples:
 
-`env_amaya_lantern_cafe_roshan_lod0.glb`
+`env.amaya.lantern.cafe-roshan`
 
-`prop_street_bench_wood_01.glb`
+`env.amaya.mogra.residential-a`
 
-`char_player_base_body_f_01.glb`
+`veg.rain-tree.a`
 
-`anim_humanoid_wash_dish_01.glb`
+`veg.gulmohar.b`
 
-Use consistent asset metadata: bounds, interaction sockets, material slots, collision reference, LOD links, animation tags.
+`prop.street.bench.wood-a`
 
----
+`prop.street.lamp.black-a`
+
+`home.furniture.sofa.fabric-a`
+
+LOD/runtime pack keys derive from the stable asset ID.
+
+## 32.13 Validation
+
+The build must fail or warn clearly for:
+
+- missing asset IDs;
+- duplicate asset IDs;
+- missing required LOD;
+- invalid bounds;
+- excessive material count;
+- unbounded geometry;
+- incompatible instance metadata;
+- missing collision strategy where required;
+- missing socket referenced by gameplay;
+- runtime pack missing from manifest;
+- production asset accidentally creating large per-placement mesh hierarchies.
+
+## 32.14 Optional future imported assets
+
+The architecture may retain optional support for glTF/GLB if a future artist or licensed source provides an asset.
+
+That support is additive only.
+
+It must not be the assumed V1 production workflow and must not make world completion dependent on external DCC work.
 
 # 33. CAMERA SYSTEM
 
@@ -3146,9 +3704,32 @@ Do not use decorative pseudo-Japanese text merely to create “Japan vibes.” S
 
 # 85. ART DIRECTION — STREET DETAIL BIBLE
 
-## 85.1 Streets
+## 85.1 Street composition
 
-Believable combinations of:
+The street-level target follows the supplied references: the frame should feel rich through **layered composition**, not indiscriminate object count.
+
+A strong street frame should contain a deliberate mix of:
+
+- road/path shape;
+- curb and drainage;
+- building massing;
+- tree canopy rhythm;
+- foreground overlap;
+- poles/cables/sign structures;
+- parked/moving transport;
+- seating/planters;
+- people/activity;
+- distant skyline, hill, sea, or vegetation.
+
+Never distribute clutter purely randomly.
+
+Use authored composition zones and semantic placement rules.
+
+A road should have visual rhythm: open segment, tree shadow, frontage cluster, prop cluster, view release, landmark, turn, or elevation change.
+
+## 85.2 Street asset vocabulary
+
+Believable combinations include:
 
 - curbs;
 - drains;
@@ -3170,15 +3751,20 @@ Believable combinations of:
 - benches;
 - awnings;
 - puddle depressions;
-- wall stains near drainage.
+- wall stains near drainage;
+- small flowers/weeds;
+- railings/fences;
+- porch steps;
+- café spill-out;
+- market display edges.
 
-Never distribute clutter purely randomly. Use authored composition zones and semantic placement rules.
+Each family should have a small set of high-quality reusable variants rather than unlimited random primitive combinations.
 
-## 85.2 Building base contact
+## 85.3 Ground contact
 
-Every building must convincingly meet the ground.
+Everything must convincingly meet the ground.
 
-Include some combination of:
+Buildings use some combination of:
 
 - plinth;
 - step;
@@ -3190,28 +3776,72 @@ Include some combination of:
 - entry mat;
 - service conduit.
 
+Props use:
+
+- sensible feet/base;
+- slight sink/contact;
+- shadow;
+- dirt/wetness response where appropriate.
+
 Avoid “box floating on plane.”
+
+## 85.4 Density rule
+
+The references show that high perceived density does not require every object to be unique.
+
+Prefer:
+
+- repeated instance-ready props;
+- several tree variants;
+- recurring material families;
+- a small number of strong facade families;
+- carefully varied transforms/colors;
+- selective hero exceptions.
+
+A coherent repeated kit is better than thousands of weak unique objects.
 
 ---
 
 # 86. ART DIRECTION — BUILDINGS
 
+## 86.1 Reference target
+
+Buildings should use relatively simple overall masses with enough secondary structure to become believable.
+
+From ordinary gameplay distance, a building must read through:
+
+- roof/eave silhouette;
+- facade depth;
+- window rhythm;
+- entrance;
+- porch/balcony/awning;
+- trim;
+- ground contact;
+- selective service/clutter elements;
+- color/material relationship.
+
+Do not attempt photoreal architectural modelling.
+
+Do not ship primary-route blockout cubes.
+
+## 86.2 Hero building standard
+
 Hero buildings need:
 
 - readable entrance;
 - ground-floor depth;
-- windows with inset;
-- curtains/blinds;
-- AC/exhaust units;
-- balcony rail;
+- inset/recessed windows;
+- frames/sills;
+- curtains/blinds or dark/interior plane;
+- AC/exhaust silhouettes where culturally/contextually appropriate;
+- balcony/porch rail;
 - drainage;
-- signs;
-- warm interior light;
+- signs/awnings;
+- warm interior light where active;
 - roof silhouette;
 - plants;
-- believable service side.
-
-Residential windows should vary subtly based on household occupancy and time.
+- believable service side;
+- ground-contact treatment.
 
 At night:
 
@@ -3220,70 +3850,202 @@ At night:
 - some curtain silhouettes;
 - active player home recognizable without becoming a beacon.
 
+## 86.3 Building generator strategy
+
+Create authored code-defined building families rather than one unconstrained random building generator.
+
+Each family defines:
+
+- massing grammar;
+- floor heights;
+- roof grammar;
+- window module set;
+- balcony/porch rules;
+- material palette;
+- sign/awning rules;
+- service-detail rules;
+- vegetation/clutter sockets;
+- LOD reductions.
+
+Generate a small number of deterministic variants from each family.
+
+Once generated, compile compatible components into a few runtime geometries/materials.
+
+## 86.4 District differentiation
+
+Mogra Court:
+- modest residential rhythm;
+- balconies;
+- laundry;
+- plants;
+- apartment/PG details.
+
+Lantern Street:
+- tighter frontage;
+- awnings;
+- signs;
+- shop windows;
+- mixed-use upper floors;
+- warm commercial light.
+
+Rain Tree Lane:
+- older massing;
+- walls/gates;
+- vines;
+- deep vegetation;
+- repair/nursery details.
+
+The Common:
+- clearer civic geometry;
+- larger courtyards;
+- restrained signage.
+
+Bay Steps:
+- promenade-facing facades;
+- railings;
+- cafés/huts;
+- strong horizon relationship.
+
+Hill Garden:
+- lower visual density;
+- scenic structures;
+- garden/tea-hut character.
+
 ---
 
 # 87. ART DIRECTION — INTERIORS
 
-Interiors require:
+Interiors use the same painterly stylized-realism language as the exterior.
 
-- skirting/baseboards where style calls for it;
-- switches;
-- plugs;
-- door frames;
+They require:
+
+- clear room proportions;
+- door/window frames;
+- skirting/base detail where style calls for it;
+- switches/plugs where visible;
 - handles;
-- shelves;
-- small clutter;
+- shelving;
 - cloth;
-- utensils;
-- appliances;
-- soft shadow grounding;
-- different acoustic feel;
-- slight material imperfections;
-- believable storage.
+- utensils/appliances;
+- storage;
+- plant/decor layers;
+- believable object clusters;
+- soft grounding/contact shadow;
+- warm practical lighting;
+- slightly imperfect color/material variation;
+- different acoustic feel.
 
 A beautiful empty room is not enough.
 
-Home interiors should gain detail as the household accumulates things.
+The room should gain personality as the household accumulates things.
+
+Furniture should be code-authored as reusable production assets and compiled/instanced using the same asset pipeline as the city.
+
+Do not create each leg/cushion/handle as a permanent independent Mesh when they can be merged into the furniture asset.
+
+Interactive parts may remain separate only where gameplay requires independent movement.
 
 ---
 
 # 88. ART DIRECTION — VEGETATION
 
-Vegetation is a signature quality bar.
+Vegetation is a signature quality bar and one of the strongest lessons from the supplied references.
+
+The target is **large readable foliage masses with layered variation**, not botanical simulation.
 
 Trees must not look like repeated green spheres.
 
-Each species needs:
+## 88.1 Species identity
+
+Each tree species needs:
 
 - unique trunk silhouette;
 - branch distribution;
 - canopy mass pattern;
-- leaf color range;
+- canopy height/width ratio;
+- leaf/color range;
+- occasional accent bloom where appropriate;
 - season/weather response;
 - near/mid/far LOD.
 
-Wind:
+Required V1 identities:
+
+- rain tree: broad umbrella-like spread, heavy lateral canopy;
+- gulmohar: branching crown with seasonal warm/red-orange bloom accents;
+- palm: vertical rhythm and readable frond silhouette;
+- ficus: dense irregular crown and strong trunk/base;
+- ornamental tree: compact designed street/yard silhouette.
+
+## 88.2 Runtime construction
+
+A tree may be procedurally authored from many source pieces, but each species/variant/LOD must be compiled once.
+
+A normal placed tree must not be a hierarchy of 10–30 newly allocated Mesh objects.
+
+Prefer one or a few merged geometries per tree variant/LOD, then instance that asset across the world.
+
+## 88.3 Canopy language
+
+Use layered canopy clusters with:
+
+- varied size;
+- asymmetry;
+- overlap;
+- hue/value variation;
+- negative space;
+- non-uniform vertical placement.
+
+Do not make every canopy an identical sphere, dodecahedron, or blob.
+
+The final silhouette matters more than individual leaf count.
+
+## 88.4 Understory
+
+Bushes/grass/flowers should provide the reference-style richness near paths and buildings.
+
+Use:
+
+- 3+ height bands;
+- hue variation;
+- flowers as selective accents;
+- vines/plant spillover;
+- grass clumps;
+- weeds/moss near drains/wet edges;
+- potted plants around homes/shops.
+
+Use instancing aggressively.
+
+## 88.5 Wind
+
+Wind should preserve performance.
+
+Preferred:
+
+- shared material/TSL deformation;
+- cheap per-instance parameters;
+- occasional group motion.
+
+Avoid updating thousands of leaf/branch Object3D transforms individually.
+
+Wind hierarchy:
 
 - trunk mostly stable;
-- branches subtle;
-- small foliage more active;
-- gust response during monsoon.
-
-Bushes and grass must vary height and hue.
-
-Use vegetation to frame views and hide streaming transitions.
+- major branches subtle;
+- canopy/leaf masses more active;
+- stronger coordinated gust response during monsoon.
 
 ---
 
 # 89. ART DIRECTION — COLOR
 
-Base palette is natural, warm, and restrained.
+The reference-led palette is **natural, warm, atmospheric, and deliberately more expressive than photoreal color**.
 
 World families:
 
 - warm concrete;
 - sage foliage;
 - deep green;
+- yellow-green sunlight foliage;
 - off-white;
 - muted terracotta;
 - dusty blue;
@@ -3292,23 +4054,77 @@ World families:
 - charcoal;
 - rainy cool grey;
 - monsoon teal;
-- evening amber.
+- sea blue/teal;
+- evening amber;
+- sunrise/sunset peach;
+- controlled lavender/pink cloud accents.
 
-Avoid neon game colors, plastic saturation, pure white, pure black, and uniform green vegetation.
+## 89.1 Color hierarchy
 
-Color changes by light and weather rather than simply swapping LUTs.
+Foreground should usually have the strongest local contrast.
+
+Midground architecture should remain readable but controlled.
+
+Background should compress through atmospheric perspective.
+
+Bright accent color should come from meaningful elements:
+
+- flower;
+- awning;
+- sign;
+- clothing;
+- vehicle;
+- sunset;
+- interior light.
+
+Do not distribute strong accents uniformly.
+
+## 89.2 Saturation
+
+The supplied references permit richer saturation than strict realism, especially in:
+
+- sky;
+- foliage under sun;
+- flowers;
+- sunset;
+- waterfront.
+
+But avoid:
+
+- neon game colors;
+- plastic saturation;
+- pure white;
+- pure black;
+- one uniform green across vegetation.
+
+Color should respond to light/weather rather than merely swapping a LUT.
 
 ---
 
 # 90. CHARACTER ART DIRECTION
 
-Characters should read clearly at 5–20m, feel warm and approachable, use realistic clothing proportions, avoid glossy skin, avoid doll/plastic appearance, support expressive face and posture, and fit both first-person embodiment and third-person social viewing.
+Characters should belong to the same stylized world.
+
+They should:
+
+- read clearly at 5–20m;
+- have simplified but human proportions;
+- feel warm and approachable;
+- avoid glossy/plastic skin;
+- use controlled painterly color;
+- preserve readable hands/head/body silhouette;
+- support first-person embodiment and third-person social viewing;
+- support expressive posture and subtle facial behavior.
+
+V1 character production should not depend on an external DCC pipeline.
+
+Use a Three.js-native character construction path using reusable geometry, `SkinnedMesh`/`Skeleton` or another code-owned rig representation where necessary, and code-authored/procedural animation data.
+
+If an optional imported character asset is introduced later, it must not invalidate the browser-only Three.js architecture.
 
 Facial expression should be subtle enough not to become cartoon-emote spam.
 
 Outfits should reflect modern everyday Indian urban life without reducing identity to cultural costume.
-
----
 
 # 91. AUDIO IMPLEMENTATION
 
@@ -3605,6 +4421,14 @@ The systems must flow without a quest designer manually forcing each step.
 
 Quality tier changes must not alter gameplay-relevant collision or interactions.
 
+All tiers must preserve the same art direction.
+
+Low may reduce render scale, distant density, shadow range, secondary effects, foliage density, and LOD distance, but it must not turn the city back into blockout/prototype geometry.
+
+Medium is the canonical art target and must be the primary benchmark profile.
+
+Use measured adaptive scaling where practical: protect nearby geometry/composition first, reduce resolution/effects/far density before removing the visual identity of the world.
+
 ---
 
 # 104. ENGINE RULES
@@ -3629,6 +4453,14 @@ Quality tier changes must not alter gameplay-relevant collision or interactions.
 18. Avoid per-frame React state updates from the render loop.
 19. Keep player input latency independent of server round trip.
 20. Maintain deterministic content IDs across saves.
+21. Code-authored asset construction and runtime rendering are separate stages.
+22. Compile reusable production assets once; do not reconstruct them per placement/chunk.
+23. Shared asset registries own reusable GPU geometry/material resources.
+24. Chunk unload removes placements/instances/colliders; it does not recursively dispose shared production assets.
+25. Prefer InstancedMesh for repeated identical assets, BatchedMesh where measured useful, and merged BufferGeometry for unique static structures.
+26. Hero visual quality is achieved through silhouette, composition, material response, foliage, light, and selective detail—not uncontrolled mesh count.
+27. V1 world production must not require Blender/GLB or another external DCC workflow.
+28. The browser client is the only V1 game client.
 
 ---
 
@@ -3660,7 +4492,13 @@ Required internal tools:
 - interaction socket viewer;
 - audio-zone viewer;
 - light count/shadow debug;
-- LOD force selector.
+- LOD force selector;
+- visible Mesh/Object3D count;
+- visible instance count;
+- asset-registry resource counts;
+- chunk generation/commit timing;
+- p95/p99 frame time and >50ms hitch counter;
+- backend indicator (WebGPU/WebGL2).
 
 A game this systemic cannot be efficiently built without strong debug tooling.
 
@@ -3795,7 +4633,7 @@ Deliver:
 - input;
 - Rapier;
 - debug overlay;
-- asset loader;
+- Three.js-native asset registry/compiler/runtime-pack loader;
 - chunk framework;
 - client/server shared types;
 - auth proof;
@@ -3809,7 +4647,7 @@ Goal: prove that walking through Amaya Bay feels good.
 
 Deliver:
 
-- one polished street;
+- one polished reference-quality street using code-authored compiled assets;
 - first-person embodied controller;
 - third-person toggle;
 - lighting cycle;
@@ -3818,11 +4656,11 @@ Deliver:
 - weather test;
 - audio zone;
 - ambient NPC walkers;
-- bicycle placeholder.
+- code-authored bicycle production prototype.
 
 Exit criteria: a tester willingly walks around without needing a task.
 
-Do not proceed if world feel is weak.
+Do not proceed if world feel is weak or if the street achieves frame rate only by reverting to obvious blockout assets.
 
 ## Phase 2 — Complete City Shell
 
@@ -4107,6 +4945,8 @@ It is done when all of the following are true.
 
 - No numeric relationship/needs HUD.
 - No box-city placeholder assets remain on shipping primary routes.
+- Primary-route environment art is produced through the Three.js-native compiled asset pipeline.
+- Normal traversal does not reconstruct/dispose large reusable asset hierarchies at chunk boundaries.
 - No core interaction is a fake timer where embodied action is promised.
 - Reconnect does not corrupt household state.
 - Production build passes automated suite.
@@ -4533,7 +5373,7 @@ Mitigation: chunking, LOD, instancing, compressed assets, strict budgets, qualit
 
 ## Risk: 3D art becomes the bottleneck
 
-Mitigation: establish modular city kit, semantic prop library, procedural vegetation placement, material families, hero-asset priority, and automated asset validation.
+Mitigation: establish a Three.js-native modular city kit, semantic prop library, build-time asset compiler/runtime packs, procedural vegetation placement, shared material families, hero-asset priority, instancing/batching, and automated asset validation.
 
 ## Risk: chores become tedious
 
@@ -4665,6 +5505,10 @@ For implementation teams, the shortest correct interpretation of this PRD is:
 
 - Build **one** dense coastal city: Amaya Bay.
 - Use **TypeScript + Three.js WebGPURenderer + TSL + Rapier + React + Socket.IO + Supabase**.
+- Keep V1 **browser-only**; do not create a parallel PC/native client.
+- Produce ordinary V1 world art through a **Three.js-native code-authored asset pipeline**, not a required Blender/GLB workflow.
+- Separate asset authoring from runtime representation: compile/merge once, cache, then instance/batch/stream.
+- Treat the four supplied reference videos as the visual target for painterly stylized realism, foliage density, color, lighting, silhouette, and frame composition.
 - Build the world for **embodied first-person first**.
 - Keep third-person as a seamless toggle.
 - Use fixed property shells with deep interior personalization.
@@ -4750,9 +5594,29 @@ These values are tuning inputs for behavior, not player goals.
 
 # APPENDIX C — MINIMUM ASSET GROUPS
 
+All groups below are **logical production asset families**, not a requirement for external model files.
+
+For V1, they should be implemented primarily as Three.js-native code-authored definitions and compiled runtime assets following Section 32.
+
+## Production requirements for every family
+
+Where applicable, each family needs:
+
+- stable semantic asset IDs;
+- code-owned source generator/definition;
+- compiled runtime geometry;
+- shared material family;
+- bounds;
+- LOD strategy;
+- collision strategy;
+- interaction/socket metadata;
+- instance/batch strategy;
+- runtime-pack assignment;
+- validation coverage.
+
 ## Player
 
-- base avatar rigs;
+- code-authored base avatar rigs;
 - hair library;
 - clothing library;
 - accessories;

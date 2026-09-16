@@ -157,3 +157,7 @@ Need subtle original/licensed textures for warm paper, tape, receipts, ticket st
 5. Replace procedural proxy creation only after the final asset is loaded/tested.
 6. Run content/asset validation and profile Medium quality before removing the proxy fallback.
 7. Never commit source Blender working files if their size/licensing makes the runtime repository unsuitable; store them in the art source repository/Drive and commit runtime exports only.
+
+## V3.1 technical-direction supersession
+
+As of 2026-09-15, `docs/PRD.md` V3.1 is the authoritative product and technical direction. Together V1 remains a browser-only TypeScript/Three.js product: WebGPU-first via `three/webgpu`, with WebGL2 compatibility fallback, Rapier, React for application UI only, Socket.IO, and the existing server/shared/content architecture. Core Amaya Bay art is code-authored, compiled once into shared immutable runtime assets, then rendered through measured merging, instancing, LOD, and streaming. Blender/Maya/hand-authored GLB/KTX2 exports are optional future inputs only and are not a V1 production dependency. Medium is the normal supported-desktop baseline; Low is a complete fallback. Hardware FPS claims remain unverified until a real browser profile is recorded.
