@@ -300,7 +300,7 @@ export class GameEngine {
   }
 
   async captureFrame(quality = 0.86): Promise<Blob> {
-    this.renderer.renderer.render(this.scene, this.camera.camera);
+    this.measureSystem('render', () => this.renderer.renderer.render(this.scene, this.camera.camera));
     const normalizedQuality = Math.max(0.45, Math.min(0.95, quality));
     return new Promise<Blob>((resolve, reject) => {
       this.canvas.toBlob((blob) => {
@@ -389,8 +389,8 @@ export class GameEngine {
     this.camera.applyLook(input.lookDeltaX, input.lookDeltaY);
     this.player.setInput(input);
     if (this.autoRide) this.updateAutoRide(deltaSeconds);
-    this.player.syncVisual(this.camera.yaw, deltaSeconds);
-    this.camera.update(deltaSeconds, this.player.isMoving(), this.player.isJogging());
+    this.measureSystem('player', () => this.player.syncVisual(this.camera.yaw, deltaSeconds));
+    this.measureSystem('camera', () => this.camera.update(deltaSeconds, this.player.isMoving(), this.player.isJogging()));
     const playerPosition = this.player.getPosition();
     if (input.transportDismountPressed && this.player.getTransportMode() !== 'on_foot') {
       this.player.setTransportMode('on_foot');
@@ -448,12 +448,12 @@ export class GameEngine {
     }
 
     this.gameMinutes = (this.gameMinutes + realSecondsToGameMinutes(deltaSeconds)) % 1440;
-    this.lighting.update(this.gameMinutes, this.avatar.root.position);
-    this.weather.update(deltaSeconds, this.avatar.root.position);
-    this.npcs.update(deltaSeconds, this.avatar.root.position);
-    this.namedNpcs.update(deltaSeconds, this.gameMinutes, this.avatar.root.position);
-    this.worldStreamer.update(deltaSeconds, this.avatar.root.position);
-    this.remotePlayers.update(deltaSeconds);
+    this.measureSystem('lighting', () => this.lighting.update(this.gameMinutes, this.avatar.root.position));
+    this.measureSystem('weather', () => this.weather.update(deltaSeconds, this.avatar.root.position));
+    this.measureSystem('ambient-npcs', () => this.npcs.update(deltaSeconds, this.avatar.root.position));
+    this.measureSystem('named-npcs', () => this.namedNpcs.update(deltaSeconds, this.gameMinutes, this.avatar.root.position));
+    this.measureSystem('streaming', () => this.worldStreamer.update(deltaSeconds, this.avatar.root.position));
+    this.measureSystem('remote-players', () => this.remotePlayers.update(deltaSeconds));
     if (this.voice) {
       for (const userId of this.remotePlayers.userIds()) {
         const remote = this.remotePlayers.getPosition(userId);
@@ -478,7 +478,7 @@ export class GameEngine {
     this.audio.setMusicContext({ gameMinutes: this.gameMinutes, weather: this.weather.state, indoors, ...(district ? { districtId: district.id } : {}) });
     this.audio.update();
 
-    this.renderer.renderer.render(this.scene, this.camera.camera);
+    this.measureSystem('render', () => this.renderer.renderer.render(this.scene, this.camera.camera));
     const info = this.renderer.renderer.info.render;
     this.performance.recordRenderer(info.calls, info.triangles);
     this.performance.recordFrame(performance.now() - start);
@@ -489,6 +489,11 @@ export class GameEngine {
     }
     this.applyVisualBudget(this.adaptiveQuality.sample(this.performance.read()));
     this.debug.update(deltaSeconds, { weather: this.weather.state, gameTime: formatGameTime(this.gameMinutes) });
+  }
+
+  private measureSystem<T>(name: string, operation: () => T): T {
+    const started = performance.now();
+    try { return operation(); } finally { this.performance.recordSystem(name, performance.now() - started); }
   }
 
   private recordSceneMetrics(): void {
@@ -533,7 +538,7 @@ export class GameEngine {
 
   private fixedUpdate(deltaSeconds: number): void {
     this.player.fixedUpdate(deltaSeconds, this.camera.yaw);
-    this.physics.step();
+    this.measureSystem('physics', () => this.physics.step());
   }
 
   private readonly onResize = (): void => {
