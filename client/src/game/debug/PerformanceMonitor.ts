@@ -7,6 +7,12 @@ export type PerformanceSnapshot = {
   framesOver50ms: number;
   drawCalls: number;
   triangles: number;
+  meshes: number;
+  instancedMeshes: number;
+  instances: number;
+  geometries: number;
+  materials: number;
+  activeColliders: number;
   activeChunks: number;
   visualChunks: number;
   horizonChunks: number;
@@ -31,6 +37,12 @@ export class PerformanceMonitor {
     framesOver50ms: 0,
     drawCalls: 0,
     triangles: 0,
+    meshes: 0,
+    instancedMeshes: 0,
+    instances: 0,
+    geometries: 0,
+    materials: 0,
+    activeColliders: 0,
     activeChunks: 0,
     visualChunks: 0,
     horizonChunks: 0,
@@ -53,6 +65,15 @@ export class PerformanceMonitor {
   recordRenderer(drawCalls: number, triangles: number): void {
     this.snapshot.drawCalls = drawCalls;
     this.snapshot.triangles = triangles;
+  }
+
+  recordSceneResources(resources: { meshes: number; instancedMeshes: number; instances: number; geometries: number; materials: number; colliders: number }): void {
+    this.snapshot.meshes = resources.meshes;
+    this.snapshot.instancedMeshes = resources.instancedMeshes;
+    this.snapshot.instances = resources.instances;
+    this.snapshot.geometries = resources.geometries;
+    this.snapshot.materials = resources.materials;
+    this.snapshot.activeColliders = resources.colliders;
   }
 
   recordChunks(active: number, visual: number, horizon: number): void {

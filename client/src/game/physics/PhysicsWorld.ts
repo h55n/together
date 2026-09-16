@@ -52,6 +52,8 @@ export class PhysicsWorld {
     this.world.removeCollider(collider, false);
   }
 
+  getActiveColliderCount(): number { return this.world.colliders.len(); }
+
   step(): void {
     this.world.step();
   }

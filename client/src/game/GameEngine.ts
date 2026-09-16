@@ -71,6 +71,7 @@ export class GameEngine {
   private networkElapsed = 0;
   private networkSeq = 0;
   private locationElapsed = Number.POSITIVE_INFINITY;
+  private sceneMetricsElapsed = Number.POSITIVE_INFINITY;
   private lastLocation: string | null = null;
   private homeCenter = { x: 0, z: 0 };
   private homeReserveRadius = 0;
@@ -481,8 +482,28 @@ export class GameEngine {
     const info = this.renderer.renderer.info.render;
     this.performance.recordRenderer(info.calls, info.triangles);
     this.performance.recordFrame(performance.now() - start);
+    this.sceneMetricsElapsed += deltaSeconds;
+    if (this.sceneMetricsElapsed >= 0.25) {
+      this.sceneMetricsElapsed = 0;
+      this.recordSceneMetrics();
+    }
     this.applyVisualBudget(this.adaptiveQuality.sample(this.performance.read()));
     this.debug.update(deltaSeconds, { weather: this.weather.state, gameTime: formatGameTime(this.gameMinutes) });
+  }
+
+  private recordSceneMetrics(): void {
+    const geometries = new Set<string>();
+    const materials = new Set<string>();
+    let meshes = 0; let instancedMeshes = 0; let instances = 0;
+    this.scene.traverse((object) => {
+      if (!(object instanceof THREE.Mesh || object instanceof THREE.Points)) return;
+      meshes += 1;
+      geometries.add(object.geometry.uuid);
+      const objectMaterials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of objectMaterials) materials.add(material.uuid);
+      if (object instanceof THREE.InstancedMesh) { instancedMeshes += 1; instances += object.count; }
+    });
+    this.performance.recordSceneResources({ meshes, instancedMeshes, instances, geometries: geometries.size, materials: materials.size, colliders: this.physics.getActiveColliderCount() });
   }
 
   private applyVisualBudget(budget: AdaptiveVisualBudget): void {
