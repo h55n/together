@@ -1,185 +1,288 @@
-Continue the Together V1 project from the exact current repository state. Do not restart the implementation, do not recreate systems already verified as working, and do not treat old documentation as more authoritative than `docs/PRD.md`.
+Continue `h55n/together` from the exact remote state produced by the 2026-09-16 gameplay/world recovery pass. Do not restart the project, do not recreate systems already present, and do not use an older local checkout as the source of truth.
 
-Repository/project: Together V1 — Amaya Bay
-Current working branch: `build/amaya-bay-v1`
-Implementation HEAD containing the game/system work: `9f355fd6607902c2dbe035102a014c5abc1e9466`
-The handoff documentation is committed after that implementation commit; use `git rev-parse HEAD` to see the final documentation-only HEAD.
+## 1. Synchronize before doing anything
 
-## What Together is
+Repository: `https://github.com/h55n/together`
+Canonical working branch: `build/amaya-bay-v1`
+Recovery implementation floor: `f27efcab7a491d4c23e58b48be131e83d9916400`
 
-Together is a calm, persistent browser-based 3D multiplayer life simulator where Couple or Friends households create identities, form a household, choose a home in Amaya Bay, live in embodied first-person (with switchable third-person), work gentle physical jobs, shop, cook, clean, decorate, travel, enjoy leisure, build NPC familiarity, experience ordinary-life stories and preserve shared history in a private Memory Book.
-
-`docs/PRD.md` is the single source of truth.
-
-## Product rules that must not regress
-
-- One complete city only: Amaya Bay. Do not add a second city.
-- First person is primary/default; third person remains switchable.
-- World is real 3D calm stylized realism, not pixel/blocky primitive shipping art.
-- Japanese-inspired spatial calm + contemporary Indian lived culture.
-- Do not gate normal streets; progression unlocks capabilities/activities/life development.
-- No combat, premium currency, FOMO, XP-grind focus or survival-punishment economy.
-- No visible hunger/energy/relationship/vibe meters.
-- React owns UI; Three.js owns the frame/world.
-- Persistent consequences are server-authoritative.
-- Never trust client price/reward/permission/inventory authority.
-- Chores/cooking remain multi-step embodied systems; never replace them with fake wait timers.
-- Couple/Friends share the same underlying engine.
-- Memory Book is core, not optional gallery polish.
-
-## Repository state and architecture
-
-Read first:
-
-1. `docs/PRD.md`
-2. `HANDOFF.md`
-3. `docs/IMPLEMENTATION_STATUS.md`
-4. `docs/ARCHITECTURE.md`
-5. `docs/KNOWN_LIMITATIONS.md`
-6. `docs/ASSET_REQUIREMENTS.md`
-7. `docs/BUILD_PLAN.md`
-8. `docs/VERIFICATION.md`
-
-The active app is TypeScript. Obsolete JS/JSX prototype runtime files were removed; history remains in Git at the legacy import commit.
-
-Monorepo:
-
-- `client/` — React/Vite UI + Three.js/Rapier game runtime
-- `server/` — Express/Socket.IO authoritative services + repository adapters
-- `shared/` — schemas and deterministic rules
-- `content/` — typed game content
-- `tools/` — validation/sandbox verification
-
-## Implemented systems
-
-Do not rebuild these from scratch:
-
-- WebGPU-first renderer architecture + WebGL2 fallback;
-- fixed loop, input, Rapier movement, camera modes and collision;
-- ~900m-class Amaya Bay semantic city, 7 districts, 28 subareas, 45 venues, 128m streaming chunks;
-- deterministic terrain/dressing/vegetation/weather/lighting/audio foundations;
-- avatar identity/profile persistence, first/third-person body foundation and remote interpolation;
-- Couple/Friends household creation, six-character codes, presence and property voting;
-- five physical starter home shells;
-- authoritative furniture ownership/placement/move/remove/surface state and decorate mode;
-- 92 furniture/decor definitions and 15 renovations;
-- reusable micro-actions and eight chore families;
-- 23 item definitions, multiple physical groceries, 20 recipes and persistent co-op cooking;
-- personal/shared wallets, idempotent transactions and physical job sessions;
-- walking/bicycle/scooter/kayak/auto-rickshaw foundations;
-- eight persistent leisure activity sessions;
-- 12 named NPCs with schedules, dialogue and household memory flags;
-- seven active-play life stages;
-- 36 stories: 20 shared, 8 Couple, 8 Friends;
-- private manual/automatic Memory images, captions and share export;
-- moving/packing/property-transfer and renovation approval/state;
-- WebRTC household/proximity voice signaling foundation and sticky notes;
-- FOV/head-bob/reduced-motion/UI scale/high contrast/subtitles/audio/remapping/controller foundations;
-- Low/Medium/High/Capture render-cost profiles and debug metrics.
-
-## Verification baseline
-
-In the original sandbox:
+Run:
 
 ```bash
-node tools/verify-sandbox.mjs
+git status --short
+git fetch origin --prune
+git switch build/amaya-bay-v1
+git pull --ff-only origin build/amaya-bay-v1
+git rev-parse HEAD
+git log --oneline --decorate -15
 ```
 
-PASS:
+The branch you pull must contain commit `f27efcab7a491d4c23e58b48be131e83d9916400` or a descendant. If your local branch has unrelated uncommitted work, preserve it safely before switching; do not overwrite it. Do not reset the remote branch backwards.
 
-- 161 tests / 161 pass / 0 fail
-- client TypeScript PASS
-- shared TypeScript PASS
-- content TypeScript PASS
-- repository integrity PASS
-- content validation zero issues
+## 2. Read the authoritative context in this order
 
-The following were NOT application-verified because the sandbox had Node 22, no pnpm executable/registry DNS and a copied Windows dependency tree:
+1. `docs/PRD.md` — authoritative V3.1 product/technical direction.
+2. `docs/GAMEPLAY_RECOVERY_2026-09-16.md` — exact reason for this repair pass, completed fixes, and remaining browser work.
+3. `docs/superpowers/plans/2026-09-16-gameplay-world-recovery.md` — implementation plan/history.
+4. `HANDOFF.md`
+5. `docs/IMPLEMENTATION_STATUS.md`
+6. `docs/ARCHITECTURE.md`
+7. `docs/BUILD_PLAN.md`
+8. `docs/KNOWN_LIMITATIONS.md`
+9. `docs/VERIFICATION.md`
 
-- clean install / generated pnpm lockfile
-- full server TypeScript against clean dependencies
-- ESLint
-- Vite production build
-- Playwright
-- real browser two-player acceptance
-- target-hardware FPS/GPU memory
+Where older handoff/status wording conflicts with the V3.1 PRD or the dated gameplay-recovery document, use the PRD first and the recovery document second.
 
-## First exact task
+## 3. Product direction that must not regress
 
-Do **not** start by adding a new gameplay feature.
+Together V1 is a browser-only TypeScript/Three.js multiplayer cozy life simulator set in one city, Amaya Bay. It is WebGPU-first with a supported WebGL2 fallback. Do not create Electron, a native PC renderer, Unity/Unreal migration, or a second client to avoid solving browser performance.
 
-On a connected Node 24 machine:
+The V1 world-art pipeline is Three.js-native/code-authored and compiled into efficient runtime geometry. Blender/GLB is optional future input, not a dependency for completing V1.
+
+Keep these rules:
+
+- first-person is the default, third-person is always available;
+- painterly stylized realism, not primitive/blockout shipping art;
+- Medium is the canonical visual target;
+- React owns UI, not per-frame world transforms;
+- Rapier owns gameplay collision/controller correction;
+- persistent economy/home/story consequences remain server-authoritative;
+- no visible needs/relationship/vibe meters by default;
+- chores/cooking remain embodied multi-step interactions;
+- Couple/Friends share the same engine;
+- no second city, random public matchmaking or MMO-scale layer before Amaya Bay V1 is complete;
+- performance fixes must use batching, instancing, LOD, streaming, workload scaling and correct resource ownership—not by making the city visually empty.
+
+## 4. Recovery work already completed — DO NOT redo it blindly
+
+The 2026-09-16 gameplay recording showed camera obstruction, open-roof property shells, a bubble-diagram map, primitive world presentation and roughly 2k–3k draw calls in sparse views. The recovery branch already implemented:
+
+### Camera
+
+- first-person eye offset to reduce body intrusion;
+- multi-probe third-person camera obstruction rather than a single center ray;
+- immediate inward camera correction when a new obstruction appears;
+- damped recovery outward;
+- automatic registration of the permanent `amaya-bay-authored-environment` as a camera collision root;
+- camera math tests.
+
+Relevant files:
+
+- `client/src/game/camera/CameraController.ts`
+- `client/src/game/camera/cameraMath.ts`
+- `client/src/game/camera/cameraMath.test.ts`
+
+### Homes
+
+- all starter property shell paths now receive roof/ceiling caps with small eaves;
+- roof sizing is tested;
+- roof render/camera geometry does not add unnecessary Rapier roof colliders.
+
+Relevant files:
+
+- `client/src/game/world/PropertyInterior.ts`
+- `client/src/game/world/propertyShell.ts`
+- `client/src/game/world/propertyShell.test.ts`
+
+### City map
+
+- old district bubbles are no longer the main map representation;
+- authored road spine/connectors, park loop, promenade, coastline and landmark pins were added;
+- map geometry is deterministic/tested and the map received a warm cartographic visual pass.
+
+Relevant files:
+
+- `client/src/ui/game/CityMap.tsx`
+- `client/src/ui/game/CityMap.css`
+- `client/src/ui/game/cityMapGeometry.ts`
+- `client/src/ui/game/cityMapGeometry.test.ts`
+
+### Runtime batching/performance foundation
+
+- added `StaticBatchCompiler` to bake static transforms and merge compatible static meshes by shared material;
+- Lantern Street hero geometry now uses it;
+- permanent Amaya Bay landmark groups now use it;
+- shrub source pieces are compiled into material-grouped runtime geometry;
+- permanent Mogra Court/Rain Tree Lane/The Common landmarks received basic roof/plinth/facade-depth improvements while remaining batchable.
+
+Relevant files:
+
+- `client/src/game/assets/runtime/StaticBatchCompiler.ts`
+- `client/src/game/assets/runtime/StaticBatchCompiler.test.ts`
+- `client/src/game/world/HeroStreet.ts`
+- `client/src/game/world/AmayaBayEnvironment.ts`
+- `client/src/game/world/VegetationSystem.ts`
+
+### Verification infrastructure
+
+- `.github/workflows/ci.yml` now performs Node 24 + pnpm frozen install, typecheck, lint, tests, content validation, repository validation and production build;
+- ESLint was made environment-aware so browser/Node globals do not produce hundreds of false `no-undef` errors;
+- client test coverage now includes world/assets/map recovery work through the correct Vitest/Node runners.
+
+A clean GitHub Actions run on implementation commit `f27efcab7a491d4c23e58b48be131e83d9916400` passed install, typecheck, lint, tests, validation and production build.
+
+## 5. Your FIRST task: verify in a real browser before adding features
+
+Do not start jobs, stories, furniture catalog expansion, voice, or another gameplay feature.
+
+Run the baseline:
 
 ```bash
 corepack enable
-corepack prepare pnpm@12.4.1 --activate
-pnpm install
+pnpm install --frozen-lockfile
 pnpm typecheck
 pnpm lint
 pnpm test
 pnpm validate
+pnpm validate:repo
 pnpm build
-pnpm test:e2e
 ```
 
-Commit the generated `pnpm-lock.yaml` after the first clean green install. If anything fails, diagnose it from evidence. Do not weaken TypeScript, remove WebGPU architecture or reintroduce old JS just to make a stale environment pass.
+Then launch the actual client/server and reproduce the same kind of solo traversal that exposed the problem.
 
-After clean verification, manually run two-browser household onboarding/property/movement and reconnect. Fix only verified defects.
+Specifically test:
 
-## Next dependency-ordered implementation work
+1. spawn in every starter property;
+2. walk through each doorway and tight interior corner;
+3. toggle `V` first-person/third-person repeatedly;
+4. orbit the third-person camera around walls, roofs, storefronts and narrow lanes;
+5. look down in first person and inspect whether torso/head/limbs intrude incorrectly;
+6. walk Mogra Court → Lantern Street → Bay Steps;
+7. open `M` and confirm the new map communicates actual roads/coast/landmarks;
+8. repeat the original recording viewpoints if possible.
 
-1. Final humanoid GLB/rig/animations/IK and first-person embodiment polish.
-2. Production Amaya Bay hero-route art replacement/LOD/KTX2/Meshopt.
-3. Baked per-chunk navmesh/path batching/door links for NPCs.
-4. Final weather/wetness/runoff/reflection and district SFX/audio assets.
-5. Real-player shared-kitchen/furniture/moving/Memory acceptance testing.
-6. Supabase RLS/private Storage production testing.
-7. TURN voice testing and 2–6 member voice/network soak.
-8. Medium/Low performance profile on PRD target hardware.
-9. Browser/controller/accessibility matrix and PRD acceptance tests.
+If a camera/control problem remains, diagnose with evidence before changing movement speed or input math. Movement math was not the primary root cause of the recorded obstruction problem.
 
-## Relevant high-leverage files
+## 6. Measure performance before and after further renderer work
 
-- `client/src/game/GameEngine.ts`
-- `client/src/ui/game/GameCanvas.tsx`
+Use the existing debug metrics and record at minimum:
+
+- renderer backend;
+- FPS/frame time;
+- p95/p99 frame time;
+- >50 ms hitch counter;
+- draw calls;
+- triangles;
+- visible Mesh/Object3D count;
+- visible instance count;
+- resident chunks;
+- asset-registry resource counts.
+
+Capture the same viewpoints before and after each optimization.
+
+The supplied recording previously showed roughly 2,194 draws / 308k triangles around one open street view and roughly 2,977 draws / 395k triangles in another sparse open-world view. The recovery batching code should improve part of this, but DO NOT claim the target is met until you measure the new build.
+
+PRD Medium guideline remains <160 typical draw calls, <900k typical visible triangles, 60fps target at 1080p on target class hardware, and no recurring >50ms hitch.
+
+## 7. Highest-priority remaining engineering work
+
+Work in this order unless fresh profiling proves another bottleneck is larger.
+
+### A. Streamed chunk render-cost audit
+
+Inspect:
+
 - `client/src/game/world/WorldStreamer.ts`
 - `client/src/game/world/AmayaBayChunkFactory.ts`
-- `client/src/game/world/PropertyInterior.ts`
-- `client/src/game/player/PlayerController.ts`
-- `client/src/game/player/PlayerAvatar.ts`
-- `server/src/app.ts`
-- `server/src/index.ts`
-- `server/src/db/GameRepository.ts`
-- `server/src/db/LocalGameRepository.ts`
-- `server/src/db/SupabaseGameRepository.ts`
-- `server/src/game/*.ts`
-- `shared/src/index.ts`
-- `shared/src/world/city.ts`
-- `shared/src/home/*`
-- `shared/src/interaction/*`
-- `shared/src/story/*`
-- `content/src/index.ts`
-- `tools/verify-sandbox.mjs`
+- `client/src/game/world/NeighborhoodDressing.ts`
+- `client/src/game/world/CityVenueDressing.ts`
+- vegetation/prop placement paths
+- runtime asset registry/cache ownership
 
-## External dependencies/setup
+Find repeated geometry/material/object patterns still emitted as independent Mesh/Object3D submissions. Convert appropriate families to:
 
-- Supabase/Postgres/Auth/Storage for production persistence.
-- Real private Storage bucket for Memory screenshots.
-- TURN service for robust production WebRTC.
-- Final Blender/GLB/KTX2/audio assets described in `docs/ASSET_REQUIREMENTS.md`.
+- `InstancedMesh` for repeated identical geometry/material;
+- material-grouped compiled/merged `BufferGeometry` for unique static structures;
+- `BatchedMesh` only where profiling demonstrates value and both renderer backends remain correct;
+- explicit near/mid/far LODs with hysteresis.
 
-## Asset gaps
+Do not recursively dispose registry-owned shared geometry when chunks unload.
 
-The current procedural/development world and avatar are not shipping art. Preserve system/content IDs and replace proxies incrementally; never delete functioning system logic merely because final assets arrive.
+### B. Primary-route world-art recovery
 
-## Known risks
+The city is still far below the V3.1 art bar. Improve the highest-visibility route first instead of spreading weak detail everywhere:
 
-Read `docs/KNOWN_LIMITATIONS.md`. In particular, do not claim 60fps target, TURN readiness, production avatar quality or hero-route art completion until measured/verified.
+Mogra Court → Lantern Street → Bay Steps.
 
-## Execution rule
+For buildings add, where composition calls for it:
 
-Continue phase-by-phase. Before changing a system, inspect its current implementation and tests. Do not redo verified completed work. Use failing tests for behavior changes. Run relevant local tests after each atomic change and global verification at coherent checkpoints. Update `docs/IMPLEMENTATION_STATUS.md`, `HANDOFF.md` and `PROJECT_STATE.json` whenever the actual state materially changes.
+- roof/eave silhouette;
+- facade setbacks;
+- recessed windows/doors;
+- frames/sills;
+- balconies/porches/awnings;
+- railings;
+- thresholds/plinth/curb/drain ground contact;
+- selective AC/exhaust/drain/service silhouettes;
+- signs and planters;
+- warm active interior planes at appropriate times.
 
-## V3.1 technical-direction supersession
+For streets add authored rhythm rather than random clutter:
 
-As of 2026-09-15, `docs/PRD.md` V3.1 is the authoritative product and technical direction. Together V1 remains a browser-only TypeScript/Three.js product: WebGPU-first via `three/webgpu`, with WebGL2 compatibility fallback, Rapier, React for application UI only, Socket.IO, and the existing server/shared/content architecture. Core Amaya Bay art is code-authored, compiled once into shared immutable runtime assets, then rendered through measured merging, instancing, LOD, and streaming. Blender/Maya/hand-authored GLB/KTX2 exports are optional future inputs only and are not a V1 production dependency. Medium is the normal supported-desktop baseline; Low is a complete fallback. Hardware FPS claims remain unverified until a real browser profile is recorded.
+- curb/drain transitions;
+- road patches/markings;
+- poles/cables;
+- bicycles/scooters/autos;
+- benches/planters;
+- foreground vegetation overlap;
+- storefront spill-out;
+- sightline breaks and view releases.
+
+Keep all additions batch/instance/LOD-friendly.
+
+### C. Avatar/game feel
+
+The procedural avatar still looks like development art. Improve without breaking network/content identity contracts:
+
+- locomotion blending and foot contact;
+- turn-in-place / acceleration / deceleration readability;
+- better posture and body yaw behavior;
+- first-person body framing;
+- hand/contact IK for interactions;
+- higher-quality rig/animation representation using the code-owned Three.js architecture.
+
+### D. City life and atmosphere
+
+After frame cost is controlled, improve perceived life with budgeted motion:
+
+- ambient pedestrians with tiered updates;
+- bicycles/autos in distance;
+- curtains/laundry/foliage motion;
+- birds/cats/micro-events;
+- storefront state;
+- audio-zone identity;
+- rain response and wetness.
+
+Do not add expensive full-detail NPCs everywhere just to make screenshots busy.
+
+## 8. Acceptance gates before moving on
+
+Do not call the world-feel phase complete until:
+
+- the camera never spends normal traversal inside/behind walls;
+- starter homes read as enclosed architecture;
+- first-person body framing is intentional;
+- a player can understand the city map as geography;
+- the primary route no longer reads as colored boxes on a plane;
+- measured Medium draw calls/frame time are moving toward PRD budget without deleting visual identity;
+- the Quiet Walk acceptance test is passed: a tester willingly walks Mogra Court → Bay Steps and notices lighting, vegetation, NPC life, sound, storefronts, weather or city detail without being given a task.
+
+## 9. TDD / verification rules
+
+For each behavioral or renderer-structure change:
+
+1. reproduce/measure first;
+2. add or update a failing test where the behavior is testable deterministically;
+3. make the smallest architecture-correct change;
+4. run focused tests;
+5. run global typecheck/lint/test/validate/build at coherent checkpoints;
+6. inspect the diff for accidental gameplay/content regressions;
+7. update `docs/GAMEPLAY_RECOVERY_2026-09-16.md` and `docs/IMPLEMENTATION_STATUS.md` when the verified state changes materially.
+
+Do not weaken tests, TypeScript, renderer architecture or browser support to make a failure disappear.
+
+## 10. What can remain for later after world feel is actually good
+
+Only after the world/camera/performance gate is healthy should you resume deeper release work such as production avatar polish, NPC navmesh/door links, shared-kitchen acceptance, Supabase production validation, TURN/voice soak, final weather/audio pass, browser/controller matrix, and the remaining PRD acceptance tests.
+
+The immediate objective is not “more systems.” It is to make the existing game finally look, move and render like the Together V1 described by the PRD.
