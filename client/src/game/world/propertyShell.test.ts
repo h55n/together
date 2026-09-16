@@ -1,19 +1,20 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
-import { propertyRoofSpec } from './propertyShell.js';
+import { describe, expect, it } from 'vitest';
+import { propertyRoofSpec } from './propertyShell';
 
-test('couple studio roof clears the player camera and overhangs the walls', () => {
-  const roof = propertyRoofSpec(11, 9, 3);
-  assert.ok(roof.width > 11);
-  assert.ok(roof.depth > 9);
-  assert.ok(roof.centerY > 3);
-  assert.ok(roof.thickness >= 0.16);
-});
+describe('propertyRoofSpec', () => {
+  it('clears the player camera and overhangs the couple studio walls', () => {
+    const roof = propertyRoofSpec(11, 9, 3);
+    expect(roof.width).toBeGreaterThan(11);
+    expect(roof.depth).toBeGreaterThan(9);
+    expect(roof.centerY).toBeGreaterThan(3);
+    expect(roof.thickness).toBeGreaterThanOrEqual(0.16);
+  });
 
-test('larger property roofs scale with their architectural shell', () => {
-  const small = propertyRoofSpec(11, 9, 3);
-  const large = propertyRoofSpec(18, 15, 3);
-  assert.ok(large.width > small.width);
-  assert.ok(large.depth > small.depth);
-  assert.equal(large.centerY, small.centerY);
+  it('scales with larger architectural shells', () => {
+    const small = propertyRoofSpec(11, 9, 3);
+    const large = propertyRoofSpec(18, 15, 3);
+    expect(large.width).toBeGreaterThan(small.width);
+    expect(large.depth).toBeGreaterThan(small.depth);
+    expect(large.centerY).toBe(small.centerY);
+  });
 });
