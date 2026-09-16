@@ -1,5 +1,16 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "noEmit": false, "outDir": "dist", "rootDir": "src", "sourceMap": true },
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@together/shared": ["../shared/dist/index.d.ts"],
+      "@together/shared/*": ["../shared/dist/*"],
+      "@together/content": ["../content/dist/index.d.ts"]
+    }
+  },
   "exclude": ["src/**/*.test.ts"]
 }
