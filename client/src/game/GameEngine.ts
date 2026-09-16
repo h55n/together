@@ -53,6 +53,7 @@ export type GameEngineOptions = {
   onHomeGrowthInteraction?: () => void;
   avatarConfig?: AvatarConfig;
   propertyId?: string;
+  forceRendererBackend?: 'webgl2';
 };
 
 export class GameEngine {
@@ -141,7 +142,7 @@ export class GameEngine {
   }
 
   static async create(options: GameEngineOptions): Promise<GameEngine> {
-    const renderer = await Renderer.create(options.canvas);
+    const renderer = await Renderer.create(options.canvas, options.forceRendererBackend ? { forceBackend: options.forceRendererBackend } : undefined);
     const physics = await PhysicsWorld.create();
     const materials = new MaterialLibrary();
     const scene = new THREE.Scene();

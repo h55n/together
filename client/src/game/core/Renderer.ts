@@ -54,30 +54,38 @@ export class Renderer {
     let universalRendererLoaded = false;
     let fallbackReason: string | undefined;
 
-    // Keep the import indirect so a stale local dependency tree can still run the
-    // WebGL2 compatibility profile. Fresh installs on the declared Three.js
-    // version resolve `three/webgpu` and use the universal WebGPURenderer.
-    try {
-      const universalModule = (await import('three/webgpu')) as unknown as {
-        WebGPURenderer: UniversalRendererConstructor;
-      };
-      renderer = new universalModule.WebGPURenderer({
-        canvas,
-        antialias: true,
-        powerPreference: 'high-performance',
-        forceWebGL: preferredBackend === 'webgl2',
-      });
-      if (renderer.init) await renderer.init();
-      universalRendererLoaded = true;
-    } catch (error) {
-      if (!capabilities.webgl2 || options.forceBackend === 'webgl2') throw error;
-      fallbackReason = error instanceof Error ? error.message : String(error);
-      backend = 'webgl2';
+    // The native WebGL renderer is deliberately used for the compatibility
+    // profile. `WebGPURenderer({ forceWebGL: true })` can still lose its device
+    // after initialization on Chromium drivers, which produces a blank canvas.
+    if (preferredBackend === 'webgl2') {
       renderer = new THREE.WebGLRenderer({
         canvas,
         antialias: true,
         powerPreference: 'high-performance',
       }) as unknown as RuntimeRenderer;
+      fallbackReason = 'Native WebGL2 compatibility profile';
+    } else {
+      try {
+        const universalModule = (await import('three/webgpu')) as unknown as {
+          WebGPURenderer: UniversalRendererConstructor;
+        };
+        renderer = new universalModule.WebGPURenderer({
+          canvas,
+          antialias: true,
+          powerPreference: 'high-performance',
+        });
+        if (renderer.init) await renderer.init();
+        universalRendererLoaded = true;
+      } catch (error) {
+        if (!capabilities.webgl2) throw error;
+        fallbackReason = error instanceof Error ? error.message : String(error);
+        backend = 'webgl2';
+        renderer = new THREE.WebGLRenderer({
+          canvas,
+          antialias: true,
+          powerPreference: 'high-performance',
+        }) as unknown as RuntimeRenderer;
+      }
     }
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));

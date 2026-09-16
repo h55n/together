@@ -698,6 +698,8 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     void refreshHomeState().catch(() => undefined);
     void refreshMemories().catch(() => undefined);
 
+    const forceRendererBackend = new URLSearchParams(window.location.search).get('renderer') === 'webgpu' ? undefined : 'webgl2' as const;
+
     void GameEngine.create({
       canvas,
       container,
@@ -720,6 +722,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       onHomeGrowthInteraction: openHomeGrowth,
       ...(avatarConfig ? { avatarConfig } : {}),
       ...(propertyId ? { propertyId } : {}),
+      ...(forceRendererBackend ? { forceRendererBackend } : {}),
     }).then((engine) => {
       if (cancelled) { engine.dispose(); return; }
       engineRef.current = engine;
