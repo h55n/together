@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { WorldStreamer } from './WorldStreamer';
+import { PerformanceMonitor } from '../debug/PerformanceMonitor';
 
 describe('WorldStreamer', () => {
   it('commits only one expensive initial chunk per update frame', () => {
@@ -20,5 +21,13 @@ describe('WorldStreamer', () => {
     streamer.update(0.016, new THREE.Vector3(0, 0, 0));
 
     expect(queueResidency).toHaveBeenCalledTimes(1);
+  });
+
+  it('records residency-generation time separately from the chunk commit', () => {
+    const monitor = new PerformanceMonitor();
+    const streamer = new WorldStreamer(() => new THREE.Group(), monitor);
+    streamer.update(0.31, new THREE.Vector3(0, 0, 0));
+
+    expect(monitor.read().streamingGenerationMs).toBeGreaterThan(0);
   });
 });

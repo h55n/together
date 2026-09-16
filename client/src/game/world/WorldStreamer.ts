@@ -29,14 +29,17 @@ export class WorldStreamer {
 
   update(deltaSeconds: number, playerPosition: THREE.Vector3): void {
     this.updateElapsed += deltaSeconds;
+    let generationMs = 0;
     if (this.updateElapsed >= 0.3) {
       this.updateElapsed = 0;
+      const generationStarted = performance.now();
       this.queueResidency(playerPosition);
+      generationMs = performance.now() - generationStarted;
     }
     const commitStarted = performance.now();
     this.scheduler.takeFrameBudget(8, (job) => this.commitJob(job), 1);
     const commitMs = performance.now() - commitStarted;
-    this.recordMetrics(commitMs);
+    this.recordMetrics(generationMs, commitMs);
   }
 
   setResidencyRadiusChunks(radius: number): void {
@@ -107,7 +110,7 @@ export class WorldStreamer {
     return performance.now() - started;
   }
 
-  private recordMetrics(commitMs: number): void {
+  private recordMetrics(generationMs: number, commitMs: number): void {
     let active = 0; let visual = 0; let horizon = 0;
     for (const resident of this.residents.values()) {
       if (resident.ring === 'active') active += 1;
@@ -115,7 +118,7 @@ export class WorldStreamer {
       else horizon += 1;
     }
     this.performance?.recordChunks(active, visual, horizon);
-    this.performance?.recordStreaming(this.scheduler.metrics().pendingJobs, 0, commitMs);
+    this.performance?.recordStreaming(this.scheduler.metrics().pendingJobs, generationMs, commitMs);
   }
 }
 
