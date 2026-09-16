@@ -3,6 +3,7 @@ import { AMAYA_BAY_VENUES, cityHeightAt, type BuildingLot, type ChunkDressing, t
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
 import type { MaterialLibrary, WorldMaterialKey } from './MaterialLibrary';
 import { PROPERTY_WORLD_RESERVATIONS } from './PropertyLocations';
+import { StaticGeometryCache } from '../assets/runtime/StaticGeometryCache';
 
 const STYLE_MATERIALS: Record<BuildingLot['style'], WorldMaterialKey> = {
   mogra_balcony: 'warmPlaster',
@@ -15,6 +16,8 @@ const STYLE_MATERIALS: Record<BuildingLot['style'], WorldMaterialKey> = {
   waterfront_hut: 'wood',
   park_pavilion: 'warmPlaster',
 };
+
+const staticGeometries = new StaticGeometryCache();
 
 export function addChunkDressing(
   root: THREE.Group,
@@ -179,5 +182,5 @@ function addProp(
 }
 
 function box(width: number, height: number, depth: number, material: THREE.Material): THREE.Mesh {
-  return new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+  return new THREE.Mesh(staticGeometries.box(width, height, depth), material);
 }
