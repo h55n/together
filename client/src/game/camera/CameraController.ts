@@ -1,8 +1,19 @@
 import * as THREE from 'three';
-import { clampPitch, DEFAULT_FIRST_PERSON_FOV, thirdPersonDesiredOffset } from './cameraMath';
+import {
+  clampPitch,
+  DEFAULT_FIRST_PERSON_FOV,
+  firstPersonEyeOffset,
+  safeThirdPersonDistance,
+  thirdPersonDesiredOffset,
+} from './cameraMath';
 import type { PlayerAvatar } from '../player/PlayerAvatar';
 
 export type CameraMode = 'first_person' | 'third_person';
+
+const THIRD_PERSON_DISTANCE = 4;
+const CAMERA_COLLISION_RADIUS = 0.18;
+const CAMERA_COLLISION_PADDING = 0.2;
+const CAMERA_MIN_DISTANCE = 0.65;
 
 export class CameraController {
   readonly camera: THREE.PerspectiveCamera;
@@ -17,14 +28,21 @@ export class CameraController {
   private readonly lookTarget = new THREE.Vector3();
   private readonly raycaster = new THREE.Raycaster();
   private readonly collisionMeshes: THREE.Object3D[] = [];
+  private readonly rayDirection = new THREE.Vector3();
+  private readonly probeOrigin = new THREE.Vector3();
+  private readonly probeRight = new THREE.Vector3();
+  private readonly probeUp = new THREE.Vector3(0, 1, 0);
+  private permanentEnvironmentRegistered = false;
 
   constructor(private readonly avatar: PlayerAvatar, aspect: number) {
     this.camera = new THREE.PerspectiveCamera(DEFAULT_FIRST_PERSON_FOV, aspect, 0.04, 700);
     this.camera.rotation.order = 'YXZ';
     avatar.setFirstPerson(true);
+    this.ensurePermanentEnvironmentCollision();
   }
 
   addCollisionRoot(root: THREE.Object3D): void {
+    if (this.collisionMeshes.includes(root)) return;
     this.collisionMeshes.push(root);
   }
 
@@ -44,29 +62,81 @@ export class CameraController {
   }
 
   update(deltaSeconds: number, moving: boolean, jogging: boolean): void {
+    this.ensurePermanentEnvironmentCollision();
     const root = this.avatar.root.position;
     if (this.mode === 'first_person') {
       this.bobTime += moving ? deltaSeconds * (jogging ? 9 : 6.2) : deltaSeconds * 1.5;
       const bob = moving ? Math.sin(this.bobTime) * this.headBobAmount * (jogging ? 1.3 : 1) : 0;
-      this.camera.position.set(root.x, root.y + this.avatar.eyeHeight + bob, root.z);
+      const eyeOffset = firstPersonEyeOffset(this.yaw);
+      this.camera.position.set(root.x + eyeOffset.x, root.y + this.avatar.eyeHeight + bob, root.z + eyeOffset.z);
       this.camera.rotation.set(this.pitch, this.yaw, 0);
       return;
     }
 
-    const desiredOffset = thirdPersonDesiredOffset(this.yaw, 4);
+    const desiredOffset = thirdPersonDesiredOffset(this.yaw, THIRD_PERSON_DISTANCE);
     this.lookTarget.set(root.x, root.y + 1.35, root.z);
     this.targetPosition.set(root.x + desiredOffset.x, root.y + desiredOffset.y, root.z + desiredOffset.z);
 
-    const rayDirection = this.targetPosition.clone().sub(this.lookTarget);
-    const desiredDistance = rayDirection.length();
-    rayDirection.normalize();
-    this.raycaster.set(this.lookTarget, rayDirection);
-    this.raycaster.far = desiredDistance;
-    const hit = this.raycaster.intersectObjects(this.collisionMeshes, true)[0];
-    if (hit) this.targetPosition.copy(this.lookTarget).addScaledVector(rayDirection, Math.max(0.7, hit.distance - 0.18));
+    this.rayDirection.copy(this.targetPosition).sub(this.lookTarget);
+    const desiredDistance = this.rayDirection.length();
+    this.rayDirection.normalize();
 
-    const damping = 1 - Math.exp(-deltaSeconds * 12);
-    this.camera.position.lerp(this.targetPosition, damping);
+    const hitDistances = this.collectProbeHitDistances(desiredDistance);
+    const safeDistance = safeThirdPersonDistance(
+      desiredDistance,
+      hitDistances,
+      CAMERA_COLLISION_PADDING,
+      CAMERA_MIN_DISTANCE,
+    );
+    this.targetPosition.copy(this.lookTarget).addScaledVector(this.rayDirection, safeDistance);
+
+    const currentDistance = this.camera.position.distanceTo(this.lookTarget);
+    if (safeDistance + 0.06 < currentDistance) {
+      // Never ease a camera through a newly detected wall. Obstruction recovery must be immediate.
+      this.camera.position.copy(this.targetPosition);
+    } else {
+      const damping = 1 - Math.exp(-deltaSeconds * 12);
+      this.camera.position.lerp(this.targetPosition, damping);
+    }
+
     this.camera.lookAt(this.lookTarget.x, this.lookTarget.y + Math.sin(this.pitch) * 1.6, this.lookTarget.z);
+  }
+
+  private collectProbeHitDistances(desiredDistance: number): number[] {
+    if (this.collisionMeshes.length === 0) return [];
+
+    this.probeRight.crossVectors(this.rayDirection, this.probeUp);
+    if (this.probeRight.lengthSq() < 1e-6) this.probeRight.set(1, 0, 0);
+    else this.probeRight.normalize();
+
+    const offsets: readonly [number, number][] = [
+      [0, 0],
+      [CAMERA_COLLISION_RADIUS, 0],
+      [-CAMERA_COLLISION_RADIUS, 0],
+      [0, CAMERA_COLLISION_RADIUS],
+      [0, -CAMERA_COLLISION_RADIUS * 0.7],
+    ];
+    const distances: number[] = [];
+
+    for (const [rightOffset, upOffset] of offsets) {
+      this.probeOrigin.copy(this.lookTarget)
+        .addScaledVector(this.probeRight, rightOffset)
+        .addScaledVector(this.probeUp, upOffset);
+      this.raycaster.set(this.probeOrigin, this.rayDirection);
+      this.raycaster.near = 0.02;
+      this.raycaster.far = desiredDistance;
+      const hit = this.raycaster.intersectObjects(this.collisionMeshes, true)[0];
+      if (hit) distances.push(hit.distance);
+    }
+
+    return distances;
+  }
+
+  private ensurePermanentEnvironmentCollision(): void {
+    if (this.permanentEnvironmentRegistered) return;
+    const environment = this.avatar.root.parent?.getObjectByName('amaya-bay-authored-environment');
+    if (!environment) return;
+    this.addCollisionRoot(environment);
+    this.permanentEnvironmentRegistered = true;
   }
 }
