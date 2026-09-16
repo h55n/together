@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createSeededRandom } from '@together/shared';
 import type { MaterialLibrary } from './MaterialLibrary';
 import { AssetRegistry, type AssetRegistryMetrics } from '../assets/runtime/AssetRegistry';
@@ -61,7 +62,7 @@ export class VegetationSystem {
         frond.castShadow = true;
         group.add(frond);
       }
-      return group;
+      return this.compileRuntimeTree(group);
     }
 
     const branchCount = options.species === 'rain_tree' ? 7 : 5;
@@ -101,7 +102,33 @@ export class VegetationSystem {
       group.add(foliage);
     }
 
-    return group;
+    return this.compileRuntimeTree(group);
+  }
+
+  private compileRuntimeTree(authoring: THREE.Group): THREE.Group {
+    authoring.updateMatrixWorld(true);
+    const byMaterial = new Map<string, { material: THREE.Material; geometries: THREE.BufferGeometry[] }>();
+    authoring.traverse((object) => {
+      if (!(object instanceof THREE.Mesh) || Array.isArray(object.material)) return;
+      const material = object.material as THREE.Material;
+      let entry = byMaterial.get(material.uuid);
+      if (!entry) {
+        entry = { material, geometries: [] };
+        byMaterial.set(material.uuid, entry);
+      }
+      entry.geometries.push(object.geometry.clone().applyMatrix4(object.matrixWorld));
+    });
+    const runtime = new THREE.Group();
+    runtime.name = authoring.name;
+    for (const { material, geometries } of byMaterial.values()) {
+      const geometry = mergeGeometries(geometries, false);
+      if (!geometry) continue;
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      runtime.add(mesh);
+    }
+    return runtime;
   }
 
   createShrub(seed: number, scale = 1): THREE.Group {

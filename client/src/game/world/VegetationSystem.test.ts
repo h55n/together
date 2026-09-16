@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { VegetationSystem } from './VegetationSystem';
 
-const materials = { get: () => new THREE.MeshStandardMaterial() } as never;
+const materialByKey = new Map<string, THREE.MeshStandardMaterial>();
+const materials = { get: (key: string) => {
+  let material = materialByKey.get(key);
+  if (!material) { material = new THREE.MeshStandardMaterial(); materialByKey.set(key, material); }
+  return material;
+} } as never;
 
 describe('VegetationSystem', () => {
   it('reuses compiled geometry for deterministic tree variants', () => {
@@ -21,5 +26,14 @@ describe('VegetationSystem', () => {
     vegetation.createTree({ species: 'rain_tree', seed: 9 });
 
     expect(vegetation.metrics()).toMatchObject({ compiledAssets: 1 });
+  });
+
+  it('compiles a detailed tree variant into a small material-grouped runtime mesh set', () => {
+    const vegetation = new VegetationSystem(materials);
+    const tree = vegetation.createTree({ species: 'rain_tree', seed: 7 });
+    let meshCount = 0;
+    tree.traverse((object) => { if (object instanceof THREE.Mesh) meshCount += 1; });
+
+    expect(meshCount).toBeLessThanOrEqual(4);
   });
 });
