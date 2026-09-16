@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
+import { compileStaticMeshesByMaterial } from '../assets/runtime/StaticBatchCompiler';
 import type { MaterialLibrary } from './MaterialLibrary';
 import { VegetationSystem } from './VegetationSystem';
 
@@ -94,6 +95,7 @@ export function buildLanternStreetHero(
   interactions.set('bicycle_rack', new THREE.Vector3(origin.x - 10.1, originY + 0.2, origin.z - 30));
   interactions.set('street_planter', new THREE.Vector3(origin.x + 11.9, originY + 0.2, origin.z + 31));
 
+  compileStaticMeshesByMaterial(group);
   return { group, spawn: new THREE.Vector3(origin.x, originY + 1.05, origin.z + 42), interactionAnchors: interactions };
 }
 
