@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run src/game/core src/game/lighting src/game/weather && tsx --test src/game/camera/**/*.test.ts src/game/player/**/*.test.ts",
+    "test": "vitest run src/game/core src/game/lighting src/game/weather && tsx --test src/game/camera/**/*.test.ts src/game/player/**/*.test.ts src/game/world/**/*.test.ts src/game/assets/runtime/**/*.test.ts src/ui/game/**/*.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -29,7 +29,6 @@
     "@types/react": "^18.3.24",
     "@types/react-dom": "^18.3.7",
     "@types/three": "^0.186.0",
-    "@vitejs/plugin-react": "^5.0.2",
     "autoprefixer": "10.6.0",
     "jsdom": "^27.0.0",
     "postcss": "8.5.28",
