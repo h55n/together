@@ -9,8 +9,8 @@ export type VegetationSpecies = 'rain_tree' | 'gulmohar' | 'ficus' | 'palm' | 'o
 type TreeOptions = { species: VegetationSpecies; seed: number; scale?: number };
 
 /**
- * Procedural placeholder vegetation with branch hierarchy and irregular canopy masses.
- * Final Blender-authored LOD assets can replace each returned tree group without changing placement data.
+ * Three.js-native procedural vegetation. Authoring pieces are compiled into a
+ * small material-grouped runtime representation before placement.
  */
 export class VegetationSystem {
   private readonly assets: AssetRegistry;
@@ -29,6 +29,7 @@ export class VegetationSystem {
     instance.scale.setScalar(options.scale ?? 1);
     return instance;
   }
+
   metrics(): AssetRegistryMetrics { return this.assets.metrics(); }
 
   private compileTree(options: TreeOptions): THREE.Group {
@@ -123,6 +124,8 @@ export class VegetationSystem {
     for (const { material, geometries } of byMaterial.values()) {
       const geometry = mergeGeometries(geometries, false);
       if (!geometry) continue;
+      geometry.computeBoundingBox();
+      geometry.computeBoundingSphere();
       const mesh = new THREE.Mesh(geometry, material);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -134,6 +137,7 @@ export class VegetationSystem {
   createShrub(seed: number, scale = 1): THREE.Group {
     const random = createSeededRandom(seed);
     const group = new THREE.Group();
+    group.name = 'vegetation:shrub';
     for (let i = 0; i < 5; i += 1) {
       const leafMass = new THREE.Mesh(
         new THREE.IcosahedronGeometry((0.42 + random() * 0.24) * scale, 1),
@@ -144,6 +148,6 @@ export class VegetationSystem {
       leafMass.castShadow = true;
       group.add(leafMass);
     }
-    return group;
+    return this.compileRuntimeTree(group);
   }
 }
