@@ -31,4 +31,20 @@ describe('compileStaticMeshesByMaterial', () => {
     result.traverse((object) => { if (object instanceof THREE.Mesh) meshCount += 1; });
     expect(meshCount).toBe(2);
   });
+
+  it('keeps source meshes visible when a material batch cannot be merged safely', () => {
+    const material = new THREE.MeshBasicMaterial();
+    const root = new THREE.Group();
+    const withUv = new THREE.BoxGeometry(1, 1, 1);
+    const withoutUv = new THREE.BoxGeometry(1, 1, 1);
+    withoutUv.deleteAttribute('uv');
+    root.add(new THREE.Mesh(withUv, material));
+    root.add(new THREE.Mesh(withoutUv, material));
+
+    const result = compileStaticMeshesByMaterial(root);
+    let meshCount = 0;
+    result.traverse((object) => { if (object instanceof THREE.Mesh) meshCount += 1; });
+
+    expect(meshCount).toBe(2);
+  });
 });
