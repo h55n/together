@@ -19,6 +19,7 @@ import type { WorldInteraction } from '../interaction/InteractionSystem';
 import type { MaterialLibrary } from './MaterialLibrary';
 import { buildStarterHome, STARTER_HOME_CENTER } from './StarterHome';
 import { PROPERTY_WORLD_PLACEMENTS } from './PropertyLocations';
+import { propertyRoofSpec } from './propertyShell';
 
 export type PropertyInteriorBuild = {
   group: THREE.Group;
@@ -33,6 +34,14 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
   const property = starterPropertyById(propertyId ?? 'couple_studio') ?? starterPropertyById('couple_studio')!;
   if (property.id === 'couple_studio') {
     const starter = buildStarterHome(materials, physics);
+    const roof = propertyRoofSpec(11, 9, 3);
+    const roofMesh = addBox(
+      starter.group,
+      [roof.width, roof.thickness, roof.depth],
+      [STARTER_HOME_CENTER.x, roof.centerY, STARTER_HOME_CENTER.z],
+      materials.get('warmPlaster'),
+    );
+    roofMesh.name = 'home:couple_studio:roof';
     return {
       ...starter,
       center: STARTER_HOME_CENTER,
@@ -58,6 +67,9 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
   // South wall doorway is intentionally open in the middle.
   addWall(group, physics, [halfW - 1.3, 3, 0.18], [center.x - (halfW + 1.3) / 2, 1.5, center.z - halfD], materials);
   addWall(group, physics, [halfW - 1.3, 3, 0.18], [center.x + (halfW + 1.3) / 2, 1.5, center.z - halfD], materials);
+  const roof = propertyRoofSpec(size.width, size.depth, 3);
+  const roofMesh = addBox(group, [roof.width, roof.thickness, roof.depth], [center.x, roof.centerY, center.z], materials.get('warmPlaster'));
+  roofMesh.name = `home:${property.id}:roof`;
 
   // Interior partitions vary with household capacity: more rooms without creating a CAD-style floor plan.
   const partitionX = center.x + (property.id === 'one_bhk' ? 2.2 : 1.4);
