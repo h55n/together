@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { detectRendererCapabilities, selectRendererBackend, type RendererBackend } from './rendererBackend';
+import { detectRendererCapabilities, resolveRendererForceBackend, selectRendererBackend, type RendererBackend } from './rendererBackend';
 
 export type RendererRuntimeInfo = {
   requestedBackend: RendererBackend;
@@ -36,6 +36,7 @@ export class Renderer {
   readonly renderer: RuntimeRenderer;
   readonly info: RendererRuntimeInfo;
   private pixelRatioCap = 2;
+  private appliedPixelRatio = Number.NaN;
 
   private constructor(renderer: RuntimeRenderer, info: RendererRuntimeInfo) {
     this.renderer = renderer;
@@ -43,8 +44,12 @@ export class Renderer {
   }
 
   static async create(canvas: HTMLCanvasElement, options: { forceBackend?: 'webgl2' } = {}): Promise<Renderer> {
-    const capabilities = detectRendererCapabilities(canvas);
-    const preferredBackend = selectRendererBackend(capabilities, options.forceBackend);
+    const forceBackend = resolveRendererForceBackend(
+      typeof window === 'undefined' ? '' : window.location.search,
+      options.forceBackend,
+    );
+    const capabilities = detectRendererCapabilities(canvas, forceBackend === 'webgl2');
+    const preferredBackend = selectRendererBackend(capabilities, forceBackend);
     if (preferredBackend === 'unsupported') {
       throw new Error('Together requires WebGPU or WebGL2 support.');
     }
@@ -53,10 +58,10 @@ export class Renderer {
     let backend: RendererBackend = preferredBackend;
     let universalRendererLoaded = false;
     let fallbackReason: string | undefined;
+    let webgl2Detected = capabilities.webgl2;
 
-    // The native WebGL renderer is deliberately used for the compatibility
-    // profile. `WebGPURenderer({ forceWebGL: true })` can still lose its device
-    // after initialization on Chromium drivers, which produces a blank canvas.
+    // The native WebGL renderer is deliberately used for explicit compatibility
+    // mode. Normal startup remains WebGPU-first.
     if (preferredBackend === 'webgl2') {
       renderer = new THREE.WebGLRenderer({
         canvas,
@@ -64,6 +69,7 @@ export class Renderer {
         powerPreference: 'high-performance',
       }) as unknown as RuntimeRenderer;
       fallbackReason = 'Native WebGL2 compatibility profile';
+      webgl2Detected = true;
     } else {
       try {
         const universalModule = (await import('three/webgpu')) as unknown as {
@@ -77,49 +83,65 @@ export class Renderer {
         if (renderer.init) await renderer.init();
         universalRendererLoaded = true;
       } catch (error) {
-        if (!capabilities.webgl2) throw error;
         fallbackReason = error instanceof Error ? error.message : String(error);
         backend = 'webgl2';
-        renderer = new THREE.WebGLRenderer({
-          canvas,
-          antialias: true,
-          powerPreference: 'high-performance',
-        }) as unknown as RuntimeRenderer;
+        try {
+          renderer = new THREE.WebGLRenderer({
+            canvas,
+            antialias: true,
+            powerPreference: 'high-performance',
+          }) as unknown as RuntimeRenderer;
+          webgl2Detected = true;
+        } catch (fallbackError) {
+          const reason = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+          throw new Error(`WebGPU initialization failed and WebGL2 fallback was unavailable: ${reason}`, { cause: error });
+        }
       }
     }
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const initialPixelRatio = Math.min(window.devicePixelRatio, 2);
+    renderer.setPixelRatio(initialPixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
     renderer.shadowMap.enabled = true;
 
-    return new Renderer(renderer, {
+    const result = new Renderer(renderer, {
       requestedBackend: preferredBackend,
       backend,
       ...(fallbackReason ? { fallbackReason } : {}),
       webgpuDetected: capabilities.webgpu,
-      webgl2Detected: capabilities.webgl2,
+      webgl2Detected,
       universalRendererLoaded,
     });
+    result.appliedPixelRatio = initialPixelRatio;
+    return result;
   }
 
   setPixelRatioCap(cap: number): void {
     this.pixelRatioCap = Math.max(0.75, Math.min(2, cap));
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.pixelRatioCap));
+    this.applyPixelRatio(window.devicePixelRatio);
   }
 
   setShadowsEnabled(enabled: boolean): void {
+    if (this.renderer.shadowMap.enabled === enabled) return;
     this.renderer.shadowMap.enabled = enabled;
   }
 
   resize(width: number, height: number, pixelRatio = window.devicePixelRatio): void {
-    this.renderer.setPixelRatio(Math.min(pixelRatio, this.pixelRatioCap));
+    this.applyPixelRatio(pixelRatio);
     this.renderer.setSize(width, height);
   }
 
   dispose(): void {
     this.renderer.dispose();
+  }
+
+  private applyPixelRatio(pixelRatio: number): void {
+    const next = Math.min(pixelRatio, this.pixelRatioCap);
+    if (Math.abs(next - this.appliedPixelRatio) < 0.001) return;
+    this.appliedPixelRatio = next;
+    this.renderer.setPixelRatio(next);
   }
 }
