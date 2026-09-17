@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { GameRepository } from './GameRepository.js';
+import { createAtomicSupabaseGameRepository } from './createAtomicSupabaseGameRepository.js';
 import { LocalGameRepository } from './LocalGameRepository.js';
-import { SupabaseGameRepository } from './SupabaseGameRepository.js';
 import { logger } from '../logging/logger.js';
 
 let singleton: GameRepository | null = null;
@@ -19,7 +19,7 @@ export function createGameRepository(): GameRepository {
     singleton = repository;
     return repository;
   }
-  const repository = new SupabaseGameRepository(
+  const repository = createAtomicSupabaseGameRepository(
     createClient(url, serviceRole, { auth: { persistSession: false } }),
   );
   singleton = repository;
