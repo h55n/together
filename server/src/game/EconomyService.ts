@@ -1,4 +1,4 @@
-import { applyWalletTransaction, furnitureById, jobById, purchaseRequestSchema, type JobId, type ShiftQuality } from '@together/shared';
+import { applyWalletTransaction, furnitureById, jobById, purchaseRequestSchema, type FurnitureDefinition, type JobId, type ShiftQuality } from '@together/shared';
 import { requireAtomicGameRepository, type GameRepository, type HouseholdRecord, type JobSessionRecord, type TransactionRecord } from '../db/GameRepository.js';
 
 export type EconomySnapshot = { sharedWallet: number; personalWallet: number; transaction: TransactionRecord };
@@ -26,6 +26,13 @@ export class EconomyService {
       const result = applyWalletTransaction(member.personalWallet, -amount);
       if (!result.ok) throw new Error('Insufficient personal funds');
       member.personalWallet = result.balance;
+    }
+    if (isFlatPackFurniture(definition)) {
+      const rawFlags = household.hiddenState.flags;
+      const flags = rawFlags && typeof rawFlags === 'object' && !Array.isArray(rawFlags)
+        ? Object.fromEntries(Object.entries(rawFlags).map(([key, value]) => [key, Boolean(value)]))
+        : {};
+      household.hiddenState = { ...household.hiddenState, flags: { ...flags, bought_flat_pack: true } };
     }
     const transaction = this.transaction(householdId, userId, request.wallet, -amount, 'purchase', request.idempotencyKey, request.itemId);
     const inventory = await this.repository.listInventory('household', householdId);
@@ -104,4 +111,8 @@ export class EconomyService {
     if (!household.members.some((member) => member.userId === userId && member.membershipState === 'active')) throw new Error('User is not an active household member');
     return household;
   }
+}
+
+function isFlatPackFurniture(definition: FurnitureDefinition): boolean {
+  return definition.category === 'storage' || definition.category === 'table' || definition.category === 'bed';
 }
