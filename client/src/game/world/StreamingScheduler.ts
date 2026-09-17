@@ -23,6 +23,10 @@ export class StreamingScheduler {
     this.jobs = [...byKey.values()].sort((left, right) => left.priority - right.priority || left.key.localeCompare(right.key));
   }
 
+  clear(): void {
+    this.jobs = [];
+  }
+
   takeFrameBudget(budgetMs: number, commit: (job: StreamingJob) => number, maxJobs = Number.POSITIVE_INFINITY): StreamingJob[] {
     const committed: StreamingJob[] = [];
     let elapsedMs = 0;
