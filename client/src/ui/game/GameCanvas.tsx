@@ -24,6 +24,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const engineRef = useRef<GameEngine | null>(null);
   const homeVersionRef = useRef(0);
   const lastAutomaticCaptureRef = useRef(-300_000);
+  const captureBusyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [interactionPrompt, setInteractionPrompt] = useState<string | null>(null);
@@ -150,7 +151,8 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
   const captureMemory = useCallback(async (): Promise<void> => {
     const engine = engineRef.current;
-    if (!engine || !networkSession || captureBusy) return;
+    if (!engine || !networkSession || captureBusyRef.current) return;
+    captureBusyRef.current = true;
     setCaptureBusy(true);
     try {
       const context = engine.getMemoryContext();
@@ -186,13 +188,14 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
+      captureBusyRef.current = false;
       setCaptureBusy(false);
     }
-  }, [authHeaders, captureBusy, networkSession]);
+  }, [authHeaders, networkSession]);
 
   const captureAutomaticMemory = useCallback(async (tag: string): Promise<void> => {
     const engine = engineRef.current;
-    if (!engine || !networkSession || captureBusy) return;
+    if (!engine || !networkSession || captureBusyRef.current) return;
     const context = engine.getMemoryContext();
     const secondsSinceAutomaticCapture = Math.max(0, (performance.now() - lastAutomaticCaptureRef.current) / 1000);
     const scenic = /Bay|Park|Hill|Garden|Cove|Sunset/i.test(context.locationId) ? 0.95 : 0.62;
@@ -204,6 +207,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       secondsSinceAutomaticCapture,
     });
     if (!shouldAutoCapture(score, secondsSinceAutomaticCapture)) return;
+    captureBusyRef.current = true;
     setCaptureBusy(true);
     try {
       const blob = await engine.captureFrame(0.88);
@@ -232,8 +236,11 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     } catch (cause) {
       // Automatic Memory failure must never interrupt the activity itself.
       console.warn('[Together Memory]', cause);
-    } finally { setCaptureBusy(false); }
-  }, [authHeaders, captureBusy, networkSession]);
+    } finally {
+      captureBusyRef.current = false;
+      setCaptureBusy(false);
+    }
+  }, [authHeaders, networkSession]);
 
   const exportMemory = useCallback(async (memory: MemoryView): Promise<void> => {
     if (!networkSession) return;
@@ -698,7 +705,8 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     void refreshHomeState().catch(() => undefined);
     void refreshMemories().catch(() => undefined);
 
-    const forceRendererBackend = new URLSearchParams(window.location.search).get('renderer') === 'webgpu' ? undefined : 'webgl2' as const;
+    const requestedRenderer = new URLSearchParams(window.location.search).get('renderer');
+    const forceRendererBackend = requestedRenderer === 'webgl2' ? 'webgl2' as const : undefined;
 
     void GameEngine.create({
       canvas,
