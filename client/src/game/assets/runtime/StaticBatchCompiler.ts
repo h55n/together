@@ -71,7 +71,7 @@ function geometryCompatibilityKey(geometry: THREE.BufferGeometry): string {
     .join('|');
   const morphAttributes = Object.entries(geometry.morphAttributes)
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, morphs]) => `${name}[${morphs.map(attributeStorageKey).join(',')}]`)
+    .map(([name, morphs]) => `${name}[${(morphs ?? []).map(attributeStorageKey).join(',')}]`)
     .join('|');
   return `${indexKey};attrs=${attributes};morphRelative=${geometry.morphTargetsRelative ? 1 : 0};morph=${morphAttributes}`;
 }
