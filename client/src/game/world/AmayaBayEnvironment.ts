@@ -20,12 +20,16 @@ export class AmayaBayEnvironment {
   private createMograCourt(): THREE.Group {
     const root = new THREE.Group();
     root.name = 'landmark:mogra-court';
-    const y = cityHeightAt(-225, 160);
-    for (let i = 0; i < 3; i += 1) {
+    const apartments = [
+      { x: -250, z: 135, height: 12 },
+      { x: -224, z: 135, height: 14.5 },
+      { x: -198, z: 150, height: 17 },
+    ] as const;
+
+    for (let i = 0; i < apartments.length; i += 1) {
       const building = new THREE.Group();
-      const x = -250 + i * 26;
-      const z = 160 + (i % 2) * 16;
-      const height = 12 + i * 2.5;
+      const { x, z, height } = apartments[i]!;
+      const y = cityHeightAt(x, z);
       addBox(building, [18, height, 22], [x, y + height / 2, z], this.materials.get(i === 1 ? 'sagePlaster' : 'warmPlaster'));
       addBox(building, [19.2, 0.34, 23.2], [x, y + height + 0.17, z], this.materials.get(i === 1 ? 'warmPlaster' : 'terracottaPlaster'));
       addBox(building, [19, 0.42, 22.8], [x, y + 0.21, z], this.materials.get('stone'));
@@ -41,11 +45,13 @@ export class AmayaBayEnvironment {
       }
       root.add(building);
     }
+
     // Corner grocery/laundromat edge gives the residential colony a lived commercial seam.
-    addBox(root, [13, 4.2, 8], [-183, y + 2.1, 126], this.materials.get('terracottaPlaster'));
-    addBox(root, [14, 0.28, 9], [-183, y + 4.34, 126], this.materials.get('warmPlaster'));
-    addBox(root, [12.2, 2.25, 0.12], [-183, y + 1.45, 121.95], this.materials.get('glass'), false);
-    addBox(root, [14, 0.18, 2.2], [-183, y + 3.7, 121.2], this.materials.get('sagePlaster'));
+    const shopY = cityHeightAt(-183, 126);
+    addBox(root, [13, 4.2, 8], [-183, shopY + 2.1, 126], this.materials.get('terracottaPlaster'));
+    addBox(root, [14, 0.28, 9], [-183, shopY + 4.34, 126], this.materials.get('warmPlaster'));
+    addBox(root, [12.2, 2.25, 0.12], [-183, shopY + 1.45, 121.95], this.materials.get('glass'), false);
+    addBox(root, [14, 0.18, 2.2], [-183, shopY + 3.7, 121.2], this.materials.get('sagePlaster'));
     return root;
   }
 
