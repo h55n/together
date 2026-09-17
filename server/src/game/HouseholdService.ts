@@ -3,6 +3,7 @@ import {
   createInviteCode,
   householdCreateSchema,
   normalizeInviteCode,
+  starterPropertyById,
   type HouseholdType,
   stageForActiveSeconds,
 } from '@together/shared';
@@ -49,8 +50,14 @@ export class HouseholdService {
 
   async createSoloExplorer(creatorUserId: string): Promise<HouseholdRecord> {
     const household = await this.createHousehold(creatorUserId, { name: 'Solo Explorer', type: 'friends' });
-    household.propertyId = 'one_bhk';
-    household.hiddenState = { ...household.hiddenState, soloExplorer: true };
+    const property = starterPropertyById('one_bhk');
+    if (!property) throw new Error('Solo Explorer property definition is missing');
+    household.propertyId = property.recordId;
+    household.hiddenState = {
+      ...household.hiddenState,
+      soloExplorer: true,
+      flags: { ...this.flags(household), property_assigned: true, moved_in: true },
+    };
     await this.repository.saveHousehold(household);
     return household;
   }
@@ -83,7 +90,6 @@ export class HouseholdService {
     return household;
   }
 
-
   async advanceActiveTime(householdId: string, seconds: number): Promise<HouseholdRecord> {
     if (!Number.isFinite(seconds) || seconds <= 0) throw new Error('Active time increment must be positive');
     const household = await this.repository.getHousehold(householdId);
@@ -102,6 +108,12 @@ export class HouseholdService {
       throw new Error('User is not an active member of this household');
     }
     return household;
+  }
+
+  private flags(household: HouseholdRecord): Record<string, boolean> {
+    const raw = household.hiddenState.flags;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Boolean(value)]));
   }
 
   private async createUniqueInviteCode(): Promise<string> {
