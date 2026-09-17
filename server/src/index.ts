@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
+import { rooms } from '@together/shared';
 import { createApp } from './app.js';
 import { createAuthService } from './auth/AuthService.js';
 import { createGameRepository } from './db/createGameRepository.js';
@@ -48,12 +49,36 @@ const transitService = new TransitService(repository);
 const activityService = new ActivityService(repository);
 const memoryImageStore = createMemoryImageStore();
 const timeService = await TimeService.create();
-const app = createApp({ authService, householdService, propertySelectionService, homeService, economyService, storyService, memoryService, inventoryService, cookingService, npcStateService, movingService, renovationService, noteService, memoryImageStore, profileService, jobSessionService, transitService, activityService });
+let publishHouseholdEvent: ((householdId: string, event: string, payload: unknown) => void) | undefined;
+const app = createApp({
+  authService,
+  householdService,
+  propertySelectionService,
+  homeService,
+  economyService,
+  storyService,
+  memoryService,
+  inventoryService,
+  cookingService,
+  npcStateService,
+  movingService,
+  renovationService,
+  noteService,
+  memoryImageStore,
+  profileService,
+  jobSessionService,
+  transitService,
+  activityService,
+  publishHouseholdEvent: (householdId, event, payload) => publishHouseholdEvent?.(householdId, event, payload),
+});
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: [clientUrl, 'http://localhost:5173'], credentials: true },
   transports: ['websocket', 'polling'],
 });
+publishHouseholdEvent = (householdId, event, payload) => {
+  io.to(rooms.household(householdId)).emit(event, payload);
+};
 const onlinePresence = registerSocketServer(io, { authService, householdService, timeService, profileService });
 
 const timeTimer = setInterval(() => {
