@@ -50,6 +50,25 @@ test('completed job session cannot be paid twice with a different completion key
   assert.equal(fresh?.members[0]?.personalWallet, first.economy.personalWallet);
 });
 
+test('job payout persistence is atomic when the transaction write fails', async () => {
+  const repository = new FailingTransactionRepository();
+  const households = new HouseholdService(repository, () => 0.3);
+  const household = await households.createHousehold('owner', { type: 'friends', name: 'Atomic Jobs' });
+  const jobs = new JobSessionService(repository, new EconomyService(repository));
+  const session = await jobs.start(household.id, 'owner', 'nursery_assistant', 'atomic-job-start-001');
+  for (const action of jobById('nursery_assistant')!.actions) await jobs.advance(session.id, 'owner', action);
+  repository.failTransactionWrites = true;
+
+  await assert.rejects(
+    () => jobs.complete(session.id, 'owner', 'atomic-job-finish-001'),
+    /simulated transaction persistence failure/,
+  );
+
+  const fresh = await repository.getHousehold(household.id);
+  assert.equal(fresh?.members[0]?.personalWallet, 1500);
+  assert.equal((await repository.getJobSession(session.id))?.state, 'active');
+});
+
 test('solo explorer stores the canonical UUID property record id', async () => {
   const repository = new LocalGameRepository();
   const households = new HouseholdService(repository, () => 0.42);
