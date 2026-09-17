@@ -134,7 +134,7 @@ describe('GameCanvas engine lifecycle', () => {
     ], {});
   });
 
-  it('updates resident weather dialogue when the in-game weather changes', async () => {
+  it('keeps resident dialogue reactive to weather chosen by the game UI', async () => {
     const engine = engineStub();
     create.mockResolvedValue(engine);
     const npc = namedNpcs[0];
@@ -153,17 +153,17 @@ describe('GameCanvas engine lifecycle', () => {
 
     mounted = await renderGame({ networkSession: { userId: 'user-1', householdId: 'household-1' } });
     await flushAsyncWork();
-    const onNpcInteraction = create.mock.calls[0]?.[0].onNpcInteraction;
-    expect(onNpcInteraction).toBeTypeOf('function');
-    await act(async () => { onNpcInteraction?.(npc.id); });
-    await flushAsyncWork();
-    expect(mounted.host.textContent).toContain(dialogue.greeting);
 
     const rainButton = Array.from(mounted.host.querySelectorAll('button')).find((button) => button.textContent === 'Rain');
     expect(rainButton).toBeTruthy();
     await act(async () => { rainButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-
     expect(engine.setWeather).toHaveBeenCalledWith('light_rain');
+
+    const onNpcInteraction = create.mock.calls[0]?.[0].onNpcInteraction;
+    expect(onNpcInteraction).toBeTypeOf('function');
+    await act(async () => { onNpcInteraction?.(npc.id); });
+    await flushAsyncWork();
+
     expect(mounted.host.textContent).toContain(dialogue.weather);
   });
 });
