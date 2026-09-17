@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { items, recipes, storyEvents } from '@together/content';
+import { starterPropertyById } from '@together/shared';
 import { createApp, type AppDependencies } from './app';
 import { LocalGameRepository } from './db/LocalGameRepository';
 import { HouseholdService } from './game/HouseholdService';
@@ -87,7 +88,7 @@ describe('app', () => {
       .set('x-dev-user-id', 'user-a')
       .send({ propertyId: 'hostel_floor', sharedWallet: 999999 });
     expect(response.status).toBe(201);
-    expect(response.body).toMatchObject({ type: 'friends', propertyId: 'one_bhk', sharedWallet: 8000, hiddenState: { soloExplorer: true } });
+    expect(response.body).toMatchObject({ type: 'friends', propertyId: starterPropertyById('one_bhk')?.recordId, sharedWallet: 8000, hiddenState: { soloExplorer: true } });
     expect(response.body.members).toHaveLength(1);
   });
 });
