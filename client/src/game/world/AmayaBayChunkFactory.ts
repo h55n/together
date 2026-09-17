@@ -16,6 +16,25 @@ import { VegetationSystem, type VegetationSpecies } from './VegetationSystem';
 import { PROPERTY_WORLD_RESERVATIONS } from './PropertyLocations';
 import { addVenueDressing } from './CityVenueDressing';
 
+export type AmayaBayBoundaryCuboid = {
+  center: { x: number; y: number; z: number };
+  halfExtents: { x: number; y: number; z: number };
+};
+
+/** Invisible perimeter guard only; authored terrain/property floors own vertical support. */
+export function amayaBayBoundaryCuboids(): readonly AmayaBayBoundaryCuboid[] {
+  const halfCity = AMAYA_BAY_CITY.sizeMetres / 2;
+  const wallHalfThickness = 0.5;
+  const wallHalfHeight = 30;
+  const wallCenterY = 20;
+  return [
+    { center: { x: -halfCity, y: wallCenterY, z: 0 }, halfExtents: { x: wallHalfThickness, y: wallHalfHeight, z: halfCity } },
+    { center: { x: halfCity, y: wallCenterY, z: 0 }, halfExtents: { x: wallHalfThickness, y: wallHalfHeight, z: halfCity } },
+    { center: { x: 0, y: wallCenterY, z: -halfCity }, halfExtents: { x: halfCity, y: wallHalfHeight, z: wallHalfThickness } },
+    { center: { x: 0, y: wallCenterY, z: halfCity }, halfExtents: { x: halfCity, y: wallHalfHeight, z: wallHalfThickness } },
+  ];
+}
+
 export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?: PhysicsWorld) {
   const vegetation = new VegetationSystem(materials);
   return (chunkX: number, chunkZ: number, ring: Exclude<ResidencyRing, 'unloaded'>): THREE.Group => {
