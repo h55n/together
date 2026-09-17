@@ -25,6 +25,7 @@ export function buildStarterHome(materials: MaterialLibrary, physics: PhysicsWor
 
   // 11m x 9m authored starter studio. The south wall keeps a 2.2m doorway open.
   addBox(group, [11, 0.18, 9], [x, y + 0.09, z], materials.get('wood'));
+  physics.createFixedCuboid({ x, y: y + 0.09, z }, { x: 5.5, y: 0.09, z: 4.5 });
   addWall(group, physics, [0.18, 3, 9], [x - 5.5, y + 1.5, z], materials);
   addWall(group, physics, [0.18, 3, 9], [x + 5.5, y + 1.5, z], materials);
   addWall(group, physics, [11, 3, 0.18], [x, y + 1.5, z + 4.5], materials);
