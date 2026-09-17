@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { detectRendererCapabilities, selectRendererBackend } from './rendererBackend';
+import { detectRendererCapabilities, resolveRendererForceBackend, selectRendererBackend } from './rendererBackend';
 
 describe('selectRendererBackend', () => {
   it('prefers WebGPU when both modern backends are available', () => {
@@ -16,6 +16,16 @@ describe('selectRendererBackend', () => {
 
   it('returns unsupported when neither backend exists', () => {
     expect(selectRendererBackend({ webgpu: false, webgl2: false })).toBe('unsupported');
+  });
+});
+
+describe('renderer compatibility override', () => {
+  it('ignores the legacy caller WebGL2 force on a normal URL', () => {
+    expect(resolveRendererForceBackend('', 'webgl2')).toBeUndefined();
+  });
+
+  it('only forces WebGL2 when the URL explicitly requests compatibility mode', () => {
+    expect(resolveRendererForceBackend('?renderer=webgl2', 'webgl2')).toBe('webgl2');
   });
 });
 
