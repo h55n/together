@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { cityHeightAt } from '@together/shared';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
 import { MaterialLibrary } from './MaterialLibrary';
+import { HomeDecorationRenderer } from './HomeDecorationRenderer';
 import { buildPropertyInterior } from './PropertyInterior';
 import { PROPERTY_WORLD_PLACEMENTS } from './PropertyLocations';
 import { STARTER_HOME_CENTER } from './StarterHome';
@@ -44,6 +45,27 @@ describe('property terrain alignment', () => {
       { x: 5.5, y: 0.09, z: 4.5 },
     );
 
+    materials.dispose();
+  });
+
+  it('raises persistent home decor visuals and colliders to the property terrain base', () => {
+    const materials = new MaterialLibrary();
+    const createFixedCuboid = vi.fn(() => ({}) as never);
+    const removeCollider = vi.fn();
+    const physics = { createFixedCuboid, removeCollider } as unknown as PhysicsWorld;
+    const placement = PROPERTY_WORLD_PLACEMENTS.pg_house;
+    const terrainY = cityHeightAt(placement.center.x, placement.center.z);
+    const decor = new HomeDecorationRenderer('pg_house', placement.center, materials, physics);
+
+    decor.sync([{ objectId: 'chair-1', definitionId: 'chair_wood_01', roomId: 'common', transform: { position: { x: 0, y: 0, z: 0 }, rotationY: 0, scale: 1 } }]);
+
+    expect(decor.root.position.y).toBeCloseTo(terrainY, 6);
+    expect(createFixedCuboid).toHaveBeenCalledWith(
+      expect.objectContaining({ y: terrainY + 0.475 }),
+      expect.anything(),
+    );
+
+    decor.dispose();
     materials.dispose();
   });
 });
