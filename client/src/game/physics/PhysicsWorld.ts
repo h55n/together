@@ -48,6 +48,10 @@ export class PhysicsWorld {
     );
   }
 
+  createFixedTrimesh(vertices: Float32Array, indices: Uint32Array): RAPIER.Collider {
+    return this.world.createCollider(RAPIER.ColliderDesc.trimesh(vertices, indices));
+  }
+
   removeCollider(collider: RAPIER.Collider): void {
     this.world.removeCollider(collider, false);
   }

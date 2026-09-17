@@ -56,6 +56,25 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
       addVenueDressing(root, venues, ring, materials, ring === 'active' ? physics : undefined);
     }
 
+    if (ring === 'active' && physics) {
+      const index = geometry.getIndex();
+      if (index) {
+        const vertices = new Float32Array(position.count * 3);
+        for (let i = 0; i < position.count; i += 1) {
+          vertices[i * 3] = centerX + position.getX(i);
+          vertices[i * 3 + 1] = position.getY(i);
+          vertices[i * 3 + 2] = centerZ + position.getZ(i);
+        }
+        const indices = Uint32Array.from(index.array);
+        const terrainCollider = physics.createFixedTrimesh(vertices, indices);
+        const previousDispose = root.userData.disposeChunk as (() => void) | undefined;
+        root.userData.disposeChunk = () => {
+          previousDispose?.();
+          physics.removeCollider(terrainCollider);
+        };
+      }
+    }
+
     if (ring === 'horizon') return root;
     const random = createSeededRandom((chunkX * 73856093) ^ (chunkZ * 19349663));
     const count = ring === 'active' ? (district?.id === 'mogra_park' || district?.id === 'rain_tree_lane' ? 14 : 9) : 4;
