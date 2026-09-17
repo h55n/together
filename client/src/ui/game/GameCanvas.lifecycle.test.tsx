@@ -120,7 +120,8 @@ describe('GameCanvas engine lifecycle', () => {
     mounted = await renderGame({ networkSession: { userId: 'user-1', householdId: 'household-1' } });
     await flushAsyncWork();
 
-    const onHomeStateChanged = create.mock.calls[0]?.[0].onHomeStateChanged;
+    const options = create.mock.calls[0]?.[0] as unknown as { onHomeStateChanged?: () => void };
+    const onHomeStateChanged = options?.onHomeStateChanged;
     expect(onHomeStateChanged).toBeTypeOf('function');
     await act(async () => { onHomeStateChanged?.(); });
     await flushAsyncWork();
