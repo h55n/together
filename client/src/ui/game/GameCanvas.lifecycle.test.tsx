@@ -1,6 +1,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { namedNpcs, npcDialogue } from '@together/content';
 import { GameEngine } from '../../game/GameEngine';
 import { GameCanvas } from './GameCanvas';
 
@@ -14,6 +15,7 @@ function engineStub() {
     start: vi.fn(),
     dispose: vi.fn(),
     setInputEnabled: vi.fn(),
+    setWeather: vi.fn(),
     syncHomeDecoration: vi.fn(),
     clearHomeDecorationPreview: vi.fn(),
     getPlayerPosition: vi.fn(() => ({ x: 0, y: 1.2, z: 0 })),
@@ -130,5 +132,38 @@ describe('GameCanvas engine lifecycle', () => {
     expect(engine.syncHomeDecoration).toHaveBeenLastCalledWith([
       expect.objectContaining({ objectId: 'live-chair' }),
     ], {});
+  });
+
+  it('updates resident weather dialogue when the in-game weather changes', async () => {
+    const engine = engineStub();
+    create.mockResolvedValue(engine);
+    const npc = namedNpcs[0];
+    if (!npc) throw new Error('Expected at least one named NPC');
+    const dialogue = npcDialogue[npc.id];
+    if (!dialogue) throw new Error(`Missing dialogue for ${npc.id}`);
+
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/home')) return new Response(JSON.stringify({ version: 0, objects: [], surfaces: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.endsWith('/memories')) return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.endsWith('/npc-memory') && !init?.method) return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/npc-memory/') && init?.method === 'POST') return new Response(JSON.stringify({ npcId: npc.id, flags: ['first_meeting'], familiarity: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
+
+    mounted = await renderGame({ networkSession: { userId: 'user-1', householdId: 'household-1' } });
+    await flushAsyncWork();
+    const onNpcInteraction = create.mock.calls[0]?.[0].onNpcInteraction;
+    expect(onNpcInteraction).toBeTypeOf('function');
+    await act(async () => { onNpcInteraction?.(npc.id); });
+    await flushAsyncWork();
+    expect(mounted.host.textContent).toContain(dialogue.greeting);
+
+    const rainButton = Array.from(mounted.host.querySelectorAll('button')).find((button) => button.textContent === 'Rain');
+    expect(rainButton).toBeTruthy();
+    await act(async () => { rainButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+    expect(engine.setWeather).toHaveBeenCalledWith('light_rain');
+    expect(mounted.host.textContent).toContain(dialogue.weather);
   });
 });
