@@ -84,8 +84,8 @@ async function walk(directory) {
 await walk(root);
 
 const envExample = await readFile(path.join(root, '.env.example'), 'utf8');
-for (const variable of ['SUPABASE_URL=', 'SUPABASE_SERVICE_ROLE_KEY=', 'VITE_SERVER_URL=', 'VITE_STUN_URL=', 'VITE_TURN_URL=']) {
-  if (!envExample.includes(variable)) errors.push(`.env.example missing ${variable}`);
+for (const variable of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'VITE_SERVER_URL', 'VITE_STUN_URL', 'VITE_TURN_URL']) {
+  if (!envExample.includes(`${variable}=`)) errors.push(`.env.example missing ${variable}=`);
 }
 
 if (warnings.length) for (const warning of warnings) console.warn(`WARN: ${warning}`);
