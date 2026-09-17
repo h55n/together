@@ -108,3 +108,16 @@ test('purchase persistence is atomic when the transaction write fails', async ()
   assert.equal(fresh?.members[0]?.personalWallet, 1500);
   assert.deepEqual(await repository.listInventory('household', household.id), []);
 });
+
+test('buying assemble-at-home furniture produces the flat-pack story prerequisite', async () => {
+  const { repository, household } = await makeHousehold();
+  const economy = new EconomyService(repository);
+  await economy.purchase(household.id, 'owner', {
+    itemId: 'shelf_tall_01',
+    wallet: 'household',
+    idempotencyKey: 'flat-pack-purchase-001',
+  });
+  const fresh = await repository.getHousehold(household.id);
+  const flags = fresh?.hiddenState.flags as Record<string, boolean> | undefined;
+  assert.equal(flags?.bought_flat_pack, true);
+});
