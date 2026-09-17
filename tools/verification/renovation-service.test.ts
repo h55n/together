@@ -1,11 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import type { TransactionRecord } from '../../server/src/db/GameRepository.js';
 import { LocalGameRepository } from '../../server/src/db/LocalGameRepository.js';
 import { HouseholdService } from '../../server/src/game/HouseholdService.js';
 import { RenovationService } from '../../server/src/game/RenovationService.js';
 
-async function setup() {
-  const repo = new LocalGameRepository();
+class FailingTransactionRepository extends LocalGameRepository {
+  failTransactionWrites = false;
+
+  override async saveTransaction(transaction: TransactionRecord): Promise<void> {
+    if (this.failTransactionWrites) throw new Error('simulated transaction persistence failure');
+    await super.saveTransaction(transaction);
+  }
+}
+
+async function setup(repo: LocalGameRepository = new LocalGameRepository()) {
   const households = new HouseholdService(repo, () => 0.41);
   const created = await households.createHousehold('a', { name: 'Renovation Home', type: 'couple' });
   await households.joinHousehold('b', created.inviteCode);
@@ -41,6 +50,21 @@ test('renovation cannot be installed twice or on the wrong property', async () =
   await assert.rejects(() => renovations.openVote(household.id, 'a', 'roof_gathering'), /not available/);
 });
 
+test('failed renovation ledger write rolls back wallet and home together', async () => {
+  const repo = new FailingTransactionRepository();
+  const { household, renovations } = await setup(repo);
+  const vote = await renovations.openVote(household.id, 'a', 'study_corner');
+  await renovations.castVote(vote.id, 'b', 'yes');
+  repo.failTransactionWrites = true;
+
+  await assert.rejects(() => renovations.commit(vote.id, 'a', 'renovation-atomic-fail-001'), /simulated transaction persistence failure/);
+
+  const fresh = await repo.getHousehold(household.id);
+  assert.equal(fresh?.sharedWallet, 30_000);
+  const home = await repo.getHomeState(household.id);
+  const installed = (home?.roomStates.renovations as { installed?: string[] } | undefined)?.installed ?? [];
+  assert.deepEqual(installed, []);
+});
 
 test('renovation state exposes latest vote and installed renovations for reconnecting members', async () => {
   const { household, renovations } = await setup();
