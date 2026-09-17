@@ -39,6 +39,7 @@ export type GameEngineOptions = {
   networkSession?: NetworkSession;
   onConnectionState?: (state: 'connecting' | 'connected' | 'reconnecting' | 'disconnected') => void;
   onNetworkError?: (message: string) => void;
+  onHomeStateChanged?: () => void;
   onInteractionPrompt?: (prompt: string | null) => void;
   onLocationChange?: (location: string | null) => void;
   onDomesticAction?: (action: HomeAction, interactionId: string) => void;
@@ -102,6 +103,7 @@ export class GameEngine {
     networkSession?: NetworkSession,
     onConnectionState?: GameEngineOptions['onConnectionState'],
     onNetworkError?: GameEngineOptions['onNetworkError'],
+    onHomeStateChanged?: GameEngineOptions['onHomeStateChanged'],
     onVoiceState?: GameEngineOptions['onVoiceState'],
     private readonly onLocationChange?: GameEngineOptions['onLocationChange'],
     private readonly onInteractionPrompt?: GameEngineOptions['onInteractionPrompt'],
@@ -135,6 +137,7 @@ export class GameEngine {
         onVoiceLeave: (userId: string) => this.voice?.handleLeave(userId),
         ...(onConnectionState ? { onConnectionState } : {}),
         ...(onNetworkError ? { onError: onNetworkError } : {}),
+        ...(onHomeStateChanged ? { onHomeStateChanged } : {}),
       };
       this.network = new GameSocketClient(networkSession, callbacks);
       this.voice = new VoiceManager(networkSession.userId, this.network, onVoiceState);
@@ -236,6 +239,7 @@ export class GameEngine {
       options.networkSession,
       options.onConnectionState,
       options.onNetworkError,
+      options.onHomeStateChanged,
       options.onVoiceState,
       options.onLocationChange,
       options.onInteractionPrompt,
