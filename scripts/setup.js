@@ -1,148 +1,100 @@
 #!/usr/bin/env node
-// scripts/setup.js
-// Run with: node scripts/setup.js
 
-import { existsSync, copyFileSync, readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT      = join(__dirname, '..');
-
-const RESET  = '\x1b[0m';
-const GREEN  = '\x1b[32m';
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const RESET = '\x1b[0m';
+const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
-const RED    = '\x1b[31m';
-const CYAN   = '\x1b[36m';
-const BOLD   = '\x1b[1m';
+const RED = '\x1b[31m';
+const CYAN = '\x1b[36m';
+const BOLD = '\x1b[1m';
+const ok = (message) => console.log(`  ${GREEN}✓${RESET} ${message}`);
+const warn = (message) => console.log(`  ${YELLOW}⚠${RESET}  ${message}`);
+const err = (message) => console.log(`  ${RED}✗${RESET} ${message}`);
+const info = (message) => console.log(`  ${CYAN}→${RESET} ${message}`);
 
-const ok   = (msg) => console.log(`  ${GREEN}✓${RESET} ${msg}`);
-const warn = (msg) => console.log(`  ${YELLOW}⚠${RESET}  ${msg}`);
-const err  = (msg) => console.log(`  ${RED}✗${RESET} ${msg}`);
-const info = (msg) => console.log(`  ${CYAN}→${RESET} ${msg}`);
-
-console.log(`\n${BOLD}[ TOGETHER ] Project Setup${RESET}\n`);
-
+console.log(`\n${BOLD}[ TOGETHER ] Amaya Bay V1 setup${RESET}\n`);
 let hasErrors = false;
 
-// ── 1. Node version ───────────────────────────────────────────
-const nodeVersion = process.versions.node.split('.')[0];
-if (parseInt(nodeVersion) >= 20) {
-  ok(`Node.js ${process.versions.node}`);
-} else {
-  err(`Node.js 20+ required (found ${process.versions.node})`);
+const major = Number(process.versions.node.split('.')[0]);
+if (major >= 24) ok(`Node.js ${process.versions.node}`);
+else { err(`Node.js 24+ required (found ${process.versions.node})`); hasErrors = true; }
+
+try {
+  const version = execFileSync('pnpm', ['--version'], { encoding: 'utf8' }).trim();
+  ok(`pnpm ${version}`);
+} catch {
+  err('pnpm is required. Run: corepack enable');
   hasErrors = true;
 }
 
-// ── 2. .env file ──────────────────────────────────────────────
-const envPath    = join(ROOT, '.env');
-const envExample = join(ROOT, '.env.example');
-
-if (existsSync(envPath)) {
-  ok('.env file exists');
-} else if (existsSync(envExample)) {
-  copyFileSync(envExample, envPath);
-  warn('.env created from .env.example — fill in your credentials');
-} else {
+const examplePath = join(ROOT, '.env.example');
+if (!existsSync(examplePath)) {
   err('.env.example not found');
   hasErrors = true;
-}
-
-// ── 3. Check required env vars ────────────────────────────────
-if (existsSync(envPath)) {
-  const env = readFileSync(envPath, 'utf8');
-  const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'SUPABASE_ANON_KEY'];
-  const optional = ['CLERK_PUBLISHABLE_KEY', 'REDIS_URL'];
-
-  let missingRequired = false;
-  for (const key of required) {
-    if (env.includes(`${key}=`) && !env.match(new RegExp(`${key}=\\s*$`, 'm'))) {
-      ok(`${key} set`);
-    } else {
-      warn(`${key} not set — will use mock mode`);
-      missingRequired = true;
-    }
-  }
-
-  for (const key of optional) {
-    if (env.includes(`${key}=`) && !env.match(new RegExp(`${key}=\\s*$`, 'm'))) {
-      ok(`${key} set (optional)`);
-    } else {
-      info(`${key} not set — optional feature disabled`);
-    }
-  }
-
-  if (missingRequired) {
-    console.log(`\n  ${YELLOW}Running without Supabase — using in-memory mock DB${RESET}`);
-    console.log(`  ${YELLOW}This is fine for local development.${RESET}`);
-  }
-}
-
-// ── 4. Dependencies ───────────────────────────────────────────
-console.log('\n  Checking dependencies…');
-try {
-  const clientPkg  = JSON.parse(readFileSync(join(ROOT, 'client/package.json'), 'utf8'));
-  const serverPkg  = JSON.parse(readFileSync(join(ROOT, 'server/package.json'), 'utf8'));
-  const sharedPkg  = JSON.parse(readFileSync(join(ROOT, 'shared/package.json'),  'utf8'));
-
-  const clientModules = join(ROOT, 'client/node_modules');
-  const serverModules = join(ROOT, 'server/node_modules');
-  const rootModules   = join(ROOT, 'node_modules');
-
-  if (existsSync(rootModules)) {
-    ok('node_modules found (root)');
-  } else {
-    warn('node_modules not found — run: npm install');
-    hasErrors = true;
-  }
-} catch (e) {
-  err(`Package.json read error: ${e.message}`);
-  hasErrors = true;
-}
-
-// ── 5. Key directories ────────────────────────────────────────
-console.log('\n  Checking project structure…');
-const requiredDirs = [
-  'client/src/game',
-  'client/src/ui',
-  'client/src/store',
-  'client/src/socket',
-  'server/src/api',
-  'server/src/socket',
-  'server/src/game',
-  'server/src/content/story_events',
-  'shared',
-];
-
-for (const dir of requiredDirs) {
-  if (existsSync(join(ROOT, dir))) {
-    ok(dir);
-  } else {
-    err(`Missing directory: ${dir}`);
-    hasErrors = true;
-  }
-}
-
-// ── 6. Story event files ──────────────────────────────────────
-const storyDir = join(ROOT, 'server/src/content/story_events');
-if (existsSync(storyDir)) {
-  const { readdirSync } = await import('fs');
-  const events = readdirSync(storyDir).filter(f => f.endsWith('.json'));
-  ok(`${events.length} story event${events.length !== 1 ? 's' : ''} found`);
-}
-
-// ── Summary ───────────────────────────────────────────────────
-console.log('\n' + '─'.repeat(50));
-if (hasErrors) {
-  console.log(`\n${RED}${BOLD}Setup incomplete — fix errors above then run npm install${RESET}\n`);
-  process.exit(1);
 } else {
-  console.log(`\n${GREEN}${BOLD}Setup complete!${RESET}`);
-  console.log(`\n  Start developing:\n`);
-  console.log(`    ${CYAN}npm run dev${RESET}          # Start client + server`);
-  console.log(`    ${CYAN}npm test${RESET}             # Run all tests`);
-  console.log(`    ${CYAN}npm run build${RESET}        # Build for production\n`);
-  console.log(`  Client: ${CYAN}http://localhost:5173${RESET}`);
-  console.log(`  Server: ${CYAN}http://localhost:3001${RESET}\n`);
+  const example = readFileSync(examplePath, 'utf8');
+  const serverEnv = example
+    .split(/\r?\n/)
+    .filter((line) => !line.trim().startsWith('VITE_'))
+    .join('\n');
+  const clientEnv = example
+    .split(/\r?\n/)
+    .filter((line) => line.trim().startsWith('#') || line.trim() === '' || line.trim().startsWith('VITE_'))
+    .join('\n');
+
+  mkdirSync(join(ROOT, 'server'), { recursive: true });
+  mkdirSync(join(ROOT, 'client'), { recursive: true });
+  const serverEnvPath = join(ROOT, 'server', '.env');
+  const clientEnvPath = join(ROOT, 'client', '.env.local');
+  if (!existsSync(serverEnvPath)) { writeFileSync(serverEnvPath, `${serverEnv.trim()}\n`); warn('Created server/.env from the server-safe example values'); }
+  else ok('server/.env exists');
+  if (!existsSync(clientEnvPath)) { writeFileSync(clientEnvPath, `${clientEnv.trim()}\n`); warn('Created client/.env.local with client-safe VITE_* values only'); }
+  else ok('client/.env.local exists');
 }
+
+if (existsSync(join(ROOT, 'pnpm-lock.yaml'))) ok('pnpm-lock.yaml found');
+else { err('pnpm-lock.yaml is missing'); hasErrors = true; }
+
+const requiredPaths = [
+  'client/src/game', 'client/src/ui', 'client/src/network',
+  'server/src/game', 'server/src/socket', 'server/src/db/migrations',
+  'shared/src', 'content/src', 'tools', 'docs/PRD.md',
+];
+for (const path of requiredPaths) {
+  if (existsSync(join(ROOT, path))) ok(path);
+  else { err(`Missing project path: ${path}`); hasErrors = true; }
+}
+
+if (!existsSync(join(ROOT, 'node_modules'))) {
+  warn('Dependencies are not installed. Run: pnpm install --frozen-lockfile');
+} else {
+  ok('root node_modules found');
+}
+
+const serverEnvPath = join(ROOT, 'server', '.env');
+if (existsSync(serverEnvPath)) {
+  const env = readFileSync(serverEnvPath, 'utf8');
+  const configuredSupabase = /SUPABASE_URL=\S+/.test(env) && /SUPABASE_SERVICE_ROLE_KEY=\S+/.test(env);
+  if (configuredSupabase) ok('Supabase server credentials appear configured');
+  else {
+    info('Supabase server credentials are blank; the in-memory repository will be used outside production');
+    if (!/ALLOW_DEV_AUTH=true/.test(env)) warn('Set ALLOW_DEV_AUTH=true explicitly in server/.env if you want local x-dev-user-id authentication');
+  }
+}
+
+console.log('\n' + '─'.repeat(58));
+if (hasErrors) {
+  console.log(`\n${RED}${BOLD}Setup incomplete.${RESET}\n`);
+  process.exit(1);
+}
+console.log(`\n${GREEN}${BOLD}Setup checks complete.${RESET}`);
+console.log(`\n  ${CYAN}corepack enable${RESET}`);
+console.log(`  ${CYAN}pnpm install --frozen-lockfile${RESET}`);
+console.log(`  ${CYAN}pnpm dev${RESET}       # client + server`);
+console.log(`  ${CYAN}pnpm test${RESET}      # canonical automated test gate`);
+console.log(`  ${CYAN}pnpm verify${RESET}    # full repository verification\n`);
