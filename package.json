@@ -17,7 +17,7 @@
     "validate": "pnpm --filter @together/content validate",
     "build": "pnpm -r --if-present build",
     "test:e2e": "pnpm --filter @together/client test:e2e",
-    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm validate && pnpm build",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm validate && pnpm verify:pure && pnpm validate:repo && pnpm build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "clean": "pnpm -r --if-present clean",
