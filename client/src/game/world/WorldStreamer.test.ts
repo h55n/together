@@ -30,4 +30,25 @@ describe('WorldStreamer', () => {
 
     expect(monitor.read().streamingGenerationMs).toBeGreaterThan(0);
   });
+
+  it('refreshes the destination active ring immediately after a teleport and drops stale queued work', () => {
+    const created: Array<{ x: number; z: number; ring: string }> = [];
+    const streamer = new WorldStreamer((x, z, ring) => {
+      created.push({ x, z, ring });
+      return new THREE.Group();
+    });
+    streamer.update(0.31, new THREE.Vector3(0, 0, 0));
+
+    const refreshNow = (streamer as unknown as { refreshNow?: (position: THREE.Vector3) => void }).refreshNow;
+    expect(refreshNow).toBeTypeOf('function');
+
+    const destination = new THREE.Vector3(384, 0, 384);
+    refreshNow?.call(streamer, destination);
+    expect(created.at(-1)).toEqual({ x: 3, z: 3, ring: 'active' });
+
+    streamer.update(0.016, destination);
+    const next = created.at(-1);
+    expect(next).toBeDefined();
+    expect(Math.max(Math.abs((next?.x ?? 0) - 3), Math.abs((next?.z ?? 0) - 3))).toBeLessThanOrEqual(2);
+  });
 });
