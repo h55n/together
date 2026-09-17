@@ -78,7 +78,11 @@ export class AmayaBayEnvironment {
     addBox(root, [0.05, 0.9, 6.1], [badminton.position.x, courtY + 0.48, badminton.position.z], this.materials.get('curtainWarm'), false);
     for (const sx of [-6.1, 6.1]) addBox(root, [0.08, 1.15, 0.08], [badminton.position.x + sx, courtY + 0.58, badminton.position.z], this.materials.get('metalDark'));
     const picnic = locationAnchor('park_picnic_lawn')!;
-    for (const offset of [[-5, 3], [4, -4], [8, 5]] as const) addBox(root, [2.2, 0.1, 1.35], [picnic.position.x + offset[0], courtY + 0.08, picnic.position.z + offset[1]], this.materials.get('curtainWarm'), false);
+    for (const offset of [[-5, 3], [4, -4], [8, 5]] as const) {
+      const matX = picnic.position.x + offset[0];
+      const matZ = picnic.position.z + offset[1];
+      addBox(root, [2.2, 0.1, 1.35], [matX, cityHeightAt(matX, matZ) + 0.08, matZ], this.materials.get('curtainWarm'), false);
+    }
     return root;
   }
 
