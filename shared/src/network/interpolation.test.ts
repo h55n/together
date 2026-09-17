@@ -17,3 +17,9 @@ test('angle interpolation follows the shortest wrap-around path', () => {
   const halfway = lerpAngle(from, to, 0.5);
   assert.ok(Math.abs(Math.abs(halfway) - Math.PI) < 1e-9);
 });
+
+test('angle interpolation normalizes enormous finite angles in constant-time arithmetic', () => {
+  const result = lerpAngle(0, 1e12, 0.5);
+  assert.equal(Number.isFinite(result), true);
+  assert.ok(Math.abs(result) <= Math.PI);
+});
