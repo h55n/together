@@ -42,6 +42,13 @@ export class WorldStreamer {
     this.recordMetrics(generationMs, commitMs);
   }
 
+  refreshNow(playerPosition: THREE.Vector3): void {
+    this.scheduler.clear();
+    this.queued.clear();
+    this.updateElapsed = Number.POSITIVE_INFINITY;
+    this.update(0, playerPosition);
+  }
+
   setResidencyRadiusChunks(radius: number): void {
     const nextRadius = Math.max(3, Math.min(6, Math.round(radius)));
     if (nextRadius === this.residencyRadiusChunks) return;
@@ -53,6 +60,7 @@ export class WorldStreamer {
     for (const resident of this.residents.values()) disposeGroup(resident.group);
     this.residents.clear();
     this.queued.clear();
+    this.scheduler.clear();
     this.root.clear();
   }
 
