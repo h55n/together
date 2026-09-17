@@ -6,6 +6,8 @@ import path from 'node:path';
 test('sandbox verification resolves TypeScript through pnpm on every platform', async () => {
   const source = await readFile(path.join(process.cwd(), 'tools/verify-sandbox.mjs'), 'utf8');
   assert.match(source, /const pnpm = process\.platform === 'win32' \? 'pnpm\.cmd' : 'pnpm'/);
-  assert.match(source, /spawnSync\(pnpm, \['exec', 'tsc'/);
+  assert.match(source, /\[pnpm, \['exec', 'tsc', '-p', 'client\/tsconfig\.json'/);
+  assert.match(source, /\[pnpm, \['exec', 'tsc', '-p', 'shared\/tsconfig\.json'/);
+  assert.match(source, /\[pnpm, \['exec', 'tsc', '-p', 'content\/tsconfig\.json'/);
   assert.equal(source.includes("['tsc', ['-p'"), false);
 });
