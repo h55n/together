@@ -1,8 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import {
   createInviteCode,
   householdCreateSchema,
   normalizeInviteCode,
+  starterPropertyById,
   type HouseholdType,
   stageForActiveSeconds,
 } from '@together/shared';
@@ -10,11 +11,12 @@ import type { GameRepository, HouseholdRecord } from '../db/GameRepository.js';
 
 const STARTING_SHARED_WALLET = 8_000;
 const STARTING_PERSONAL_WALLET = 1_500;
+const cryptoRandom = (): number => randomInt(0, 0x1_0000_0000) / 0x1_0000_0000;
 
 export class HouseholdService {
   constructor(
     private readonly repository: GameRepository,
-    private readonly random: () => number = Math.random,
+    private readonly random: () => number = cryptoRandom,
   ) {}
 
   async createHousehold(
@@ -34,14 +36,12 @@ export class HouseholdService {
       hiddenState: {},
       activeTimeSeconds: 0,
       createdAt: now,
-      members: [
-        {
-          userId: creatorUserId,
-          personalWallet: STARTING_PERSONAL_WALLET,
-          membershipState: 'active',
-          joinedAt: now,
-        },
-      ],
+      members: [{
+        userId: creatorUserId,
+        personalWallet: STARTING_PERSONAL_WALLET,
+        membershipState: 'active',
+        joinedAt: now,
+      }],
     };
     await this.repository.saveHousehold(household);
     return household;
@@ -49,8 +49,14 @@ export class HouseholdService {
 
   async createSoloExplorer(creatorUserId: string): Promise<HouseholdRecord> {
     const household = await this.createHousehold(creatorUserId, { name: 'Solo Explorer', type: 'friends' });
-    household.propertyId = 'one_bhk';
-    household.hiddenState = { ...household.hiddenState, soloExplorer: true };
+    const property = starterPropertyById('one_bhk');
+    if (!property) throw new Error('Solo Explorer starter property is unavailable');
+    household.propertyId = property.recordId;
+    household.hiddenState = {
+      ...household.hiddenState,
+      soloExplorer: true,
+      flags: { property_assigned: true, moved_in: true },
+    };
     await this.repository.saveHousehold(household);
     return household;
   }
@@ -59,30 +65,17 @@ export class HouseholdService {
     const code = normalizeInviteCode(inviteCode);
     const household = await this.repository.getHouseholdByInviteCode(code);
     if (!household) throw new Error('Household invite code not found');
-
     const existing = household.members.find((member) => member.userId === userId);
     if (existing) return household;
-
     const activeMembers = household.members.filter((member) => member.membershipState === 'active');
     const capacity = household.type === 'couple' ? 2 : 6;
     if (activeMembers.length >= capacity) {
-      throw new Error(
-        household.type === 'couple'
-          ? 'Couple households are limited to 2 members'
-          : 'Friends households are limited to 6 members',
-      );
+      throw new Error(household.type === 'couple' ? 'Couple households are limited to 2 members' : 'Friends households are limited to 6 members');
     }
-
-    household.members.push({
-      userId,
-      personalWallet: STARTING_PERSONAL_WALLET,
-      membershipState: 'active',
-      joinedAt: new Date().toISOString(),
-    });
+    household.members.push({ userId, personalWallet: STARTING_PERSONAL_WALLET, membershipState: 'active', joinedAt: new Date().toISOString() });
     await this.repository.saveHousehold(household);
     return household;
   }
-
 
   async advanceActiveTime(householdId: string, seconds: number): Promise<HouseholdRecord> {
     if (!Number.isFinite(seconds) || seconds <= 0) throw new Error('Active time increment must be positive');
@@ -98,9 +91,7 @@ export class HouseholdService {
   async getHouseholdForMember(householdId: string, userId: string): Promise<HouseholdRecord> {
     const household = await this.repository.getHousehold(householdId);
     if (!household) throw new Error('Household not found');
-    if (!household.members.some((member) => member.userId === userId && member.membershipState === 'active')) {
-      throw new Error('User is not an active member of this household');
-    }
+    if (!household.members.some((member) => member.userId === userId && member.membershipState === 'active')) throw new Error('User is not an active member of this household');
     return household;
   }
 

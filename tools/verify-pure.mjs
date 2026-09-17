@@ -7,18 +7,21 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(root, '.verify-dist');
 await rm(outDir, { recursive: true, force: true });
 
-const tsc = spawnSync('tsc', ['-p', path.join(root, 'tools/tsconfig.verify.json')], {
+const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const tsc = spawnSync(pnpm, ['exec', 'tsc', '-p', path.join(root, 'tools/tsconfig.verify.json')], {
   cwd: root,
   stdio: 'inherit',
 });
 if (tsc.status !== 0) process.exit(tsc.status ?? 1);
 
-// Recreate the pnpm workspace link inside the isolated emitted tree so pure
-// server-domain tests can import @together/shared without requiring pnpm here.
-const sharedPackage = path.join(outDir, 'node_modules/@together/shared');
+// Recreate the workspace/dependency links needed by the isolated emitted tree.
+const nodeModules = path.join(outDir, 'node_modules');
+const sharedPackage = path.join(nodeModules, '@together/shared');
 await mkdir(sharedPackage, { recursive: true });
 await cp(path.join(outDir, 'shared/src'), sharedPackage, { recursive: true });
 await writeFile(path.join(sharedPackage, 'package.json'), JSON.stringify({ type: 'module', exports: './index.js' }));
+const zodPackage = path.join(nodeModules, 'zod');
+await cp(path.join(root, 'shared/node_modules/zod'), zodPackage, { recursive: true, dereference: true });
 
 async function collectTests(directory) {
   const results = [];

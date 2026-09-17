@@ -1,178 +1,20 @@
-import type { AvatarConfig, HouseholdType } from '@together/shared';
+import type { ActivityId, ActivityState, AvatarConfig, CookingSessionState, HouseholdType, JobId } from '@together/shared';
 
-
-export type UserProfileRecord = {
-  userId: string;
-  displayName: string;
-  avatarConfig: AvatarConfig;
-  settings: Record<string, unknown>;
-  updatedAt: string;
-};
-
-export type HouseholdMemberRecord = {
-  userId: string;
-  personalWallet: number;
-  membershipState: 'active' | 'left';
-  bedroomId?: string;
-  joinedAt: string;
-};
-
-export type HouseholdRecord = {
-  id: string;
-  type: HouseholdType;
-  name: string;
-  inviteCode: string;
-  propertyId?: string;
-  stage: number;
-  sharedWallet: number;
-  hiddenState: Record<string, unknown>;
-  activeTimeSeconds: number;
-  createdAt: string;
-  members: HouseholdMemberRecord[];
-};
-
-
-
-export type HomeObjectRecord = {
-  objectId: string;
-  definitionId: string;
-  roomId: string;
-  transform: {
-    position: { x: number; y: number; z: number };
-    rotationY: number;
-    scale: number;
-  };
-};
-
-export type HomeStateRecord = {
-  householdId: string;
-  version: number;
-  objects: HomeObjectRecord[];
-  surfaces: Record<string, string>;
-  roomStates: Record<string, unknown>;
-  processedMutations: Record<string, number>;
-  updatedAt: string;
-};
-
-
-
-export type InventoryRecord = {
-  ownerType: 'user' | 'household';
-  ownerId: string;
-  itemId: string;
-  quantity: number;
-  metadata: Record<string, unknown>;
-};
-
-export type TransactionRecord = {
-  id: string;
-  idempotencyKey: string;
-  householdId: string;
-  userId: string;
-  walletType: 'personal' | 'household';
-  amount: number;
-  type: 'purchase' | 'job_payout' | 'deposit' | 'refund' | 'inventory_consumption' | 'moving' | 'renovation' | 'transport';
-  itemRef?: string;
-  metadata: Record<string, unknown>;
-  createdAt: string;
-};
-
-
-
-
-
-
-
-export type JobSessionRecord = {
-  id: string;
-  startIdempotencyKey: string;
-  householdId: string;
-  userId: string;
-  jobId: import('@together/shared').JobId;
-  state: 'active' | 'complete';
-  completedActions: string[];
-  mistakes: number;
-  startedAt: string;
-  updatedAt: string;
-};
-
-export type HouseholdNoteRecord = {
-  id: string;
-  householdId: string;
-  authorUserId: string;
-  text: string;
-  placement: 'fridge' | 'corkboard' | 'desk' | 'door';
-  createdAt: string;
-};
-
-export type NPCRelationshipRecord = {
-  householdId: string;
-  npcId: string;
-  flags: string[];
-  familiarity: number;
-  lastInteraction?: string;
-};
-
-export type CookingSessionRecord = {
-  id: string;
-  idempotencyKey: string;
-  householdId: string;
-  recipeId: string;
-  state: import('@together/shared').CookingSessionState;
-  ingredientTransactionKey: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-
-export type ActivitySessionRecord = {
-  id: string;
-  idempotencyKey: string;
-  householdId: string;
-  activityId: import('@together/shared').ActivityId;
-  state: import('@together/shared').ActivityState;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type MemoryRecord = {
-  id: string;
-  idempotencyKey: string;
-  householdId: string;
-  type: 'manual' | 'automatic' | 'story' | 'milestone' | 'moving';
-  screenshotPath: string;
-  caption: string;
-  locationId: string;
-  weather: string;
-  participants: string[];
-  eventId?: string;
-  metadata: Record<string, unknown>;
-  createdAt: string;
-};
-
-export type StoryInstanceRecord = {
-  id: string;
-  householdId: string;
-  eventId: string;
-  state: 'active' | 'resolved';
-  branch?: string;
-  taskState: Record<string, 'pending' | 'complete' | 'failed' | 'skipped'>;
-  failures: number;
-  memoryTag?: string;
-  startedAt: string;
-  resolvedAt?: string;
-};
-
-export type VoteRecord = {
-  id: string;
-  householdId: string;
-  type: 'property' | 'moving' | 'renovation' | 'shared_purchase' | 'sleep';
-  payload: Record<string, unknown>;
-  ballots: Record<string, 'yes' | 'no'>;
-  resolution: 'pending' | 'approved' | 'rejected' | 'tied';
-  createdAt: string;
-  expiresAt?: string;
-};
+export type UserProfileRecord = { userId: string; displayName: string; avatarConfig: AvatarConfig; settings: Record<string, unknown>; updatedAt: string };
+export type HouseholdMemberRecord = { userId: string; personalWallet: number; membershipState: 'active' | 'left'; bedroomId?: string; joinedAt: string };
+export type HouseholdRecord = { id: string; type: HouseholdType; name: string; inviteCode: string; propertyId?: string; stage: number; sharedWallet: number; hiddenState: Record<string, unknown>; activeTimeSeconds: number; createdAt: string; members: HouseholdMemberRecord[] };
+export type HomeObjectRecord = { objectId: string; definitionId: string; roomId: string; transform: { position: { x: number; y: number; z: number }; rotationY: number; scale: number } };
+export type HomeStateRecord = { householdId: string; version: number; objects: HomeObjectRecord[]; surfaces: Record<string, string>; roomStates: Record<string, unknown>; processedMutations: Record<string, number>; updatedAt: string };
+export type InventoryRecord = { ownerType: 'user' | 'household'; ownerId: string; itemId: string; quantity: number; metadata: Record<string, unknown> };
+export type TransactionRecord = { id: string; idempotencyKey: string; householdId: string; userId: string; walletType: 'personal' | 'household'; amount: number; type: 'purchase' | 'job_payout' | 'deposit' | 'refund' | 'inventory_consumption' | 'moving' | 'renovation' | 'transport'; itemRef?: string; metadata: Record<string, unknown>; createdAt: string };
+export type JobSessionRecord = { id: string; startIdempotencyKey: string; completionIdempotencyKey?: string; householdId: string; userId: string; jobId: JobId; state: 'active' | 'complete'; completedActions: string[]; mistakes: number; startedAt: string; updatedAt: string };
+export type HouseholdNoteRecord = { id: string; householdId: string; authorUserId: string; text: string; placement: 'fridge' | 'corkboard' | 'desk' | 'door'; createdAt: string };
+export type NPCRelationshipRecord = { householdId: string; npcId: string; flags: string[]; familiarity: number; lastInteraction?: string };
+export type CookingSessionRecord = { id: string; idempotencyKey: string; householdId: string; recipeId: string; state: CookingSessionState; ingredientTransactionKey: string; createdAt: string; updatedAt: string };
+export type ActivitySessionRecord = { id: string; idempotencyKey: string; householdId: string; activityId: ActivityId; state: ActivityState; createdAt: string; updatedAt: string };
+export type MemoryRecord = { id: string; idempotencyKey: string; householdId: string; type: 'manual' | 'automatic' | 'story' | 'milestone' | 'moving'; screenshotPath: string; caption: string; locationId: string; weather: string; participants: string[]; eventId?: string; metadata: Record<string, unknown>; createdAt: string };
+export type StoryInstanceRecord = { id: string; householdId: string; eventId: string; state: 'active' | 'resolved'; branch?: string; taskState: Record<string, 'pending' | 'complete' | 'failed' | 'skipped'>; failures: number; memoryTag?: string; startedAt: string; resolvedAt?: string };
+export type VoteRecord = { id: string; householdId: string; type: 'property' | 'moving' | 'renovation' | 'shared_purchase' | 'sleep'; payload: Record<string, unknown>; ballots: Record<string, 'yes' | 'no'>; resolution: 'pending' | 'approved' | 'rejected' | 'tied'; createdAt: string; expiresAt?: string };
 
 export interface GameRepository {
   saveUserProfile(profile: UserProfileRecord): Promise<void>;

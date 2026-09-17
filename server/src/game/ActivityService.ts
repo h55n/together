@@ -6,9 +6,14 @@ export class ActivityService {
 
   async start(householdId: string, userId: string, activityId: ActivityId, idempotencyKey: string): Promise<ActivitySessionRecord> {
     if (idempotencyKey.length < 8) throw new Error('Invalid idempotency key');
-    const existing = await this.repository.getActivitySessionByIdempotencyKey(idempotencyKey);
-    if (existing) return existing;
     await this.authorize(householdId, userId);
+    const existing = await this.repository.getActivitySessionByIdempotencyKey(idempotencyKey);
+    if (existing) {
+      if (existing.householdId !== householdId || existing.activityId !== activityId || !existing.state.participants.includes(userId)) {
+        throw new Error('Idempotency key belongs to a different activity request');
+      }
+      return existing;
+    }
     const now = new Date().toISOString();
     const session: ActivitySessionRecord = {
       id: crypto.randomUUID(), idempotencyKey, householdId, activityId,

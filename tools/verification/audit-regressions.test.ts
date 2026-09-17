@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { jobById, starterPropertyById } from '../../shared/src/index.js';
 import { LocalGameRepository } from '../../server/src/db/LocalGameRepository.js';
 import { HouseholdService } from '../../server/src/game/HouseholdService.js';
 import { EconomyService } from '../../server/src/game/EconomyService.js';
 import { JobSessionService } from '../../server/src/game/JobSessionService.js';
 import { ActivityService } from '../../server/src/game/ActivityService.js';
 import { PropertySelectionService } from '../../server/src/game/PropertySelectionService.js';
-import { starterPropertyById } from '../../shared/src/home/properties.js';
 
 async function makeHousehold() {
   const repository = new LocalGameRepository();
@@ -33,8 +33,7 @@ test('completed job session cannot be paid twice with a different completion key
   const { repository, household } = await makeHousehold();
   const jobs = new JobSessionService(repository, new EconomyService(repository));
   const session = await jobs.start(household.id, 'owner', 'nursery_assistant', 'job-start-double-pay');
-  const jobActions = ['water', 'prune', 'repot', 'sweep'];
-  for (const action of jobActions) await jobs.advance(session.id, 'owner', action);
+  for (const action of jobById('nursery_assistant')!.actions) await jobs.advance(session.id, 'owner', action);
   const first = await jobs.complete(session.id, 'owner', 'job-finish-first-001');
   await assert.rejects(() => jobs.complete(session.id, 'owner', 'job-finish-second-002'), /already complete|already paid/i);
   const fresh = await repository.getHousehold(household.id);
