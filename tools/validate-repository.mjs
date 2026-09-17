@@ -44,6 +44,7 @@ if (migrations.length < 1) errors.push('no database migrations found');
 
 const staleRuntimeFiles = [
   'client/src/main.jsx', 'client/src/App.jsx', 'client/src/game/GameEngine.js', 'server/src/index.js',
+  'shared/constants.js', 'shared/eventTypes.js', 'shared/index.js', 'shared/utils.js', 'shared/utils.test.js',
 ];
 for (const relative of staleRuntimeFiles) {
   try { await stat(path.join(root, relative)); errors.push(`obsolete legacy runtime still present: ${relative}`); }
@@ -54,7 +55,12 @@ const ignoredDirs = new Set(['.git', 'node_modules', '.verify-dist', 'dist', 'co
 const textExtensions = new Set(['.ts', '.tsx', '.js', '.mjs', '.json', '.md', '.sql', '.html', '.css', '.yml', '.yaml']);
 const secretPatterns = [
   [/sk-[A-Za-z0-9_-]{20,}/g, 'OpenAI-style secret'],
-  [/service_role\s*[=:]\s*['\"][A-Za-z0-9._-]{20,}/gi, 'Supabase service-role value'],
+  [/github_pat_[A-Za-z0-9_]{20,}/g, 'GitHub fine-grained token'],
+  [/ghp_[A-Za-z0-9]{30,}/g, 'GitHub personal access token'],
+  [/xox[baprs]-[A-Za-z0-9-]{20,}/g, 'Slack token'],
+  [/AKIA[0-9A-Z]{16}/g, 'AWS access key id'],
+  [/service_role\s*[=:]\s*['"][A-Za-z0-9._-]{20,}/gi, 'Supabase service-role value'],
+  [/(?:SUPABASE_SERVICE_ROLE_KEY|VITE_TURN_CREDENTIAL)\s*=\s*[^\s#][^\r\n]{15,}/g, 'sensitive environment value'],
   [/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g, 'private key'],
 ];
 
@@ -87,4 +93,5 @@ if (errors.length) {
   for (const error of errors) console.error(`ERROR: ${error}`);
   process.exit(1);
 }
-console.log(`Repository integrity OK: ${migrations.length} ordered migrations, required roots present, no obvious committed secrets, no legacy runtime entrypoints.`);
+console.log(`Repository integrity OK: ${migrations.length} ordered migrations, required roots present, legacy runtime files absent, heuristic committed-secret scan passed.`);
+console.log('Note: the heuristic secret scan is a repository guardrail, not a substitute for provider secret scanning or credential rotation.');
