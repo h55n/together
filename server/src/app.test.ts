@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { items, recipes, storyEvents } from '@together/content';
-import { starterPropertyById } from '@together/shared';
+import { socketEvents, starterPropertyById } from '@together/shared';
 import { createApp, type AppDependencies } from './app';
 import { LocalGameRepository } from './db/LocalGameRepository';
 import { HouseholdService } from './game/HouseholdService';
@@ -90,5 +90,37 @@ describe('app', () => {
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({ type: 'friends', propertyId: starterPropertyById('one_bhk')?.recordId, sharedWallet: 8000, hiddenState: { soloExplorer: true } });
     expect(response.body.members).toHaveLength(1);
+  });
+
+  it('publishes a realtime household invalidation after a successful home mutation', async () => {
+    const publishHouseholdEvent = vi.fn();
+    const dependencies = {
+      ...deps(),
+      publishHouseholdEvent,
+      homeService: {
+        placeFurniture: vi.fn(async () => ({
+          householdId: 'household-1',
+          version: 3,
+          objects: [],
+          surfaces: {},
+          roomStates: {},
+          processedMutations: {},
+          updatedAt: new Date().toISOString(),
+        })),
+      } as unknown as HomeService,
+    };
+    const app = createApp(dependencies);
+
+    const response = await request(app)
+      .post('/api/households/household-1/home/furniture')
+      .set('x-dev-user-id', 'user-a')
+      .send({});
+
+    expect(response.status).toBe(201);
+    expect(publishHouseholdEvent).toHaveBeenCalledWith(
+      'household-1',
+      socketEvents.homeFurniturePlace,
+      { version: 3 },
+    );
   });
 });
