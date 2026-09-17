@@ -14,6 +14,18 @@ describe('AdaptiveQualityController', () => {
     expect(controller.sample(hitchSnapshot)).toMatchObject({ streamRadiusChunks: 4, gameplayScale: 1 });
   });
 
+  it('reuses the same visual budget object until an adaptive threshold actually changes', () => {
+    const controller = new AdaptiveQualityController('medium');
+    const first = controller.sample(stableSnapshot);
+    const second = controller.sample(stableSnapshot);
+    expect(second).toBe(first);
+
+    for (let index = 0; index < 30; index += 1) controller.sample(hitchSnapshot);
+    const reduced = controller.sample(hitchSnapshot);
+    expect(reduced).not.toBe(first);
+    expect(reduced.streamRadiusChunks).toBeLessThan(first.streamRadiusChunks);
+  });
+
   it('pins the explicit Low fallback instead of adapting gameplay', () => {
     const controller = new AdaptiveQualityController('low');
     for (let index = 0; index < 60; index += 1) controller.sample(hitchSnapshot);
