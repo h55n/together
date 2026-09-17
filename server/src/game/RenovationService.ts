@@ -7,7 +7,7 @@ import {
   type RenovationState,
   type VoteChoice,
 } from '@together/shared';
-import type { GameRepository, HomeStateRecord, HouseholdRecord, TransactionRecord, VoteRecord } from '../db/GameRepository.js';
+import { requireAtomicGameRepository, type GameRepository, type HomeStateRecord, type HouseholdRecord, type TransactionRecord, type VoteRecord } from '../db/GameRepository.js';
 import type { HouseholdService } from './HouseholdService.js';
 
 export type RenovationStateView = { vote: VoteRecord | null; installed: string[] };
@@ -92,14 +92,12 @@ export class RenovationService {
     home.version += 1;
     home.roomStates = { ...home.roomStates, renovations: nextRenovations };
     home.updatedAt = new Date().toISOString();
-    await this.repository.saveHomeState(home);
 
     household.sharedWallet = wallet.balance;
     household.hiddenState = {
       ...household.hiddenState,
       flags: { ...this.flags(household), renovated_home: true, [`renovation_${renovationId}`]: true },
     };
-    await this.repository.saveHousehold(household);
 
     const transaction: TransactionRecord = {
       id: crypto.randomUUID(), idempotencyKey, householdId: household.id, userId,
@@ -107,7 +105,7 @@ export class RenovationService {
       metadata: { voteId, propertyId: property.recordId, renovationId, displayName: definition.displayName },
       createdAt: new Date().toISOString(),
     };
-    await this.repository.saveTransaction(transaction);
+    await requireAtomicGameRepository(this.repository).commitRenovation({ household, home, transaction });
     return { household, home, transaction };
   }
 
