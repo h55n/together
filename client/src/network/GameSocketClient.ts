@@ -21,6 +21,7 @@ export type NetworkCallbacks = {
   onPlayerSnapshot?: (userId: string, snapshot: PlayerSnapshot) => void;
   onPlayerProfile?: (userId: string, profile: RemoteProfile) => void;
   onPlayerLeave?: (userId: string) => void;
+  onHomeStateChanged?: () => void;
   onError?: (message: string) => void;
   onVoiceJoin?: (payload: { userId?: string; peers?: string[]; mode: Exclude<VoiceMode, 'off'> }) => void;
   onVoiceOffer?: (payload: { sourceUserId: string; sdp: string; mode: Exclude<VoiceMode, 'off'> }) => void;
@@ -77,6 +78,12 @@ export class GameSocketClient {
         if (member.snapshot) this.callbacks.onPlayerSnapshot?.(member.userId, member.snapshot);
       }
     });
+    const invalidateHome = (): void => this.callbacks.onHomeStateChanged?.();
+    socket.on(socketEvents.homeFurniturePlace, invalidateHome);
+    socket.on(socketEvents.homeFurnitureMove, invalidateHome);
+    socket.on(socketEvents.homeFurnitureRemove, invalidateHome);
+    socket.on(socketEvents.homeSurfaceChange, invalidateHome);
+    socket.on(socketEvents.homeObjectState, invalidateHome);
     socket.on(socketEvents.playerJoin, (payload: unknown) => {
       if (!payload || typeof payload !== 'object') return;
       const value = payload as { userId?: unknown; profile?: unknown };
