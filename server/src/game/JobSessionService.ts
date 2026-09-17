@@ -49,12 +49,22 @@ export class JobSessionService {
     const job = jobById(session.jobId)!;
     if (session.completedActions.length < job.actions.length) throw new Error('Job session is not complete');
     const quality = session.mistakes === 0 ? 'standard' : 'early';
-    const economy = await this.economy.completeJobShift(session.householdId, userId, session.jobId, quality, idempotencyKey, session.id);
-    session.state = 'complete';
-    session.completionIdempotencyKey = idempotencyKey;
-    session.updatedAt = new Date().toISOString();
-    await this.repository.saveJobSession(session);
-    return { session: this.view(session), economy };
+    const completedSession: JobSessionRecord = {
+      ...session,
+      state: 'complete',
+      completionIdempotencyKey: idempotencyKey,
+      updatedAt: new Date().toISOString(),
+    };
+    const economy = await this.economy.completeJobShift(
+      session.householdId,
+      userId,
+      session.jobId,
+      quality,
+      idempotencyKey,
+      session.id,
+      completedSession,
+    );
+    return { session: this.view(completedSession), economy };
   }
 
   async list(householdId: string, userId: string): Promise<JobSessionView[]> {
