@@ -93,4 +93,41 @@ describe('GameCanvas engine lifecycle', () => {
 
     expect(create).toHaveBeenCalledTimes(1);
   });
+
+  it('refreshes authoritative home state when realtime home invalidation arrives', async () => {
+    const engine = engineStub();
+    create.mockResolvedValue(engine);
+    let homeRequestCount = 0;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/home')) {
+        homeRequestCount += 1;
+        return new Response(JSON.stringify({
+          version: homeRequestCount,
+          objects: homeRequestCount >= 3 ? [{
+            objectId: 'live-chair',
+            definitionId: 'chair_basic',
+            roomId: 'living',
+            transform: { position: { x: 1, y: 0, z: 1 }, rotationY: 0, scale: 1 },
+          }] : [],
+          surfaces: {},
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/memories')) return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
+
+    mounted = await renderGame({ networkSession: { userId: 'user-1', householdId: 'household-1' } });
+    await flushAsyncWork();
+
+    const onHomeStateChanged = create.mock.calls[0]?.[0].onHomeStateChanged;
+    expect(onHomeStateChanged).toBeTypeOf('function');
+    await act(async () => { onHomeStateChanged?.(); });
+    await flushAsyncWork();
+
+    expect(homeRequestCount).toBeGreaterThanOrEqual(3);
+    expect(engine.syncHomeDecoration).toHaveBeenLastCalledWith([
+      expect.objectContaining({ objectId: 'live-chair' }),
+    ], {});
+  });
 });
