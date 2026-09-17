@@ -1,5 +1,5 @@
 import { applyWalletTransaction, furnitureById, jobById, purchaseRequestSchema, type JobId, type ShiftQuality } from '@together/shared';
-import type { GameRepository, HouseholdRecord, TransactionRecord } from '../db/GameRepository.js';
+import { requireAtomicGameRepository, type GameRepository, type HouseholdRecord, type TransactionRecord } from '../db/GameRepository.js';
 
 export type EconomySnapshot = { sharedWallet: number; personalWallet: number; transaction: TransactionRecord };
 
@@ -28,11 +28,19 @@ export class EconomyService {
       member.personalWallet = result.balance;
     }
     const transaction = this.transaction(householdId, userId, request.wallet, -amount, 'purchase', request.idempotencyKey, request.itemId);
-    await this.repository.saveHousehold(household);
     const inventory = await this.repository.listInventory('household', householdId);
     const owned = inventory.find((entry) => entry.itemId === definition.id);
-    await this.repository.saveInventory({ ownerType: 'household', ownerId: householdId, itemId: definition.id, quantity: (owned?.quantity ?? 0) + 1, metadata: { ...(owned?.metadata ?? {}), category: 'furniture', purchasedBy: userId } });
-    await this.repository.saveTransaction(transaction);
+    await requireAtomicGameRepository(this.repository).commitPurchase({
+      household,
+      inventory: {
+        ownerType: 'household',
+        ownerId: householdId,
+        itemId: definition.id,
+        quantity: (owned?.quantity ?? 0) + 1,
+        metadata: { ...(owned?.metadata ?? {}), category: 'furniture', purchasedBy: userId },
+      },
+      transaction,
+    });
     return this.snapshot(household, userId, transaction);
   }
 
