@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process';
 
+const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const commands = [
   [process.execPath, ['tools/verify-pure.mjs'], 'pure domain/integration tests'],
-  ['tsc', ['-p', 'client/tsconfig.json', '--noEmit'], 'client TypeScript'],
-  ['tsc', ['-p', 'shared/tsconfig.json', '--noEmit'], 'shared TypeScript'],
-  ['tsc', ['-p', 'content/tsconfig.json', '--noEmit'], 'content TypeScript'],
+  [pnpm, ['exec', 'tsc', '-p', 'client/tsconfig.json', '--noEmit'], 'client TypeScript'],
+  [pnpm, ['exec', 'tsc', '-p', 'shared/tsconfig.json', '--noEmit'], 'shared TypeScript'],
+  [pnpm, ['exec', 'tsc', '-p', 'content/tsconfig.json', '--noEmit'], 'content TypeScript'],
   [process.execPath, ['tools/validate-repository.mjs'], 'repository integrity'],
 ];
 
