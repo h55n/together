@@ -10,6 +10,7 @@ import {
   type ResidencyRing,
 } from '@together/shared';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
+import { compileStaticMeshesByMaterial } from '../assets/runtime/StaticBatchCompiler';
 import type { MaterialLibrary } from './MaterialLibrary';
 import { addChunkDressing } from './NeighborhoodDressing';
 import { VegetationSystem, type VegetationSpecies } from './VegetationSystem';
@@ -66,13 +67,28 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
     root.add(terrain);
 
     if (district) {
+      const staticDressing = new THREE.Group();
+      staticDressing.name = 'chunk-static-dressing';
+      root.add(staticDressing);
+
       const dressing = generateChunkDressing(chunkX, chunkZ, district.id);
-      addChunkDressing(root, dressing, chunkOriginX, chunkOriginZ, ring, materials, ring === 'active' ? physics : undefined);
+      addChunkDressing(staticDressing, dressing, chunkOriginX, chunkOriginZ, ring, materials, ring === 'active' ? physics : undefined);
       const venues = AMAYA_BAY_VENUES.filter((venue) =>
         venue.position.x >= chunkOriginX && venue.position.x < chunkOriginX + CHUNK_SIZE_METRES &&
         venue.position.z >= chunkOriginZ && venue.position.z < chunkOriginZ + CHUNK_SIZE_METRES
       );
-      addVenueDressing(root, venues, ring, materials, ring === 'active' ? physics : undefined);
+      addVenueDressing(staticDressing, venues, ring, materials, ring === 'active' ? physics : undefined);
+
+      const disposeStaticDressing = staticDressing.userData.disposeChunk as (() => void) | undefined;
+      delete staticDressing.userData.disposeChunk;
+      compileStaticMeshesByMaterial(staticDressing);
+      if (disposeStaticDressing) {
+        const previousDispose = root.userData.disposeChunk as (() => void) | undefined;
+        root.userData.disposeChunk = () => {
+          previousDispose?.();
+          disposeStaticDressing();
+        };
+      }
     }
 
     if (ring === 'active' && physics) {
