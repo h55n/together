@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { starterPropertyById } from '@together/shared';
 import { LocalGameRepository } from '../db/LocalGameRepository';
 import { HouseholdService } from './HouseholdService';
 
@@ -30,7 +31,7 @@ describe('HouseholdService', () => {
     const service = new HouseholdService(new LocalGameRepository(), () => 0.3);
     const household = await service.createSoloExplorer('user-a');
     expect(household.type).toBe('friends');
-    expect(household.propertyId).toBe('one_bhk');
+    expect(household.propertyId).toBe(starterPropertyById('one_bhk')?.recordId);
     expect(household.sharedWallet).toBe(8000);
     expect(household.hiddenState).toMatchObject({ soloExplorer: true });
     expect(household.members).toHaveLength(1);
