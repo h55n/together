@@ -18,6 +18,8 @@ import type { ProfileService } from '../game/ProfileService.js';
 import type { UserProfileRecord } from '../db/GameRepository.js';
 import { logger } from '../logging/logger.js';
 
+export type RemoteProfile = Pick<UserProfileRecord, 'displayName' | 'avatarConfig'>;
+
 type Presence = {
   socketId: string;
   userId: string;
@@ -25,7 +27,7 @@ type Presence = {
   cityId: 'amaya_bay';
   shardId: string;
   snapshot?: PlayerSnapshot;
-  profile?: UserProfileRecord;
+  profile?: RemoteProfile;
 };
 
 export type SocketDependencies = {
@@ -35,13 +37,25 @@ export type SocketDependencies = {
   profileService: ProfileService;
 };
 
+export function projectRemoteProfile(profile: UserProfileRecord): RemoteProfile {
+  return { displayName: profile.displayName, avatarConfig: profile.avatarConfig };
+}
+
 function snapshotInsideAmayaBay(snapshot: PlayerSnapshot): boolean {
   const { x, y, z } = snapshot.position;
   return Math.abs(x) <= 520 && Math.abs(z) <= 520 && y >= -20 && y <= 140;
 }
 
 export function registerSocketServer(io: Server, dependencies: SocketDependencies): Map<string, Presence> {
+  // Presence is session/socket scoped. Multiple tabs or devices from one user may
+  // coexist without overwriting each other's transport/voice state.
   const online = new Map<string, Presence>();
+
+  const firstPresenceForUser = (userId: string, householdId?: string): Presence | undefined =>
+    [...online.values()].find((presence) => presence.userId === userId && (!householdId || presence.householdId === householdId));
+
+  const hasOtherPresence = (socketId: string, userId: string, householdId: string): boolean =>
+    [...online.values()].some((presence) => presence.socketId !== socketId && presence.userId === userId && presence.householdId === householdId);
 
   io.use(async (socket, next) => {
     try {
@@ -63,9 +77,21 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
       try {
         const join = playerJoinSchema.parse(raw);
         const household = await dependencies.householdService.getHouseholdForMember(join.householdId, userId);
+        const previous = online.get(socket.id);
+        if (previous) {
+          socket.leave(rooms.household(previous.householdId));
+          socket.leave(rooms.cityShard(previous.cityId, previous.shardId));
+          online.delete(socket.id);
+          if (!hasOtherPresence(socket.id, userId, previous.householdId)) {
+            socket.to(rooms.household(previous.householdId)).emit(socketEvents.playerLeave, { userId });
+            socket.to(rooms.household(previous.householdId)).emit(socketEvents.voiceLeave, { userId });
+          }
+        }
+
         socket.join(rooms.household(join.householdId));
         socket.join(rooms.cityShard(join.cityId, join.shardId));
-        const profile = await dependencies.profileService.getProfile(userId) ?? undefined;
+        const storedProfile = await dependencies.profileService.getProfile(userId);
+        const profile = storedProfile ? projectRemoteProfile(storedProfile) : undefined;
         const presence: Presence = {
           socketId: socket.id,
           userId,
@@ -74,14 +100,21 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
           shardId: join.shardId,
           ...(profile ? { profile } : {}),
         };
-        online.set(userId, presence);
+        online.set(socket.id, presence);
         socket.data.householdId = join.householdId;
-        socket.emit(socketEvents.householdSnapshot, {
-          household,
-          onlineMembers: [...online.values()]
-            .filter((member) => member.householdId === join.householdId && member.userId !== userId)
-            .map(({ userId: memberId, snapshot, profile: memberProfile }) => ({ userId: memberId, ...(snapshot ? { snapshot } : {}), ...(memberProfile ? { profile: memberProfile } : {}) })),
-        });
+        socket.data.shardId = join.shardId;
+
+        const membersByUser = new Map<string, { userId: string; snapshot?: PlayerSnapshot; profile?: RemoteProfile }>();
+        for (const member of online.values()) {
+          if (member.householdId !== join.householdId || member.userId === userId) continue;
+          const existing = membersByUser.get(member.userId);
+          membersByUser.set(member.userId, {
+            userId: member.userId,
+            ...(member.snapshot ?? existing?.snapshot ? { snapshot: member.snapshot ?? existing?.snapshot } : {}),
+            ...(member.profile ?? existing?.profile ? { profile: member.profile ?? existing?.profile } : {}),
+          });
+        }
+        socket.emit(socketEvents.householdSnapshot, { household, onlineMembers: [...membersByUser.values()] });
         socket.to(rooms.household(join.householdId)).emit(socketEvents.playerJoin, { userId, ...(profile ? { profile } : {}) });
       } catch (error) {
         socket.emit(socketEvents.systemError, {
@@ -98,15 +131,17 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
       if (!mode.success || mode.data === 'off') return;
       socket.data.voiceMode = mode.data;
       socket.to(rooms.household(householdId)).emit(socketEvents.voiceJoin, { userId, mode: mode.data });
-      const peers = [...online.values()].filter((presence) => presence.householdId === householdId && presence.userId !== userId).map((presence) => presence.userId);
+      const peers = [...new Set([...online.values()]
+        .filter((presence) => presence.householdId === householdId && presence.userId !== userId)
+        .map((presence) => presence.userId))];
       socket.emit(socketEvents.voiceJoin, { peers, mode: mode.data });
     });
 
     socket.on(socketEvents.voiceOffer, (raw) => {
       const parsed = voiceOfferSchema.safeParse(raw);
       if (!parsed.success) return;
-      const source = online.get(userId);
-      const target = online.get(parsed.data.targetUserId);
+      const source = online.get(socket.id);
+      const target = firstPresenceForUser(parsed.data.targetUserId, source?.householdId);
       if (!source || !target || source.householdId !== target.householdId) return;
       io.to(target.socketId).emit(socketEvents.voiceOffer, { sourceUserId: userId, sdp: parsed.data.sdp, mode: parsed.data.mode });
     });
@@ -114,8 +149,8 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
     socket.on(socketEvents.voiceAnswer, (raw) => {
       const parsed = voiceAnswerSchema.safeParse(raw);
       if (!parsed.success) return;
-      const source = online.get(userId);
-      const target = online.get(parsed.data.targetUserId);
+      const source = online.get(socket.id);
+      const target = firstPresenceForUser(parsed.data.targetUserId, source?.householdId);
       if (!source || !target || source.householdId !== target.householdId) return;
       io.to(target.socketId).emit(socketEvents.voiceAnswer, { sourceUserId: userId, sdp: parsed.data.sdp });
     });
@@ -123,8 +158,8 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
     socket.on(socketEvents.voiceIce, (raw) => {
       const parsed = voiceIceSchema.safeParse(raw);
       if (!parsed.success) return;
-      const source = online.get(userId);
-      const target = online.get(parsed.data.targetUserId);
+      const source = online.get(socket.id);
+      const target = firstPresenceForUser(parsed.data.targetUserId, source?.householdId);
       if (!source || !target || source.householdId !== target.householdId) return;
       io.to(target.socketId).emit(socketEvents.voiceIce, {
         sourceUserId: userId,
@@ -152,7 +187,7 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
       const parsed = playerSnapshotSchema.safeParse(raw);
       const householdId = typeof socket.data.householdId === 'string' ? socket.data.householdId : undefined;
       if (!parsed.success || !householdId || !snapshotInsideAmayaBay(parsed.data)) return;
-      const presence = online.get(userId);
+      const presence = online.get(socket.id);
       if (!presence) return;
       presence.snapshot = parsed.data;
       socket.to(rooms.household(householdId)).emit(socketEvents.playerSnapshot, {
@@ -162,9 +197,14 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
     });
 
     const leave = () => {
-      const presence = online.get(userId);
+      const presence = online.get(socket.id);
       if (!presence) return;
-      online.delete(userId);
+      online.delete(socket.id);
+      socket.leave(rooms.household(presence.householdId));
+      socket.leave(rooms.cityShard(presence.cityId, presence.shardId));
+      delete socket.data.householdId;
+      delete socket.data.shardId;
+      if (hasOtherPresence(socket.id, userId, presence.householdId)) return;
       socket.to(rooms.household(presence.householdId)).emit(socketEvents.playerLeave, { userId });
       socket.to(rooms.household(presence.householdId)).emit(socketEvents.voiceLeave, { userId });
     };
