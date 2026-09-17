@@ -8,7 +8,7 @@ import { MaterialLibrary } from './world/MaterialLibrary';
 import { buildLanternStreetHero } from './world/HeroStreet';
 import { AmayaBayEnvironment } from './world/AmayaBayEnvironment';
 import { WorldStreamer } from './world/WorldStreamer';
-import { createAmayaBayChunkFactory } from './world/AmayaBayChunkFactory';
+import { amayaBayBoundaryCuboids, createAmayaBayChunkFactory } from './world/AmayaBayChunkFactory';
 import { PlayerAvatar } from './player/PlayerAvatar';
 import { PlayerController } from './player/PlayerController';
 import { CameraController } from './camera/CameraController';
@@ -148,7 +148,9 @@ export class GameEngine {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xaabbb7);
 
-    physics.createFixedCuboid({ x: 0, y: -0.25, z: 0 }, { x: 450, y: 0.6, z: 450 });
+    for (const boundary of amayaBayBoundaryCuboids()) {
+      physics.createFixedCuboid(boundary.center, boundary.halfExtents);
+    }
     const lanternOrigin = { x: -30, y: cityHeightAt(-30, 75), z: 75 };
     const street = buildLanternStreetHero(materials, physics, lanternOrigin);
     scene.add(street.group);
@@ -328,6 +330,7 @@ export class GameEngine {
     this.interactions.setEnabled(false);
     if (skip) {
       this.player.setWorldPosition({ x: end.x, y: end.y, z: end.z });
+      this.worldStreamer.refreshNow(end);
       this.finishAutoRide();
       return;
     }
