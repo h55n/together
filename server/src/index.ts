@@ -47,7 +47,7 @@ const jobSessionService = new JobSessionService(repository, economyService);
 const transitService = new TransitService(repository);
 const activityService = new ActivityService(repository);
 const memoryImageStore = createMemoryImageStore();
-const timeService = new TimeService();
+const timeService = await TimeService.create();
 const app = createApp({ authService, householdService, propertySelectionService, homeService, economyService, storyService, memoryService, inventoryService, cookingService, npcStateService, movingService, renovationService, noteService, memoryImageStore, profileService, jobSessionService, transitService, activityService });
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -56,11 +56,14 @@ const io = new Server(httpServer, {
 });
 const onlinePresence = registerSocketServer(io, { authService, householdService, timeService, profileService });
 
-const timeTimer = setInterval(() => io.emit('time:sync', timeService.snapshot()), 5_000);
+const timeTimer = setInterval(() => {
+  io.emit('time:sync', timeService.snapshot());
+  void timeService.persist().catch((error) => logger.warn('Could not persist city time', { error: error instanceof Error ? error.message : String(error) }));
+}, 5_000);
 timeTimer.unref();
 
 // Household life chapters advance from active play rather than wall-clock/offline time.
-// Count each online household once even when several members are connected.
+// Count each online household once even when several members or tabs are connected.
 const activeTimeTimer = setInterval(() => {
   const householdIds = new Set([...onlinePresence.values()].map((presence) => presence.householdId));
   void Promise.allSettled([...householdIds].map((householdId) => householdService.advanceActiveTime(householdId, 60)));
