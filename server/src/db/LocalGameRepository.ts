@@ -1,4 +1,4 @@
-import type { ActivitySessionRecord, CookingSessionRecord, GameRepository, HouseholdNoteRecord, HouseholdRecord, HomeStateRecord, InventoryRecord, JobSessionRecord, MemoryRecord, NPCRelationshipRecord, StoryInstanceRecord, TransactionRecord, UserProfileRecord, VoteRecord } from './GameRepository.js';
+import type { ActivitySessionRecord, CookingSessionRecord, GameRepository, HouseholdNoteRecord, HouseholdRecord, HomeStateRecord, InventoryRecord, JobPayoutCommit, JobSessionRecord, MemoryRecord, MovingCommit, NPCRelationshipRecord, PurchaseCommit, RenovationCommit, StoryInstanceRecord, TransactionRecord, UserProfileRecord, VoteRecord } from './GameRepository.js';
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -53,7 +53,6 @@ export class LocalGameRepository implements GameRepository {
     return home ? clone(home) : null;
   }
 
-
   async saveInventory(record: InventoryRecord): Promise<void> {
     const key = `${record.ownerType}:${record.ownerId}:${record.itemId}`;
     if (record.quantity <= 0) this.inventories.delete(key);
@@ -83,6 +82,37 @@ export class LocalGameRepository implements GameRepository {
       .map(clone);
   }
 
+  async commitPurchase(input: PurchaseCommit): Promise<void> {
+    await this.atomicMutation(async () => {
+      await this.saveHousehold(input.household);
+      await this.saveInventory(input.inventory);
+      await this.saveTransaction(input.transaction);
+    });
+  }
+
+  async commitJobPayout(input: JobPayoutCommit): Promise<void> {
+    await this.atomicMutation(async () => {
+      await this.saveHousehold(input.household);
+      if (input.session) await this.saveJobSession(input.session);
+      await this.saveTransaction(input.transaction);
+    });
+  }
+
+  async commitMoving(input: MovingCommit): Promise<void> {
+    await this.atomicMutation(async () => {
+      await this.saveHousehold(input.household);
+      if (input.home) await this.saveHomeState(input.home);
+      await this.saveTransaction(input.transaction);
+    });
+  }
+
+  async commitRenovation(input: RenovationCommit): Promise<void> {
+    await this.atomicMutation(async () => {
+      await this.saveHousehold(input.household);
+      await this.saveHomeState(input.home);
+      await this.saveTransaction(input.transaction);
+    });
+  }
 
   async saveJobSession(session: JobSessionRecord): Promise<void> {
     this.jobSessions.set(session.id, clone(session));
@@ -125,7 +155,6 @@ export class LocalGameRepository implements GameRepository {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map(clone);
   }
-
 
   async saveHouseholdNote(note: HouseholdNoteRecord): Promise<void> {
     this.notes.set(note.id, clone(note));
@@ -233,5 +262,32 @@ export class LocalGameRepository implements GameRepository {
       .filter((vote) => vote.householdId === householdId && vote.type === type)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return matches[0] ? clone(matches[0]) : null;
+  }
+
+  private async atomicMutation(operation: () => Promise<void>): Promise<void> {
+    const snapshots = {
+      households: clone([...this.households.entries()]),
+      inviteIndex: clone([...this.inviteIndex.entries()]),
+      homes: clone([...this.homes.entries()]),
+      transactions: clone([...this.transactions.entries()]),
+      inventories: clone([...this.inventories.entries()]),
+      jobSessions: clone([...this.jobSessions.entries()]),
+    };
+    try {
+      await operation();
+    } catch (error) {
+      this.restoreMap(this.households, snapshots.households);
+      this.restoreMap(this.inviteIndex, snapshots.inviteIndex);
+      this.restoreMap(this.homes, snapshots.homes);
+      this.restoreMap(this.transactions, snapshots.transactions);
+      this.restoreMap(this.inventories, snapshots.inventories);
+      this.restoreMap(this.jobSessions, snapshots.jobSessions);
+      throw error;
+    }
+  }
+
+  private restoreMap<K, V>(target: Map<K, V>, entries: Array<[K, V]>): void {
+    target.clear();
+    for (const [key, value] of entries) target.set(key, value);
   }
 }
