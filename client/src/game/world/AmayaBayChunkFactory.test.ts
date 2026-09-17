@@ -13,10 +13,17 @@ type BoundaryCuboid = {
 describe('createAmayaBayChunkFactory', () => {
   it('gives active visual terrain a matching disposable physics collider', () => {
     const terrainCollider = { kind: 'terrain' };
+    let buildingIndex = 0;
+    const buildingColliders: Array<{ kind: string; index: number }> = [];
     const createFixedTrimesh = vi.fn((_vertices: Float32Array, _indices: Uint32Array) => terrainCollider);
     const removeCollider = vi.fn();
     const physics = {
-      createFixedCuboid: vi.fn(() => ({ kind: 'building' })),
+      createFixedCuboid: vi.fn(() => {
+        const collider = { kind: 'building', index: buildingIndex };
+        buildingIndex += 1;
+        buildingColliders.push(collider);
+        return collider;
+      }),
       createFixedTrimesh,
       removeCollider,
     } as unknown as PhysicsWorld;
@@ -32,11 +39,27 @@ describe('createAmayaBayChunkFactory', () => {
       expect(indices).toBeInstanceOf(Uint32Array);
       expect(vertices?.length).toBeGreaterThan(0);
       expect(indices?.length).toBeGreaterThan(0);
+      expect(buildingColliders.length).toBeGreaterThan(0);
 
       const disposeChunk = chunk.userData.disposeChunk as (() => void) | undefined;
       expect(disposeChunk).toBeTypeOf('function');
       disposeChunk?.();
       expect(removeCollider).toHaveBeenCalledWith(terrainCollider);
+      for (const collider of buildingColliders) expect(removeCollider).toHaveBeenCalledWith(collider);
+    } finally {
+      materials.dispose();
+    }
+  });
+
+  it('compiles streamed structural dressing into compatible static batches', () => {
+    const materials = new MaterialLibrary();
+    try {
+      const createChunk = createAmayaBayChunkFactory(materials);
+      const chunk = createChunk(0, 0, 'visual');
+      const staticDressing = chunk.getObjectByName('chunk-static-dressing');
+
+      expect(staticDressing).toBeTruthy();
+      expect(staticDressing?.children.some((child) => child.name.startsWith('static-batch:'))).toBe(true);
     } finally {
       materials.dispose();
     }
