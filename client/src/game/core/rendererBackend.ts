@@ -8,12 +8,18 @@ export function selectRendererBackend(capabilities: RendererCapabilities, forceB
   return 'unsupported';
 }
 
-export function detectRendererCapabilities(canvas: HTMLCanvasElement): RendererCapabilities {
+export function resolveRendererForceBackend(search: string, requested?: 'webgl2'): 'webgl2' | undefined {
+  if (requested !== 'webgl2') return undefined;
+  return new URLSearchParams(search).get('renderer') === 'webgl2' ? 'webgl2' : undefined;
+}
+
+export function detectRendererCapabilities(canvas: HTMLCanvasElement, probeWebgl2 = false): RendererCapabilities {
   const webgpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
   // A canvas may only be bound to one rendering context family. When WebGPU is
   // available, do not pre-empt the production canvas by probing WebGL2 first.
-  // If WebGPU initialization later fails, Renderer.create performs the WebGL2
-  // fallback attempt directly and lets the constructor be the capability check.
-  const webgl2 = webgpu ? false : Boolean(canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: true }));
+  // Explicit compatibility mode is the only reason to probe WebGL2 up front.
+  const webgl2 = (!webgpu || probeWebgl2)
+    ? Boolean(canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: true }))
+    : false;
   return { webgpu, webgl2 };
 }
