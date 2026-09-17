@@ -1,12 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { jobById, starterPropertyById } from '../../shared/src/index.js';
+import type { TransactionRecord } from '../../server/src/db/GameRepository.js';
 import { LocalGameRepository } from '../../server/src/db/LocalGameRepository.js';
 import { HouseholdService } from '../../server/src/game/HouseholdService.js';
 import { EconomyService } from '../../server/src/game/EconomyService.js';
 import { JobSessionService } from '../../server/src/game/JobSessionService.js';
 import { ActivityService } from '../../server/src/game/ActivityService.js';
 import { PropertySelectionService } from '../../server/src/game/PropertySelectionService.js';
+
+class FailingTransactionRepository extends LocalGameRepository {
+  failTransactionWrites = false;
+
+  override async saveTransaction(transaction: TransactionRecord): Promise<void> {
+    if (this.failTransactionWrites) throw new Error('simulated transaction persistence failure');
+    await super.saveTransaction(transaction);
+  }
+}
 
 async function makeHousehold() {
   const repository = new LocalGameRepository();
@@ -57,4 +67,25 @@ test('property assignment emits the canonical property_assigned story flag', asy
   const saved = await repository.getHousehold(household.id);
   const flags = saved?.hiddenState.flags as Record<string, boolean> | undefined;
   assert.equal(flags?.property_assigned, true);
+});
+
+test('purchase persistence is atomic when the transaction write fails', async () => {
+  const repository = new FailingTransactionRepository();
+  const households = new HouseholdService(repository, () => 0.2);
+  const household = await households.createHousehold('owner', { type: 'friends', name: 'Atomic Home' });
+  const economy = new EconomyService(repository);
+  repository.failTransactionWrites = true;
+
+  await assert.rejects(
+    () => economy.purchase(household.id, 'owner', {
+      itemId: 'chair_wood_01',
+      wallet: 'personal',
+      idempotencyKey: 'atomic-purchase-fail-001',
+    }),
+    /simulated transaction persistence failure/,
+  );
+
+  const fresh = await repository.getHousehold(household.id);
+  assert.equal(fresh?.members[0]?.personalWallet, 1500);
+  assert.deepEqual(await repository.listInventory('household', household.id), []);
 });
