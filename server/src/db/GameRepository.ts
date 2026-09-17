@@ -16,6 +16,11 @@ export type MemoryRecord = { id: string; idempotencyKey: string; householdId: st
 export type StoryInstanceRecord = { id: string; householdId: string; eventId: string; state: 'active' | 'resolved'; branch?: string; taskState: Record<string, 'pending' | 'complete' | 'failed' | 'skipped'>; failures: number; memoryTag?: string; startedAt: string; resolvedAt?: string };
 export type VoteRecord = { id: string; householdId: string; type: 'property' | 'moving' | 'renovation' | 'shared_purchase' | 'sleep'; payload: Record<string, unknown>; ballots: Record<string, 'yes' | 'no'>; resolution: 'pending' | 'approved' | 'rejected' | 'tied'; createdAt: string; expiresAt?: string };
 
+export type PurchaseCommit = { household: HouseholdRecord; inventory: InventoryRecord; transaction: TransactionRecord };
+export type JobPayoutCommit = { household: HouseholdRecord; transaction: TransactionRecord; session?: JobSessionRecord };
+export type MovingCommit = { household: HouseholdRecord; home: HomeStateRecord | null; transaction: TransactionRecord };
+export type RenovationCommit = { household: HouseholdRecord; home: HomeStateRecord; transaction: TransactionRecord };
+
 export interface GameRepository {
   saveUserProfile(profile: UserProfileRecord): Promise<void>;
   getUserProfile(userId: string): Promise<UserProfileRecord | null>;
@@ -57,4 +62,22 @@ export interface GameRepository {
   getMemory(id: string): Promise<MemoryRecord | null>;
   getMemoryByIdempotencyKey(key: string): Promise<MemoryRecord | null>;
   listMemories(householdId: string): Promise<MemoryRecord[]>;
+}
+
+export type AtomicGameRepository = GameRepository & {
+  commitPurchase(input: PurchaseCommit): Promise<void>;
+  commitJobPayout(input: JobPayoutCommit): Promise<void>;
+  commitMoving(input: MovingCommit): Promise<void>;
+  commitRenovation(input: RenovationCommit): Promise<void>;
+};
+
+export function requireAtomicGameRepository(repository: GameRepository): AtomicGameRepository {
+  const candidate = repository as Partial<AtomicGameRepository>;
+  if (
+    typeof candidate.commitPurchase !== 'function'
+    || typeof candidate.commitJobPayout !== 'function'
+    || typeof candidate.commitMoving !== 'function'
+    || typeof candidate.commitRenovation !== 'function'
+  ) throw new Error('Configured game repository does not support atomic mutations');
+  return repository as AtomicGameRepository;
 }
