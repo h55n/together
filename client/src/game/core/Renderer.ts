@@ -94,7 +94,7 @@ export class Renderer {
           webgl2Detected = true;
         } catch (fallbackError) {
           const reason = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-          throw new Error(`WebGPU initialization failed and WebGL2 fallback was unavailable: ${reason}`, { cause: error });
+          throw new Error(`WebGPU initialization failed and WebGL2 fallback was unavailable: ${reason}`, { cause: fallbackError });
         }
       }
     }
