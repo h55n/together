@@ -47,8 +47,6 @@ function snapshotInsideAmayaBay(snapshot: PlayerSnapshot): boolean {
 }
 
 export function registerSocketServer(io: Server, dependencies: SocketDependencies): Map<string, Presence> {
-  // Presence is session/socket scoped. Multiple tabs or devices from one user may
-  // coexist without overwriting each other's transport/voice state.
   const online = new Map<string, Presence>();
 
   const firstPresenceForUser = (userId: string, householdId?: string): Presence | undefined =>
@@ -108,10 +106,12 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
         for (const member of online.values()) {
           if (member.householdId !== join.householdId || member.userId === userId) continue;
           const existing = membersByUser.get(member.userId);
+          const snapshot = member.snapshot ?? existing?.snapshot;
+          const memberProfile = member.profile ?? existing?.profile;
           membersByUser.set(member.userId, {
             userId: member.userId,
-            ...(member.snapshot ?? existing?.snapshot ? { snapshot: member.snapshot ?? existing?.snapshot } : {}),
-            ...(member.profile ?? existing?.profile ? { profile: member.profile ?? existing?.profile } : {}),
+            ...(snapshot ? { snapshot } : {}),
+            ...(memberProfile ? { profile: memberProfile } : {}),
           });
         }
         socket.emit(socketEvents.householdSnapshot, { household, onlineMembers: [...membersByUser.values()] });
