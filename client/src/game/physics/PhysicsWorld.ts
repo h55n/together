@@ -8,6 +8,7 @@ export type PlayerPhysicsHandle = {
 
 export class PhysicsWorld {
   readonly world: RAPIER.World;
+  private disposed = false;
 
   private constructor(world: RAPIER.World) {
     this.world = world;
@@ -65,5 +66,11 @@ export class PhysicsWorld {
   disposePlayer(handle: PlayerPhysicsHandle): void {
     this.world.removeCharacterController(handle.controller);
     this.world.removeRigidBody(handle.body);
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.world.free();
   }
 }
