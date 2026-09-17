@@ -372,6 +372,7 @@ export class GameEngine {
     this.worldStreamer.dispose();
     this.homeDecor.dispose();
     this.player.dispose();
+    this.physics.dispose();
     this.avatar.dispose();
     this.materials.dispose();
     this.renderer.dispose();
