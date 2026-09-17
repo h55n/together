@@ -56,8 +56,8 @@ export class RenovationService {
   async castVote(voteId: string, userId: string, choice: VoteChoice): Promise<VoteRecord> {
     const vote = await this.repository.getVote(voteId);
     if (!vote || vote.type !== 'renovation') throw new Error('Renovation vote not found');
-    if (vote.resolution === 'approved' || vote.resolution === 'rejected') return vote;
     const household = await this.households.getHouseholdForMember(vote.householdId, userId);
+    if (vote.resolution === 'approved' || vote.resolution === 'rejected') return vote;
     const activeIds = household.members.filter((member) => member.membershipState === 'active').map((member) => member.userId);
     vote.ballots[userId] = choice;
     vote.resolution = resolveHouseholdVote(household.type, activeIds, vote.ballots);
@@ -69,10 +69,13 @@ export class RenovationService {
     if (idempotencyKey.length < 8) throw new Error('Invalid idempotency key');
     const vote = await this.repository.getVote(voteId);
     if (!vote || vote.type !== 'renovation') throw new Error('Renovation vote not found');
-    if (vote.resolution !== 'approved') throw new Error('Renovation vote is not approved');
     const household = await this.households.getHouseholdForMember(vote.householdId, userId);
+    if (vote.resolution !== 'approved') throw new Error('Renovation vote is not approved');
     const existing = await this.repository.getTransactionByIdempotencyKey(idempotencyKey);
-    if (existing) return { household, home: await this.homeState(household.id), transaction: existing };
+    if (existing) {
+      this.assertExisting(existing, household.id, userId, voteId);
+      return { household, home: await this.homeState(household.id), transaction: existing };
+    }
 
     const property = household.propertyId ? starterPropertyById(household.propertyId) : undefined;
     if (!property || property.recordId !== vote.payload.propertyId) throw new Error('Household property changed before renovation');
@@ -101,11 +104,17 @@ export class RenovationService {
     const transaction: TransactionRecord = {
       id: crypto.randomUUID(), idempotencyKey, householdId: household.id, userId,
       walletType: 'household', amount: -definition.cost, type: 'renovation', itemRef: renovationId,
-      metadata: { propertyId: property.recordId, renovationId, displayName: definition.displayName },
+      metadata: { voteId, propertyId: property.recordId, renovationId, displayName: definition.displayName },
       createdAt: new Date().toISOString(),
     };
     await this.repository.saveTransaction(transaction);
     return { household, home, transaction };
+  }
+
+  private assertExisting(transaction: TransactionRecord, householdId: string, userId: string, voteId: string): void {
+    if (transaction.householdId !== householdId || transaction.userId !== userId || transaction.type !== 'renovation' || transaction.metadata.voteId !== voteId) {
+      throw new Error('Idempotency key belongs to a different renovation transaction');
+    }
   }
 
   private async homeState(householdId: string): Promise<HomeStateRecord> {
