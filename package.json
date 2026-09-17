@@ -4,20 +4,18 @@
   "private": true,
   "description": "Together V1 — Amaya Bay, a persistent multiplayer cozy life simulator",
   "packageManager": "pnpm@12.4.1",
-  "engines": {
-    "node": ">=24.0.0"
-  },
+  "engines": { "node": ">=24.0.0" },
   "scripts": {
     "dev": "pnpm --filter @together/shared build && concurrently -n client,server -c auto \"pnpm --filter @together/client dev\" \"pnpm --filter @together/server dev\"",
     "dev:client": "pnpm --filter @together/client dev",
     "dev:server": "pnpm --filter @together/server dev",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "eslint .",
-    "test": "pnpm --filter @together/shared build && pnpm --filter @together/content build && pnpm -r --if-present test",
+    "test": "pnpm --filter @together/shared build && pnpm --filter @together/content build && pnpm -r --if-present test && pnpm verify:pure",
     "validate": "pnpm --filter @together/content validate",
     "build": "pnpm -r --if-present build",
     "test:e2e": "pnpm --filter @together/client test:e2e",
-    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm validate && pnpm build",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm validate && pnpm validate:repo && pnpm build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "clean": "pnpm -r --if-present clean",
