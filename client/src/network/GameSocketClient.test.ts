@@ -32,7 +32,7 @@ describe('GameSocketClient household home synchronization', () => {
     const onHomeStateChanged = vi.fn();
     const client = new GameSocketClient(
       { userId: 'user-1', householdId: 'household-1' },
-      { onHomeStateChanged } as ConstructorParameters<typeof GameSocketClient>[1],
+      { onHomeStateChanged } as unknown as ConstructorParameters<typeof GameSocketClient>[1],
     );
 
     client.connect();
