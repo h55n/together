@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import {
+  cityHeightAt,
   furnitureById,
   layoutRoomZone,
   mapRoomPlacementToShell,
@@ -43,6 +44,7 @@ export class HomeDecorationRenderer {
     private readonly physics: PhysicsWorld,
   ) {
     this.root.name = `home-decor:${propertyId}`;
+    this.root.position.y = cityHeightAt(center.x, center.z);
   }
 
   sync(objects: readonly HomeObjectView[], surfaces: Readonly<Record<string, string>> = {}): void {
@@ -161,7 +163,7 @@ export class HomeDecorationRenderer {
     const depth = (definition.footprint.width * sin + definition.footprint.depth * cos) * scale;
     const height = furnitureHeight(definition) * scale;
     return this.physics.createFixedCuboid(
-      { x, y: y + height / 2, z },
+      { x, y: this.root.position.y + y + height / 2, z },
       { x: Math.max(0.08, width / 2), y: Math.max(0.08, height / 2), z: Math.max(0.08, depth / 2) },
     );
   }
@@ -290,12 +292,9 @@ function disposeOwnedMaterials(root: THREE.Object3D): void {
     for (const material of materials) if (material.userData.togetherSurface) material.dispose();
   });
 }
-function finishColor(finishId: string): THREE.ColorRepresentation {
-  switch (finishId) {
-    case 'muted_sage': return 0x9aa590;
-    case 'terracotta_wash': return 0xb77a65;
-    case 'rainy_blue': return 0x879aa0;
-    default: return 0xd8cbb5;
-  }
+function finishColor(finishId: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < finishId.length; index += 1) { hash ^= finishId.charCodeAt(index); hash = Math.imul(hash, 16777619); }
+  const palette = [0xc9b79c, 0x9cae9d, 0xa99a8a, 0xc6c0b1, 0x8e9a9d, 0xb89b7d];
+  return palette[Math.abs(hash) % palette.length]!;
 }
-
