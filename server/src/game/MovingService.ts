@@ -10,7 +10,7 @@ import {
   type MovingPlan,
   type VoteChoice,
 } from '@together/shared';
-import type { GameRepository, HouseholdRecord, TransactionRecord, VoteRecord } from '../db/GameRepository.js';
+import { requireAtomicGameRepository, type GameRepository, type HouseholdRecord, type TransactionRecord, type VoteRecord } from '../db/GameRepository.js';
 import type { HouseholdService } from './HouseholdService.js';
 
 export type MoveCommitResult = { household: HouseholdRecord; transaction: TransactionRecord };
@@ -101,7 +101,6 @@ export class MovingService {
       home.surfaces = {};
       home.roomStates = { ...home.roomStates, movingBoxes, previousPropertyId: plan.fromPropertyId };
       home.updatedAt = new Date().toISOString();
-      await this.repository.saveHomeState(home);
     }
 
     household.sharedWallet = wallet.balance;
@@ -112,13 +111,12 @@ export class MovingService {
       moving: plan,
       flags: { ...previousFlags, moved_home: true, moved_in: true, move_ready: false, first_night_new_place_ready: true },
     };
-    await this.repository.saveHousehold(household);
     const transaction: TransactionRecord = {
       id: crypto.randomUUID(), idempotencyKey, householdId, userId, walletType: 'household', amount: -movingCost,
       type: 'moving', itemRef: target.id, metadata: { fromPropertyId: plan.fromPropertyId, targetPropertyId: plan.targetPropertyId, movingCost },
       createdAt: new Date().toISOString(),
     };
-    await this.repository.saveTransaction(transaction);
+    await requireAtomicGameRepository(this.repository).commitMoving({ household, home, transaction });
     return { household, transaction };
   }
 
