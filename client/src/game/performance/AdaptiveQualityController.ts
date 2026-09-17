@@ -21,11 +21,13 @@ export class AdaptiveQualityController {
   private reductionStep = 0;
   private hitchSamples = 0;
   private stableSamples = 0;
+  private cachedBudgetStep = -1;
+  private cachedBudget: AdaptiveVisualBudget | null = null;
 
   constructor(private readonly quality: QualityTier) {}
 
   sample(snapshot: AdaptiveQualitySnapshot): AdaptiveVisualBudget {
-    if (this.quality === 'low') return toBudget(this.quality, 0);
+    if (this.quality === 'low') return this.budget();
 
     if (snapshot.p95FrameMs > 33 && snapshot.framesOver33ms >= HITCH_SAMPLE_COUNT) {
       this.hitchSamples += 1;
@@ -46,7 +48,14 @@ export class AdaptiveQualityController {
       this.stableSamples = 0;
     }
 
-    return toBudget(this.quality, this.reductionStep);
+    return this.budget();
+  }
+
+  private budget(): AdaptiveVisualBudget {
+    if (this.cachedBudget && this.cachedBudgetStep === this.reductionStep) return this.cachedBudget;
+    this.cachedBudgetStep = this.reductionStep;
+    this.cachedBudget = toBudget(this.quality, this.reductionStep);
+    return this.cachedBudget;
   }
 }
 
