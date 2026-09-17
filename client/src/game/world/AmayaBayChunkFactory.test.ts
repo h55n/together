@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
 import { MaterialLibrary } from './MaterialLibrary';
-import { createAmayaBayChunkFactory } from './AmayaBayChunkFactory';
+import * as chunkFactoryModule from './AmayaBayChunkFactory';
+
+const { createAmayaBayChunkFactory } = chunkFactoryModule;
+
+type BoundaryCuboid = {
+  center: { x: number; y: number; z: number };
+  halfExtents: { x: number; y: number; z: number };
+};
 
 describe('createAmayaBayChunkFactory', () => {
   it('gives active visual terrain a matching disposable physics collider', () => {
@@ -33,5 +40,18 @@ describe('createAmayaBayChunkFactory', () => {
     } finally {
       materials.dispose();
     }
+  });
+
+  it('uses perimeter walls for static city safety instead of a flat world floor', () => {
+    const boundaryLayout = (chunkFactoryModule as unknown as {
+      amayaBayBoundaryCuboids?: () => readonly BoundaryCuboid[];
+    }).amayaBayBoundaryCuboids;
+
+    expect(boundaryLayout).toBeTypeOf('function');
+    const colliders = boundaryLayout?.() ?? [];
+    expect(colliders).toHaveLength(4);
+    expect(colliders.every(({ halfExtents }) => halfExtents.x <= 1 || halfExtents.z <= 1)).toBe(true);
+    expect(colliders.every(({ halfExtents }) => halfExtents.y >= 25)).toBe(true);
+    expect(colliders.every(({ center }) => Math.abs(center.x) >= 449 || Math.abs(center.z) >= 449)).toBe(true);
   });
 });
