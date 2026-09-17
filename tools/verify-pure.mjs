@@ -1,13 +1,16 @@
 import { rm, readdir, cp, mkdir, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(root, '.verify-dist');
+const require = createRequire(import.meta.url);
+const tscBin = require.resolve('typescript/bin/tsc');
 await rm(outDir, { recursive: true, force: true });
 
-const tsc = spawnSync('tsc', ['-p', path.join(root, 'tools/tsconfig.verify.json')], {
+const tsc = spawnSync(process.execPath, [tscBin, '-p', path.join(root, 'tools/tsconfig.verify.json')], {
   cwd: root,
   stdio: 'inherit',
 });
