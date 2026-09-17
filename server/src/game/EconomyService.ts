@@ -1,5 +1,5 @@
 import { applyWalletTransaction, furnitureById, jobById, purchaseRequestSchema, type JobId, type ShiftQuality } from '@together/shared';
-import { requireAtomicGameRepository, type GameRepository, type HouseholdRecord, type TransactionRecord } from '../db/GameRepository.js';
+import { requireAtomicGameRepository, type GameRepository, type HouseholdRecord, type JobSessionRecord, type TransactionRecord } from '../db/GameRepository.js';
 
 export type EconomySnapshot = { sharedWallet: number; personalWallet: number; transaction: TransactionRecord };
 
@@ -44,7 +44,15 @@ export class EconomyService {
     return this.snapshot(household, userId, transaction);
   }
 
-  async completeJobShift(householdId: string, userId: string, jobId: JobId, quality: ShiftQuality, idempotencyKey: string, sessionId?: string): Promise<EconomySnapshot> {
+  async completeJobShift(
+    householdId: string,
+    userId: string,
+    jobId: JobId,
+    quality: ShiftQuality,
+    idempotencyKey: string,
+    sessionId?: string,
+    completedSession?: JobSessionRecord,
+  ): Promise<EconomySnapshot> {
     if (idempotencyKey.length < 8) throw new Error('Invalid idempotency key');
     const household = await this.authorize(householdId, userId);
     const existing = await this.repository.getTransactionByIdempotencyKey(idempotencyKey);
@@ -62,8 +70,11 @@ export class EconomyService {
     member.personalWallet = result.balance;
     const metadata = { quality, ...(sessionId ? { jobSessionId: sessionId } : {}) };
     const transaction = this.transaction(householdId, userId, 'personal', payout, 'job_payout', idempotencyKey, job.id, metadata);
-    await this.repository.saveHousehold(household);
-    await this.repository.saveTransaction(transaction);
+    await requireAtomicGameRepository(this.repository).commitJobPayout({
+      household,
+      transaction,
+      ...(completedSession ? { session: completedSession } : {}),
+    });
     return this.snapshot(household, userId, transaction);
   }
 
