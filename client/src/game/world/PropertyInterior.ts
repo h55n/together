@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   bathroomCleaningSequence,
+  cityHeightAt,
   dishwashingSequence,
   floorCleaningSequence,
   groceryRestockSequence,
@@ -34,11 +35,12 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
   const property = starterPropertyById(propertyId ?? 'couple_studio') ?? starterPropertyById('couple_studio')!;
   if (property.id === 'couple_studio') {
     const starter = buildStarterHome(materials, physics);
+    const terrainY = cityHeightAt(STARTER_HOME_CENTER.x, STARTER_HOME_CENTER.z);
     const roof = propertyRoofSpec(11, 9, 3);
     const roofMesh = addBox(
       starter.group,
       [roof.width, roof.thickness, roof.depth],
-      [STARTER_HOME_CENTER.x, roof.centerY, STARTER_HOME_CENTER.z],
+      [STARTER_HOME_CENTER.x, terrainY + roof.centerY, STARTER_HOME_CENTER.z],
       materials.get('warmPlaster'),
     );
     roofMesh.name = 'home:couple_studio:roof';
@@ -46,7 +48,7 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
       ...starter,
       center: STARTER_HOME_CENTER,
       reserveRadius: 20,
-      spawn: { x: STARTER_HOME_CENTER.x, y: 1.1, z: STARTER_HOME_CENTER.z - 3.4 },
+      spawn: { x: STARTER_HOME_CENTER.x, y: terrainY + 1.1, z: STARTER_HOME_CENTER.z - 3.4 },
       property,
     };
   }
@@ -56,9 +58,15 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
   const size = placement;
   const group = new THREE.Group();
   group.name = `home:${property.id}:development-shell`;
+  const terrainY = cityHeightAt(center.x, center.z);
+  group.position.y = terrainY;
   const y = 0;
 
   addBox(group, [size.width, 0.18, size.depth], [center.x, y + 0.09, center.z], materials.get('wood'));
+  physics.createFixedCuboid(
+    { x: center.x, y: terrainY + 0.09, z: center.z },
+    { x: size.width / 2, y: 0.09, z: size.depth / 2 },
+  );
   const halfW = size.width / 2;
   const halfD = size.depth / 2;
   addWall(group, physics, [0.18, 3, size.depth], [center.x - halfW, 1.5, center.z], materials);
@@ -120,7 +128,7 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
     interactions,
     center,
     reserveRadius: placement.reserveRadius,
-    spawn: { x: center.x, y: 1.1, z: center.z - halfD + 1.8 },
+    spawn: { x: center.x, y: terrainY + 1.1, z: center.z - halfD + 1.8 },
     property,
   };
 }
@@ -133,11 +141,11 @@ function simpleInteraction(id: string, label: string, action: Exclude<AvatarActi
 }
 function addWall(group: THREE.Group, physics: PhysicsWorld, size: [number, number, number], position: [number, number, number], materials: MaterialLibrary): void {
   addBox(group, size, position, materials.get('warmPlaster'));
-  physics.createFixedCuboid({ x: position[0], y: position[1], z: position[2] }, { x: size[0] / 2, y: size[1] / 2, z: size[2] / 2 });
+  physics.createFixedCuboid({ x: position[0], y: position[1] + group.position.y, z: position[2] }, { x: size[0] / 2, y: size[1] / 2, z: size[2] / 2 });
 }
 function addFurniture(group: THREE.Group, physics: PhysicsWorld, size: [number, number, number], position: [number, number, number], material: THREE.Material): THREE.Mesh {
   const mesh = addBox(group, size, position, material);
-  physics.createFixedCuboid({ x: position[0], y: position[1], z: position[2] }, { x: size[0] / 2, y: size[1] / 2, z: size[2] / 2 });
+  physics.createFixedCuboid({ x: position[0], y: position[1] + group.position.y, z: position[2] }, { x: size[0] / 2, y: size[1] / 2, z: size[2] / 2 });
   return mesh;
 }
 function addPlant(group: THREE.Group, x: number, z: number, materials: MaterialLibrary): void {
