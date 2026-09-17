@@ -716,6 +716,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       ...(networkSession ? { networkSession } : {}),
       onConnectionState: setConnection,
       onNetworkError: setError,
+      onHomeStateChanged: () => void refreshHomeState().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))),
       onInteractionPrompt: setInteractionPrompt,
       onLocationChange: setLocation,
       onDomesticAction: (action, interactionId) => void persistDomesticAction(action, interactionId),
