@@ -292,9 +292,11 @@ function disposeOwnedMaterials(root: THREE.Object3D): void {
     for (const material of materials) if (material.userData.togetherSurface) material.dispose();
   });
 }
-function finishColor(finishId: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < finishId.length; index += 1) { hash ^= finishId.charCodeAt(index); hash = Math.imul(hash, 16777619); }
-  const palette = [0xc9b79c, 0x9cae9d, 0xa99a8a, 0xc6c0b1, 0x8e9a9d, 0xb89b7d];
-  return palette[Math.abs(hash) % palette.length]!;
+function finishColor(finishId: string): THREE.ColorRepresentation {
+  switch (finishId) {
+    case 'muted_sage': return 0x9aa590;
+    case 'terracotta_wash': return 0xb77a65;
+    case 'rainy_blue': return 0x879aa0;
+    default: return 0xd8cbb5;
+  }
 }
