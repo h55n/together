@@ -21,8 +21,8 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     kind: 'road',
     width: 7.6,
     points: [
-      { x: -330, z: 170 }, { x: -265, z: 160 }, { x: -230, z: 150 },
-      { x: -160, z: 120 }, { x: -90, z: 105 }, { x: -30, z: 75 },
+      { x: -350, z: 100 }, { x: -300, z: 102 }, { x: -250, z: 105 },
+      { x: -205, z: 108 }, { x: -160, z: 110 }, { x: -90, z: 105 }, { x: -30, z: 75 },
       { x: 20, z: 25 }, { x: 55, z: -45 }, { x: 65, z: -125 },
       { x: 72, z: -210 }, { x: 75, z: -280 },
     ],
@@ -32,9 +32,9 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     kind: 'road',
     width: 7.2,
     points: [
-      { x: -55, z: 82 }, { x: 20, z: 92 }, { x: 105, z: 104 },
-      { x: 185, z: 110 }, { x: 225, z: 160 }, { x: 250, z: 225 },
-      { x: 265, z: 275 },
+      { x: -55, z: 82 }, { x: 20, z: 92 }, { x: 95, z: 75 },
+      { x: 130, z: 55 }, { x: 200, z: 55 }, { x: 260, z: 60 },
+      { x: 270, z: 130 }, { x: 265, z: 200 }, { x: 260, z: 220 },
     ],
   },
   {
@@ -42,9 +42,10 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     kind: 'road',
     width: 7,
     points: [
-      { x: -245, z: -112 }, { x: -205, z: -95 }, { x: -140, z: -70 },
-      { x: -70, z: -25 }, { x: 0, z: -20 }, { x: 85, z: -35 },
-      { x: 160, z: -55 }, { x: 215, z: -80 }, { x: 270, z: -90 },
+      { x: -300, z: -55 }, { x: -245, z: -58 }, { x: -205, z: -60 },
+      { x: -140, z: -55 }, { x: -70, z: -25 }, { x: 0, z: -20 },
+      { x: 85, z: -35 }, { x: 145, z: -75 }, { x: 160, z: -110 },
+      { x: 215, z: -115 }, { x: 270, z: -105 },
     ],
   },
   {
@@ -62,7 +63,7 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     width: 4.2,
     points: [
       { x: 125, z: 80 }, { x: 145, z: 115 }, { x: 170, z: 145 },
-      { x: 205, z: 165 }, { x: 232, z: 130 }, { x: 232, z: 82 },
+      { x: 205, z: 165 }, { x: 225, z: 135 }, { x: 220, z: 100 },
     ],
   },
   {
@@ -70,9 +71,9 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     kind: 'path',
     width: 4,
     points: [
-      { x: 220, z: 260 }, { x: 260, z: 245 }, { x: 315, z: 225 },
-      { x: 330, z: 270 }, { x: 300, z: 330 }, { x: 265, z: 290 },
-      { x: 220, z: 260 },
+      { x: 215, z: 250 }, { x: 245, z: 225 }, { x: 300, z: 215 },
+      { x: 330, z: 245 }, { x: 330, z: 300 }, { x: 305, z: 335 },
+      { x: 255, z: 330 }, { x: 225, z: 300 }, { x: 215, z: 250 },
     ],
   },
 ] as const;
