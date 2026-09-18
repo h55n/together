@@ -51,3 +51,9 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @together/client exec playwright install --with-deps chromium
+
+      - name: Browser E2E
+        run: pnpm test:e2e
