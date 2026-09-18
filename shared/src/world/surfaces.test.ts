@@ -26,8 +26,12 @@ test('all seven district centres sit near the shared connective network', () => 
 });
 
 test('route distance uses the nearest point on each polyline segment', () => {
-  const spine = AMAYA_BAY_SURFACE_ROUTES.find((route) => route.id === 'main-spine');
-  assert.ok(spine);
-  assert.ok(distanceToSurfaceRoute(-30, 75, spine) < 1e-8);
-  assert.ok(distanceToSurfaceRoute(-30, 125, spine) > 20);
+  const route = {
+    id: 'distance-test',
+    kind: 'road' as const,
+    width: 6,
+    points: [{ x: 0, z: 0 }, { x: 10, z: 0 }],
+  };
+  assert.equal(distanceToSurfaceRoute(5, 4, route), 4);
+  assert.equal(distanceToSurfaceRoute(15, 0, route), 5);
 });
