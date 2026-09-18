@@ -111,6 +111,10 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
     }
 
     if (ring === 'horizon') return root;
+    const vegetationRoot = new THREE.Group();
+    vegetationRoot.name = 'chunk-vegetation';
+    root.add(vegetationRoot);
+
     const random = createSeededRandom((chunkX * 73856093) ^ (chunkZ * 19349663));
     const count = ring === 'active' ? (district?.id === 'mogra_park' || district?.id === 'rain_tree_lane' ? 14 : 9) : 4;
     for (let i = 0; i < count; i += 1) {
@@ -124,8 +128,9 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
       const tree = vegetation.createTree({ species, seed: Math.floor(random() * 1_000_000), scale: ring === 'visual' ? 0.72 : 0.85 + random() * 0.32 });
       tree.position.set(wx, cityHeightAt(wx, wz), wz);
       if (ring === 'visual') tree.traverse((object) => { if (object instanceof THREE.Mesh) object.castShadow = false; });
-      root.add(tree);
+      vegetationRoot.add(tree);
     }
+    compileStaticMeshesByMaterial(vegetationRoot);
     return root;
   };
 }
