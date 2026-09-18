@@ -16,6 +16,7 @@ import { addChunkDressing } from './NeighborhoodDressing';
 import { VegetationSystem, type VegetationSpecies } from './VegetationSystem';
 import { PROPERTY_WORLD_RESERVATIONS } from './PropertyLocations';
 import { addVenueDressing } from './CityVenueDressing';
+import { createChunkSurfaceNetwork } from './CitySurfaceNetwork';
 
 export type AmayaBayBoundaryCuboid = {
   center: { x: number; y: number; z: number };
@@ -65,6 +66,11 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
     terrain.position.set(centerX, 0, centerZ);
     terrain.receiveShadow = ring === 'active';
     root.add(terrain);
+
+    if (ring !== 'horizon') {
+      const surfaceNetwork = createChunkSurfaceNetwork(chunkX, chunkZ, materials);
+      if (surfaceNetwork.children.length > 0) root.add(surfaceNetwork);
+    }
 
     if (district) {
       const staticDressing = new THREE.Group();
