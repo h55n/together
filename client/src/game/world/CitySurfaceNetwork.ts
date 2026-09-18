@@ -27,6 +27,9 @@ export function createChunkSurfaceNetwork(
       if (!pointBelongsToChunk(midpointX, midpointZ, chunkX, chunkZ)) return;
       addRouteLayers(root, route, start, end, materials);
     });
+    for (const point of route.points) {
+      if (pointBelongsToChunk(point.x, point.z, chunkX, chunkZ)) addRouteCapLayers(root, route, point, materials);
+    }
   }
 
   compileStaticMeshesByMaterial(root);
@@ -43,7 +46,6 @@ function addRouteLayers(
   if (route.kind === 'road') {
     addRibbon(root, start, end, route.width + 3.4, SURFACE_ELEVATION, 'concrete', materials, false);
     addRibbon(root, start, end, route.width, SURFACE_ELEVATION + 0.022, 'asphalt', materials, true);
-    addRibbon(root, start, end, 0.16, SURFACE_ELEVATION + 0.03, 'asphaltPatch', materials, false);
     return;
   }
 
@@ -55,6 +57,59 @@ function addRouteLayers(
 
   addRibbon(root, start, end, route.width + 1.1, SURFACE_ELEVATION, 'soil', materials, false);
   addRibbon(root, start, end, route.width, SURFACE_ELEVATION + 0.018, 'stone', materials, false);
+}
+
+function addRouteCapLayers(
+  root: THREE.Group,
+  route: CitySurfaceRoute,
+  point: SurfacePoint,
+  materials: MaterialLibrary,
+): void {
+  if (route.kind === 'road') {
+    addCap(root, point, (route.width + 3.4) / 2, SURFACE_ELEVATION, 'concrete', materials, false);
+    addCap(root, point, route.width / 2, SURFACE_ELEVATION + 0.022, 'asphalt', materials, true);
+    return;
+  }
+  if (route.kind === 'promenade') {
+    addCap(root, point, route.width / 2, SURFACE_ELEVATION, 'concrete', materials, false);
+    addCap(root, point, Math.max(3.2, route.width * 0.34) / 2, SURFACE_ELEVATION + 0.02, 'stone', materials, false);
+    return;
+  }
+  addCap(root, point, (route.width + 1.1) / 2, SURFACE_ELEVATION, 'soil', materials, false);
+  addCap(root, point, route.width / 2, SURFACE_ELEVATION + 0.018, 'stone', materials, false);
+}
+
+function addCap(
+  root: THREE.Group,
+  point: SurfacePoint,
+  radius: number,
+  yOffset: number,
+  materialKey: WorldMaterialKey,
+  materials: MaterialLibrary,
+  receiveShadow: boolean,
+): void {
+  const segments = 12;
+  const positions: number[] = [...surfaceVertex(point.x, point.z, yOffset)];
+  for (let index = 0; index < segments; index += 1) {
+    const angle = (index / segments) * Math.PI * 2;
+    positions.push(...surfaceVertex(point.x + Math.cos(angle) * radius, point.z + Math.sin(angle) * radius, yOffset));
+  }
+  const indices: number[] = [];
+  for (let index = 0; index < segments; index += 1) {
+    const current = 1 + index;
+    const next = 1 + ((index + 1) % segments);
+    indices.push(0, next, current);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  const mesh = new THREE.Mesh(geometry, materials.get(materialKey));
+  mesh.receiveShadow = receiveShadow;
+  root.add(mesh);
 }
 
 function addRibbon(
