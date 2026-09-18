@@ -11,6 +11,7 @@ import type { MaterialLibrary, WorldMaterialKey } from './MaterialLibrary';
 
 const MAX_PIECE_LENGTH = 10;
 const SURFACE_ELEVATION = 0.055;
+const LANTERN_HERO_BASE_Y = cityHeightAt(-30, 75);
 
 export function createChunkSurfaceNetwork(
   chunkX: number,
@@ -150,7 +151,15 @@ function addRibbon(
 }
 
 function surfaceVertex(x: number, z: number, yOffset: number): [number, number, number] {
-  return [x, cityHeightAt(x, z) + yOffset, z];
+  const terrainY = cityHeightAt(x, z);
+  if (insideLanternHeroSurface(x, z)) {
+    return [x, Math.min(terrainY + yOffset, LANTERN_HERO_BASE_Y - 0.15), z];
+  }
+  return [x, terrainY + yOffset, z];
+}
+
+function insideLanternHeroSurface(x: number, z: number): boolean {
+  return Math.abs(x + 30) <= 12.25 && Math.abs(z - 75) <= 59.5;
 }
 
 function forEachRoutePiece(route: CitySurfaceRoute, visit: (start: SurfacePoint, end: SurfacePoint) => void): void {
