@@ -7,6 +7,7 @@ import {
   createSeededRandom,
   districtAtPosition,
   generateChunkDressing,
+  pointClearsSurfaceRoutes,
   type ResidencyRing,
 } from '@together/shared';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
@@ -123,18 +124,23 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
 
     const random = createSeededRandom((chunkX * 73856093) ^ (chunkZ * 19349663));
     const count = ring === 'active' ? (district?.id === 'mogra_park' || district?.id === 'rain_tree_lane' ? 14 : 9) : 4;
-    for (let i = 0; i < count; i += 1) {
+    let placedTrees = 0;
+    let treeAttempts = 0;
+    while (placedTrees < count && treeAttempts < count * 10) {
+      treeAttempts += 1;
       const localX = (random() - 0.5) * (CHUNK_SIZE_METRES - 12);
       const localZ = (random() - 0.5) * (CHUNK_SIZE_METRES - 12);
       const wx = centerX + localX;
       const wz = centerZ + localZ;
       if (Math.abs(wx + 30) < 28 && Math.abs(wz - 75) < 75) continue;
+      if (!pointClearsSurfaceRoutes(wx, wz, 2.2)) continue;
       if (PROPERTY_WORLD_RESERVATIONS.some(({ center, reserveRadius }) => Math.hypot(wx - center.x, wz - center.z) < reserveRadius)) continue;
       const species = chooseSpecies(district?.id, random());
       const tree = vegetation.createTree({ species, seed: Math.floor(random() * 1_000_000), scale: ring === 'visual' ? 0.72 : 0.85 + random() * 0.32 });
       tree.position.set(wx, cityHeightAt(wx, wz), wz);
       if (ring === 'visual') tree.traverse((object) => { if (object instanceof THREE.Mesh) object.castShadow = false; });
       vegetationRoot.add(tree);
+      placedTrees += 1;
     }
     compileStaticMeshesByMaterial(vegetationRoot);
     return root;
