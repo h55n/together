@@ -32,7 +32,7 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     kind: 'road',
     width: 7.2,
     points: [
-      { x: -55, z: 82 }, { x: 20, z: 92 }, { x: 95, z: 75 },
+      { x: -30, z: 142 }, { x: 30, z: 138 }, { x: 90, z: 90 },
       { x: 130, z: 55 }, { x: 200, z: 55 }, { x: 260, z: 60 },
       { x: 270, z: 130 }, { x: 265, z: 200 }, { x: 260, z: 220 },
     ],
