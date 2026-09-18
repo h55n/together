@@ -74,6 +74,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const [homeGrowthMessage, setHomeGrowthMessage] = useState<string | null>(null);
   const [lifeData, setLifeData] = useState<LifePanelData>({});
   const [settings, setSettings] = useState<GameSettings>(() => loadGameSettings());
+  const [weather, setWeatherState] = useState<WeatherState>('clear');
 
   const authHeaders = useCallback((): Record<string, string> => networkSession ? { 'x-dev-user-id': networkSession.userId } : {}, [networkSession]);
 
@@ -778,7 +779,10 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     engineRef.current?.applySettings(normalized);
   }, [settings]);
 
-  const setWeather = (weather: WeatherState) => engineRef.current?.setWeather(weather);
+  const setWeather = (nextWeather: WeatherState): void => {
+    setWeatherState(nextWeather);
+    engineRef.current?.setWeather(nextWeather);
+  };
   return <div ref={containerRef} className="game-shell">
     <canvas ref={canvasRef} className="game-canvas" aria-label="Amaya Bay 3D world" />
     {!ready && !error && <div className="world-loading">Preparing Amaya Bay…</div>}
@@ -813,7 +817,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       onClose={() => { setDecorateOpen(false); engineRef.current?.clearHomeDecorationPreview(); }} />}
     <StoryPanel open={storyOpen} active={storyActive} eligible={storyEligible} definitions={storyEvents} busy={storyBusy} message={storyMessage} onStart={startStory} onTask={updateStoryTask} onResolve={resolveStory} onClose={() => setStoryOpen(false)} />
     <CookingPanel open={cookingOpen} recipes={recipes} inventory={kitchenInventory} session={cookingSession} busy={cookingBusy} message={cookingMessage} onStart={startCooking} onStep={performCookingStep} onClose={() => setCookingOpen(false)} />
-    <NpcPanel npcId={npcId} relationship={npcRelationship} weather={engineRef.current?.getMemoryContext().weather ?? 'clear'} busy={npcBusy} onTalk={talkToNpc} onClose={() => setNpcId(null)} />
+    <NpcPanel npcId={npcId} relationship={npcRelationship} weather={weather} busy={npcBusy} onTalk={talkToNpc} onClose={() => setNpcId(null)} />
     {propertyId && <HomeGrowthPanel open={homeGrowthOpen} currentPropertyId={propertyId} household={homeGrowthHousehold} homeObjects={homeState?.objects ?? []} moving={movingState} renovation={renovationState} userId={networkSession?.userId} busy={homeGrowthBusy} message={homeGrowthMessage} onProposeMove={proposeMove} onCastMove={castMove} onPack={packMovingObject} onCommitMove={commitMove} onProposeRenovation={proposeRenovation} onCastRenovation={castRenovation} onCommitRenovation={commitRenovation} onClose={() => setHomeGrowthOpen(false)} />}
     <ActivityPanel session={activitySession} {...(networkSession ? { userId: networkSession.userId } : {})} busy={activityBusy} message={activityMessage} onStep={advanceActivity} onClose={() => setActivitySession(null)} />
     <VenuePanel venue={venueSession} {...(networkSession ? { networkSession } : {})} onClose={() => setVenueSession(null)} onStartJob={(jobId) => void startJob(jobId)} onMoment={(message) => { setToast(message); window.setTimeout(() => setToast(null), 2600); }} />
