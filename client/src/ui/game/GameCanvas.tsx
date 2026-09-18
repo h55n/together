@@ -75,6 +75,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const [lifeData, setLifeData] = useState<LifePanelData>({});
   const [settings, setSettings] = useState<GameSettings>(() => loadGameSettings());
   const [weather, setWeatherState] = useState<WeatherState>('clear');
+  const settingsRef = useRef(settings);
 
   const authHeaders = useCallback((): Record<string, string> => networkSession ? { 'x-dev-user-id': networkSession.userId } : {}, [networkSession]);
 
@@ -737,7 +738,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       if (cancelled) { engine.dispose(); return; }
       engineRef.current = engine;
       void refreshHomeState().catch(() => undefined);
-      engine.applySettings(settings);
+      engine.applySettings(settingsRef.current);
       engine.start();
       setReady(true);
     }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
@@ -773,6 +774,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
   useEffect(() => {
     const normalized = normalizeGameSettings(settings);
+    settingsRef.current = normalized;
     localStorage.setItem('together:game-settings', JSON.stringify(normalized));
     document.documentElement.style.setProperty('--ui-scale', String(normalized.uiScale));
     document.documentElement.classList.toggle('high-contrast-prompts', normalized.highContrastPrompt);
