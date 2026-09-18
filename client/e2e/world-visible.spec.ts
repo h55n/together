@@ -5,14 +5,15 @@ test('first playable frame contains world geometry', async ({ page }) => {
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error') runtimeErrors.push(message.text()); });
 
-  await page.goto('http://127.0.0.1:5173/', { waitUntil: 'networkidle' });
+  await page.goto('/', { waitUntil: 'networkidle' });
   await page.getByLabel('Display name').fill('Browser tester');
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Explore Amaya Bay solo' }).click();
   await page.getByRole('button', { name: 'Explore Amaya Bay' }).click();
   const canvas = page.getByLabel('Amaya Bay 3D world');
   await expect(canvas).toBeVisible();
-  await page.waitForTimeout(2500);
+  await expect(page.locator('.world-loading')).toBeHidden();
+  await page.waitForTimeout(1200);
 
   const screenshot = await canvas.screenshot();
   const frame = await page.evaluate(async (base64) => {
