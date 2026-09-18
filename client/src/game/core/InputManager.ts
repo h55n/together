@@ -41,6 +41,7 @@ export class InputManager {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('mousemove', this.onMouseMove);
+    window.addEventListener('blur', this.resetTransientInput);
     this.canvas.addEventListener('click', this.requestPointerLock);
   }
 
@@ -50,13 +51,10 @@ export class InputManager {
       window.removeEventListener('keydown', this.onKeyDown);
       window.removeEventListener('keyup', this.onKeyUp);
       window.removeEventListener('mousemove', this.onMouseMove);
+      window.removeEventListener('blur', this.resetTransientInput);
       this.canvas.removeEventListener('click', this.requestPointerLock);
     }
-    this.keys.clear();
-    this.pressed.clear();
-    this.lookDeltaX = 0;
-    this.lookDeltaY = 0;
-    this.previousGamepadButtons = { ...NEUTRAL_GAMEPAD_BUTTONS };
+    this.resetTransientInput();
   }
 
   setBindings(bindings: ControlBindings): void { this.bindings = { ...bindings }; }
@@ -94,6 +92,14 @@ export class InputManager {
     this.lookDeltaY = 0;
     return snapshot;
   }
+
+  private readonly resetTransientInput = (): void => {
+    this.keys.clear();
+    this.pressed.clear();
+    this.lookDeltaX = 0;
+    this.lookDeltaY = 0;
+    this.previousGamepadButtons = { ...NEUTRAL_GAMEPAD_BUTTONS };
+  };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (!event.repeat) this.pressed.add(event.code);
