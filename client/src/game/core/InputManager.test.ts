@@ -25,4 +25,19 @@ describe('InputManager disabled state', () => {
     });
     expect(getGamepads).not.toHaveBeenCalled();
   });
+  it('clears held movement when the browser window loses focus', () => {
+    vi.stubGlobal('navigator', { getGamepads: vi.fn(() => []) });
+    const canvas = document.createElement('canvas');
+    const manager = new InputManager(canvas);
+    manager.enable();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+    expect(manager.consumeSnapshot().moveZ).toBe(1);
+
+    window.dispatchEvent(new Event('blur'));
+    expect(manager.consumeSnapshot().moveZ).toBe(0);
+
+    manager.disable();
+  });
+
 });
