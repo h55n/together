@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { nearestAmayaBaySurfaceRoute } from '@together/shared';
 import { MaterialLibrary } from './MaterialLibrary';
 import { AmayaBayEnvironment } from './AmayaBayEnvironment';
 import { PROPERTY_WORLD_PLACEMENTS } from './PropertyLocations';
@@ -12,6 +13,17 @@ describe('AmayaBayEnvironment', () => {
     expect(names).not.toContain('amaya-road-network');
     expect(names).toContain('landmark:bay-steps');
     expect(names).toContain('landmark:mogra-park');
+  });
+
+  it('keeps the shared street network outside starter property reservations', () => {
+    for (const [propertyId, placement] of Object.entries(PROPERTY_WORLD_PLACEMENTS)) {
+      const nearest = nearestAmayaBaySurfaceRoute(placement.center.x, placement.center.z);
+      expect(nearest, `${propertyId} should resolve a nearby route`).toBeTruthy();
+      expect(
+        nearest!.distance,
+        `${nearest!.route.id} intrudes into the ${propertyId} reservation`,
+      ).toBeGreaterThan(placement.reserveRadius + nearest!.route.width / 2 + 2);
+    }
   });
 
   it('keeps permanent Mogra Court geometry outside every starter property reservation', () => {
