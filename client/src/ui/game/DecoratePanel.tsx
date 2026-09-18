@@ -51,23 +51,19 @@ export function DecoratePanel(props: {
   const [grid, setGrid] = useState(0.25);
   const [rotationSnap, setRotationSnap] = useState(15);
 
-  const room = property?.roomBounds[roomId];
+  const activeRoomId = property?.rooms.includes(roomId) ? roomId : firstRoom;
+  const room = property?.roomBounds[activeRoomId];
   const selectedDefinition = FURNITURE_CATALOG.find((entry) => entry.id === definitionId);
   const ownedQuantity = props.inventory.find((entry) => entry.itemId === definitionId)?.quantity ?? 0;
   const currentObject = props.home?.objects.find((entry) => entry.objectId === selectedObjectId) ?? null;
-  const roomObjects = useMemo(() => props.home?.objects.filter((object) => object.roomId === roomId) ?? [], [props.home, roomId]);
+  const roomObjects = useMemo(() => props.home?.objects.filter((object) => object.roomId === activeRoomId) ?? [], [activeRoomId, props.home]);
+  const { onPreview, onClearPreview } = props;
 
   useEffect(() => {
     if (!props.open || !room || !definitionId) return;
-    props.onPreview(definitionId, roomId, placement);
-    return props.onClearPreview;
-  }, [definitionId, placement, props.open, room, roomId]);
-
-  useEffect(() => {
-    if (!property || property.rooms.includes(roomId)) return;
-    const nextRoom = property.rooms[0] ?? '';
-    setRoomId(nextRoom);
-  }, [property, roomId]);
+    onPreview(definitionId, activeRoomId, placement);
+    return onClearPreview;
+  }, [activeRoomId, definitionId, onClearPreview, onPreview, placement, props.open, room]);
 
   if (!props.open || !property || !room) return null;
 
@@ -97,11 +93,11 @@ export function DecoratePanel(props: {
       mode: currentObject ? 'move' : 'place',
       objectId,
       definitionId,
-      roomId,
+      roomId: activeRoomId,
       placement: snapPlacement(placement, grid, rotationSnap),
     });
     if (!currentObject) {
-      const bounds = property.roomBounds[roomId]!;
+      const bounds = property.roomBounds[activeRoomId]!;
       setPlacement(defaultPlacementForRoom(bounds));
     }
   };
@@ -111,11 +107,11 @@ export function DecoratePanel(props: {
     <p className="panel-copy">Place objects in the room you are standing in. The preview is local; the household save only changes after server validation.</p>
 
     <label className="field-label" htmlFor="decorate-room">Room</label>
-    <select id="decorate-room" className="text-field" value={roomId} onChange={(event) => chooseRoom(event.target.value)}>{property.rooms.map((candidate) => <option value={candidate} key={candidate}>{humanize(candidate)}</option>)}</select>
+    <select id="decorate-room" className="text-field" value={activeRoomId} onChange={(event) => chooseRoom(event.target.value)}>{property.rooms.map((candidate) => <option value={candidate} key={candidate}>{humanize(candidate)}</option>)}</select>
 
     <label className="field-label" htmlFor="decorate-item">Furniture</label>
     <select id="decorate-item" className="text-field" value={definitionId} onChange={(event) => { setSelectedObjectId(null); setDefinitionId(event.target.value); }}>
-      {FURNITURE_CATALOG.filter((item) => item.supportedRooms === 'any' || item.supportedRooms.includes(roomId)).map((item) => <option value={item.id} key={item.id}>{item.displayName} · ₹{item.price.toLocaleString('en-IN')}</option>)}
+      {FURNITURE_CATALOG.filter((item) => item.supportedRooms === 'any' || item.supportedRooms.includes(activeRoomId)).map((item) => <option value={item.id} key={item.id}>{item.displayName} · ₹{item.price.toLocaleString('en-IN')}</option>)}
     </select>
     {!currentObject && <p className={ownedQuantity > 0 ? 'owned-furniture available' : 'owned-furniture missing'}>{ownedQuantity > 0 ? `${ownedQuantity} in household storage` : 'Not owned yet · buy this at a furniture shop in the city'}</p>}
 
@@ -127,7 +123,7 @@ export function DecoratePanel(props: {
       <div className="decorate-row"><span>Rotation</span>{[15, 45, 0].map((value) => <button key={value} className={rotationSnap === value ? 'chip active' : 'chip'} onClick={() => setRotationSnap(value)}>{value === 0 ? 'Free' : `${value}°`}</button>)}</div>
     </div>
 
-    <div className="surface-finishes"><span className="field-label">Wall finish · {humanize(roomId)}</span><div className="decorate-row">{['warm_plaster','muted_sage','terracotta_wash','rainy_blue'].map((finish) => <button className="chip" key={finish} disabled={props.busy} onClick={() => void props.onSurface(`${roomId}:walls`, finish)}>{humanize(finish)}</button>)}</div></div>
+    <div className="surface-finishes"><span className="field-label">Wall finish · {humanize(activeRoomId)}</span><div className="decorate-row">{['warm_plaster','muted_sage','terracotta_wash','rainy_blue'].map((finish) => <button className="chip" key={finish} disabled={props.busy} onClick={() => void props.onSurface(`${activeRoomId}:walls`, finish)}>{humanize(finish)}</button>)}</div></div>
 
     {props.message && <p className="status-copy">{props.message}</p>}
     <div className="entry-actions"><button className="primary-action" disabled={props.busy || (!currentObject && ownedQuantity < 1)} onClick={() => void commit()}>{props.busy ? 'Saving…' : currentObject ? 'Move object' : ownedQuantity > 0 ? 'Place owned object' : 'Buy at a furniture shop'}</button>{currentObject && <button className="secondary-action" disabled={props.busy} onClick={() => void props.onRemove(currentObject.objectId)}>Remove</button>}</div>
