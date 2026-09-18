@@ -74,10 +74,12 @@ export default function App(): ReactElement {
     if (!displayName || household) return;
     const rememberedHouseholdId = localStorage.getItem('together:household-id');
     if (!rememberedHouseholdId) return;
-    void refreshHousehold(rememberedHouseholdId).catch(() => {
-      localStorage.removeItem('together:household-id');
-      setStep('household');
-    });
+    void Promise.resolve()
+      .then(() => refreshHousehold(rememberedHouseholdId))
+      .catch(() => {
+        localStorage.removeItem('together:household-id');
+        setStep('household');
+      });
   }, [displayName, household, refreshHousehold]);
 
   const startSoloExplorer = async () => {
