@@ -1,6 +1,7 @@
 import { CHUNK_SIZE_METRES } from './chunks.js';
 import { createSeededRandom } from './random.js';
 import type { DistrictId } from './city.js';
+import { buildingFootprintClearsSurfaceRoutes, pointClearsSurfaceRoutes } from './surfaces.js';
 
 export type BuildingStyle =
   | 'mogra_balcony'
@@ -68,7 +69,6 @@ export function generateChunkDressing(chunkX: number, chunkZ: number, districtId
   const styles = DISTRICT_STYLES[districtId];
   const buildings: BuildingLot[] = [];
   const edgeInset = 10;
-  const laneClearance = 16;
   let attempts = 0;
   while (buildings.length < buildingCount && attempts < buildingCount * 12) {
     attempts += 1;
@@ -78,9 +78,9 @@ export function generateChunkDressing(chunkX: number, chunkZ: number, districtId
     const height = Math.min(15, heightBase + random() * (denseCommercial ? 8 : 6));
     const x = edgeInset + width / 2 + random() * (CHUNK_SIZE_METRES - edgeInset * 2 - width);
     const z = edgeInset + depth / 2 + random() * (CHUNK_SIZE_METRES - edgeInset * 2 - depth);
-    // Keep a loose diagonal pedestrian/road corridor through every generated chunk.
-    const corridorDistance = Math.abs((x - CHUNK_SIZE_METRES / 2) * 0.65 - (z - CHUNK_SIZE_METRES / 2));
-    if (!openDistrict && corridorDistance < laneClearance) continue;
+    const worldX = chunkX * CHUNK_SIZE_METRES + x;
+    const worldZ = chunkZ * CHUNK_SIZE_METRES + z;
+    if (!buildingFootprintClearsSurfaceRoutes(worldX, worldZ, width, depth)) continue;
     if (buildings.some((other) => Math.abs(other.x - x) < (other.width + width) * 0.55 && Math.abs(other.z - z) < (other.depth + depth) * 0.55)) continue;
     const style = styles[Math.floor(random() * styles.length)]!;
     buildings.push({
@@ -105,12 +105,20 @@ export function generateChunkDressing(chunkX: number, chunkZ: number, districtId
           : ['bench', 'planter', 'bicycle', 'bin', 'lamp'];
 
   const props: DressingProp[] = [];
-  for (let i = 0; i < propCount; i += 1) {
+  let propAttempts = 0;
+  while (props.length < propCount && propAttempts < propCount * 10) {
+    propAttempts += 1;
+    const x = 5 + random() * (CHUNK_SIZE_METRES - 10);
+    const z = 5 + random() * (CHUNK_SIZE_METRES - 10);
+    const worldX = chunkX * CHUNK_SIZE_METRES + x;
+    const worldZ = chunkZ * CHUNK_SIZE_METRES + z;
+    if (!pointClearsSurfaceRoutes(worldX, worldZ)) continue;
+    const index = props.length;
     props.push({
-      id: `${districtId}:${chunkX}:${chunkZ}:p${i}`,
-      kind: propKinds[i % propKinds.length]!,
-      x: 5 + random() * (CHUNK_SIZE_METRES - 10),
-      z: 5 + random() * (CHUNK_SIZE_METRES - 10),
+      id: `${districtId}:${chunkX}:${chunkZ}:p${index}`,
+      kind: propKinds[index % propKinds.length]!,
+      x,
+      z,
       rotationY: random() * Math.PI * 2,
       scale: 0.8 + random() * 0.4,
     });
