@@ -45,14 +45,23 @@ function addRouteLayers(
   materials: MaterialLibrary,
 ): void {
   if (route.kind === 'road') {
-    addRibbon(root, start, end, route.width + 3.4, SURFACE_ELEVATION, 'concrete', materials, false);
-    addRibbon(root, start, end, route.width, SURFACE_ELEVATION + 0.022, 'asphalt', materials, true);
+    const sidewalkOffset = route.width / 2 + 1.15;
+    const gutterOffset = route.width / 2 + 0.22;
+    addRibbon(root, start, end, route.width + 4.4, SURFACE_ELEVATION - 0.012, 'soil', materials, false);
+    addOffsetRibbon(root, start, end, 1.55, sidewalkOffset, SURFACE_ELEVATION + 0.052, 'concrete', materials, false);
+    addOffsetRibbon(root, start, end, 1.55, -sidewalkOffset, SURFACE_ELEVATION + 0.052, 'concrete', materials, false);
+    addOffsetRibbon(root, start, end, 0.42, gutterOffset, SURFACE_ELEVATION + 0.018, 'asphaltPatch', materials, true);
+    addOffsetRibbon(root, start, end, 0.42, -gutterOffset, SURFACE_ELEVATION + 0.018, 'asphaltPatch', materials, true);
+    addRibbon(root, start, end, route.width, SURFACE_ELEVATION + 0.028, 'asphalt', materials, true);
     return;
   }
 
   if (route.kind === 'promenade') {
+    addRibbon(root, start, end, route.width + 1.6, SURFACE_ELEVATION - 0.008, 'soil', materials, false);
     addRibbon(root, start, end, route.width, SURFACE_ELEVATION, 'concrete', materials, false);
-    addRibbon(root, start, end, Math.max(3.2, route.width * 0.34), SURFACE_ELEVATION + 0.02, 'stone', materials, false);
+    addOffsetRibbon(root, start, end, 0.38, route.width / 2 - 0.28, SURFACE_ELEVATION + 0.026, 'stone', materials, false);
+    addOffsetRibbon(root, start, end, 0.38, -(route.width / 2 - 0.28), SURFACE_ELEVATION + 0.026, 'stone', materials, false);
+    addRibbon(root, start, end, Math.max(3.2, route.width * 0.34), SURFACE_ELEVATION + 0.032, 'stone', materials, false);
     return;
   }
 
@@ -148,6 +157,35 @@ function addRibbon(
   const mesh = new THREE.Mesh(geometry, materials.get(materialKey));
   mesh.receiveShadow = receiveShadow;
   root.add(mesh);
+}
+
+function addOffsetRibbon(
+  root: THREE.Group,
+  start: SurfacePoint,
+  end: SurfacePoint,
+  width: number,
+  offset: number,
+  yOffset: number,
+  materialKey: WorldMaterialKey,
+  materials: MaterialLibrary,
+  receiveShadow: boolean,
+): void {
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  const length = Math.hypot(dx, dz);
+  if (length <= 1e-6) return;
+  const normalX = -dz / length;
+  const normalZ = dx / length;
+  addRibbon(
+    root,
+    { x: start.x + normalX * offset, z: start.z + normalZ * offset },
+    { x: end.x + normalX * offset, z: end.z + normalZ * offset },
+    width,
+    yOffset,
+    materialKey,
+    materials,
+    receiveShadow,
+  );
 }
 
 function surfaceVertex(x: number, z: number, yOffset: number): [number, number, number] {
