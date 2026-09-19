@@ -74,6 +74,106 @@ export function planAmayaBaySurfacePath(start: SurfacePoint, end: SurfacePoint):
   };
 }
 
+export function createAmayaBayPatrolPath(
+  origin: SurfacePoint,
+  travelMetres = 24,
+  direction: 1 | -1 = 1,
+): SurfacePoint[] {
+  const projection = nearestProjection(origin);
+  if (!projection) return [];
+
+  const desiredTravel = Math.max(2, travelMetres);
+  let centerline = routeIntervalFromProjection(projection, desiredTravel, direction);
+  if (polylineLength(centerline) < Math.min(6, desiredTravel * 0.35)) {
+    centerline = routeIntervalFromProjection(projection, desiredTravel, direction === 1 ? -1 : 1);
+  }
+  if (projection.route.kind !== 'road') return centerline;
+
+  const sidewalkOffset = projection.route.width / 2 + 1.15;
+  return offsetPolyline(centerline, sidewalkOffset * direction);
+}
+
+function routeIntervalFromProjection(
+  projection: Projection,
+  travelMetres: number,
+  direction: 1 | -1,
+): SurfacePoint[] {
+  const route = projection.route;
+  const points: SurfacePoint[] = [{ ...projection.point }];
+  let remaining = travelMetres;
+
+  if (direction === 1) {
+    let cursor = projection.point;
+    for (let segmentIndex = projection.segmentIndex; segmentIndex < route.points.length - 1 && remaining > 1e-6; segmentIndex += 1) {
+      const target = route.points[segmentIndex + 1]!;
+      const available = distanceBetween(cursor, target);
+      if (available <= 1e-6) {
+        cursor = target;
+        continue;
+      }
+      if (remaining < available) {
+        points.push(lerpPoint(cursor, target, remaining / available));
+        remaining = 0;
+      } else {
+        points.push({ ...target });
+        remaining -= available;
+        cursor = target;
+      }
+    }
+  } else {
+    let cursor = projection.point;
+    for (let segmentIndex = projection.segmentIndex; segmentIndex >= 0 && remaining > 1e-6; segmentIndex -= 1) {
+      const target = route.points[segmentIndex]!;
+      const available = distanceBetween(cursor, target);
+      if (available <= 1e-6) {
+        cursor = target;
+        continue;
+      }
+      if (remaining < available) {
+        points.push(lerpPoint(cursor, target, remaining / available));
+        remaining = 0;
+      } else {
+        points.push({ ...target });
+        remaining -= available;
+        cursor = target;
+      }
+    }
+  }
+
+  return dedupeAdjacent(points);
+}
+
+function offsetPolyline(points: readonly SurfacePoint[], offset: number): SurfacePoint[] {
+  if (points.length < 2 || Math.abs(offset) <= 1e-6) return points.map((point) => ({ ...point }));
+  return points.map((point, index) => {
+    const previous = points[Math.max(0, index - 1)]!;
+    const next = points[Math.min(points.length - 1, index + 1)]!;
+    const dx = next.x - previous.x;
+    const dz = next.z - previous.z;
+    const length = Math.hypot(dx, dz);
+    if (length <= 1e-6) return { ...point };
+    return {
+      x: point.x + (-dz / length) * offset,
+      z: point.z + (dx / length) * offset,
+    };
+  });
+}
+
+function lerpPoint(start: SurfacePoint, end: SurfacePoint, t: number): SurfacePoint {
+  return {
+    x: start.x + (end.x - start.x) * t,
+    z: start.z + (end.z - start.z) * t,
+  };
+}
+
+function polylineLength(points: readonly SurfacePoint[]): number {
+  let length = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    length += distanceBetween(points[index - 1]!, points[index]!);
+  }
+  return length;
+}
+
 function addProjectionNode(
   id: string,
   projection: Projection,
