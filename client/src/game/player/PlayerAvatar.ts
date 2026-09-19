@@ -29,8 +29,12 @@ export class PlayerAvatar {
   private readonly hair: THREE.MeshStandardMaterial;
   private readonly leftArmPivot = new THREE.Group();
   private readonly rightArmPivot = new THREE.Group();
+  private readonly leftElbowPivot = new THREE.Group();
+  private readonly rightElbowPivot = new THREE.Group();
   private readonly leftLegPivot = new THREE.Group();
   private readonly rightLegPivot = new THREE.Group();
+  private readonly leftKneePivot = new THREE.Group();
+  private readonly rightKneePivot = new THREE.Group();
   private elapsed = 0;
   private readonly bicycle = new THREE.Group();
   private readonly scooter = new THREE.Group();
@@ -50,10 +54,18 @@ export class PlayerAvatar {
     this.shirt = new THREE.MeshStandardMaterial({ color: appearance.shirtColor ?? 0x536f68, roughness: 0.9 });
     this.trousers = new THREE.MeshStandardMaterial({ color: appearance.trouserColor ?? 0x394246, roughness: 0.92 });
 
+    const pelvis = this.part(new THREE.BoxGeometry(0.46, 0.2, 0.25), this.trousers, [0, 0.86, 0]);
+    pelvis.name = 'avatar:pelvis';
+    pelvis.scale.x = bodyWidth;
+    this.root.add(pelvis);
+
     const torsoMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.48, 5, 8), this.shirt);
     torsoMesh.position.y = 1.18;
     torsoMesh.scale.set(1, 1, 0.72);
     this.torso.add(torsoMesh);
+    const shoulderLine = this.part(new THREE.BoxGeometry(0.68, 0.13, 0.23), this.shirt, [0, 1.4, 0]);
+    shoulderLine.scale.x = bodyWidth;
+    this.torso.add(shoulderLine);
     this.root.add(this.torso);
 
     this.root.add(this.part(new THREE.CylinderGeometry(0.09, 0.1, 0.12, 8), this.skin, [0, 1.53, 0]));
@@ -67,15 +79,26 @@ export class PlayerAvatar {
     hairMesh.position.y = 1.695;
     hairMesh.castShadow = true;
     this.head.add(hairMesh);
+    for (const x of [-0.065, 0.065]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 5), this.hair);
+      eye.position.set(x, 1.69, -0.163);
+      eye.scale.y = 0.8;
+      this.head.add(eye);
+    }
+    const nose = this.part(new THREE.ConeGeometry(0.026, 0.07, 6), this.skin, [0, 1.655, -0.184]);
+    nose.rotation.x = Math.PI / 2;
+    this.head.add(nose);
     this.root.add(this.head);
 
-    const leftArm = this.createArm(this.leftArmPivot, -0.35);
-    const rightArm = this.createArm(this.rightArmPivot, 0.35);
+    const shoulderX = 0.35 * bodyWidth;
+    const leftArm = this.createArm(this.leftArmPivot, this.leftElbowPivot, -shoulderX, 'left');
+    const rightArm = this.createArm(this.rightArmPivot, this.rightElbowPivot, shoulderX, 'right');
     this.root.add(this.leftArmPivot, this.rightArmPivot);
     this.hands = { left: leftArm, right: rightArm };
 
-    this.createLeg(this.leftLegPivot, -0.14);
-    this.createLeg(this.rightLegPivot, 0.14);
+    const hipX = 0.14 * bodyWidth;
+    this.createLeg(this.leftLegPivot, this.leftKneePivot, -hipX, 'left');
+    this.createLeg(this.rightLegPivot, this.rightKneePivot, hipX, 'right');
     this.root.add(this.leftLegPivot, this.rightLegPivot);
     this.buildBicycleVisual();
     this.buildScooterVisual();
@@ -126,8 +149,16 @@ export class PlayerAvatar {
     this.torso.rotation.set(pose.torsoPitch, pose.torsoYaw, 0);
     this.torso.position.y = pose.breath;
 
-    this.hands.left.position.set(pose.leftHandX + 0.35, -0.48 + pose.leftHandY, pose.leftHandZ);
-    this.hands.right.position.set(pose.rightHandX - 0.35, -0.48 + pose.rightHandY, pose.rightHandZ);
+    const bends = jointBends(action, this.elapsed, pose.leftLegPitch, pose.rightLegPitch);
+    this.leftElbowPivot.rotation.x = bends.leftElbow + Math.max(0, -pose.leftHandZ) * 0.22;
+    this.rightElbowPivot.rotation.x = bends.rightElbow + Math.max(0, -pose.rightHandZ) * 0.22;
+    this.leftKneePivot.rotation.x = bends.leftKnee;
+    this.rightKneePivot.rotation.x = bends.rightKnee;
+
+    const leftHandX = pose.leftHandX + 0.35;
+    const rightHandX = pose.rightHandX - 0.35;
+    this.hands.left.position.set(leftHandX * 0.18, -0.34 + pose.leftHandY * 0.12, pose.leftHandZ * 0.1);
+    this.hands.right.position.set(rightHandX * 0.18, -0.34 + pose.rightHandY * 0.12, pose.rightHandZ * 0.1);
   }
 
   dispose(): void {
@@ -140,21 +171,58 @@ export class PlayerAvatar {
     this.hair.dispose();
   }
 
-  private createArm(pivot: THREE.Group, x: number): THREE.Object3D {
+  private createArm(
+    pivot: THREE.Group,
+    elbowPivot: THREE.Group,
+    x: number,
+    side: 'left' | 'right',
+  ): THREE.Object3D {
+    pivot.name = `avatar:${side}-shoulder`;
     pivot.position.set(x, 1.39, 0);
-    const upper = this.part(new THREE.CapsuleGeometry(0.075, 0.36, 4, 7), this.shirt, [0, -0.2, 0]);
+
+    const upper = this.part(new THREE.CapsuleGeometry(0.072, 0.22, 4, 7), this.shirt, [0, -0.19, 0]);
+    upper.name = `avatar:${side}-upper-arm`;
     pivot.add(upper);
-    const hand = this.part(new THREE.SphereGeometry(0.082, 8, 7), this.skin, [0, -0.48, 0.01]);
-    pivot.add(hand);
+
+    elbowPivot.name = `avatar:${side}-elbow`;
+    elbowPivot.position.set(0, -0.38, 0);
+    pivot.add(elbowPivot);
+
+    const forearm = this.part(new THREE.CapsuleGeometry(0.062, 0.2, 4, 7), this.skin, [0, -0.17, 0]);
+    forearm.name = `avatar:${side}-forearm`;
+    elbowPivot.add(forearm);
+
+    const hand = this.part(new THREE.SphereGeometry(0.078, 8, 7), this.skin, [0, -0.34, 0.01]);
+    hand.name = `avatar:${side}-hand`;
+    hand.scale.set(0.82, 1.05, 0.72);
+    elbowPivot.add(hand);
     return hand;
   }
 
-  private createLeg(pivot: THREE.Group, x: number): void {
+  private createLeg(
+    pivot: THREE.Group,
+    kneePivot: THREE.Group,
+    x: number,
+    side: 'left' | 'right',
+  ): void {
+    pivot.name = `avatar:${side}-hip`;
     pivot.position.set(x, 0.87, 0);
-    const leg = this.part(new THREE.CapsuleGeometry(0.09, 0.58, 4, 7), this.trousers, [0, -0.34, 0]);
-    pivot.add(leg);
-    const shoe = this.part(new THREE.BoxGeometry(0.19, 0.11, 0.32), this.trousers, [0, -0.74, -0.07]);
-    pivot.add(shoe);
+
+    const thigh = this.part(new THREE.CapsuleGeometry(0.09, 0.25, 4, 7), this.trousers, [0, -0.21, 0]);
+    thigh.name = `avatar:${side}-thigh`;
+    pivot.add(thigh);
+
+    kneePivot.name = `avatar:${side}-knee`;
+    kneePivot.position.set(0, -0.43, 0);
+    pivot.add(kneePivot);
+
+    const shin = this.part(new THREE.CapsuleGeometry(0.078, 0.22, 4, 7), this.trousers, [0, -0.19, 0]);
+    shin.name = `avatar:${side}-shin`;
+    kneePivot.add(shin);
+
+    const shoe = this.part(new THREE.BoxGeometry(0.19, 0.11, 0.32), this.trousers, [0, -0.42, -0.075]);
+    shoe.name = `avatar:${side}-shoe`;
+    kneePivot.add(shoe);
   }
 
   private buildBicycleVisual(): void {
@@ -247,3 +315,79 @@ export class PlayerAvatar {
     return mesh;
   }
 }
+
+function jointBends(
+  action: AvatarAction,
+  elapsed: number,
+  leftLegPitch: number,
+  rightLegPitch: number,
+): { leftElbow: number; rightElbow: number; leftKnee: number; rightKnee: number } {
+  let leftElbow = 0.08;
+  let rightElbow = 0.08;
+  let leftKnee = Math.max(0, leftLegPitch) * 0.42;
+  let rightKnee = Math.max(0, rightLegPitch) * 0.42;
+
+  switch (action) {
+    case 'sit':
+      leftElbow = rightElbow = 0.34;
+      leftKnee = rightKnee = 1.18;
+      break;
+    case 'sleep':
+      leftElbow = 0.22;
+      rightElbow = 0.28;
+      leftKnee = 0.16;
+      rightKnee = 0.24;
+      break;
+    case 'cycle': {
+      const pedal = Math.sin(elapsed * Math.PI * 3.8);
+      leftElbow = rightElbow = 0.34;
+      leftKnee = 0.62 + Math.max(0, pedal) * 0.72;
+      rightKnee = 0.62 + Math.max(0, -pedal) * 0.72;
+      break;
+    }
+    case 'scooter':
+      leftElbow = rightElbow = 0.28;
+      leftKnee = 0.18;
+      rightKnee = 0.12;
+      break;
+    case 'kayak':
+      leftElbow = 0.46;
+      rightElbow = 0.46;
+      leftKnee = rightKnee = 0.72;
+      break;
+    case 'carry':
+    case 'receive':
+    case 'wash':
+    case 'fold':
+      leftElbow = rightElbow = 0.58;
+      break;
+    case 'pick_up':
+    case 'place':
+      leftElbow = rightElbow = 0.48;
+      leftKnee = rightKnee = 0.18;
+      break;
+    case 'cut':
+    case 'stir':
+    case 'scrub':
+    case 'wipe':
+    case 'pour':
+    case 'water':
+      leftElbow = 0.42;
+      rightElbow = 0.64;
+      break;
+    case 'hand_over':
+    case 'point':
+    case 'high_five':
+    case 'wave':
+      rightElbow = 0.2;
+      break;
+    case 'type':
+      leftElbow = rightElbow = 0.66;
+      break;
+    default:
+      break;
+  }
+
+  return { leftElbow, rightElbow, leftKnee, rightKnee };
+}
+
