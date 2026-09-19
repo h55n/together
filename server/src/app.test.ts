@@ -66,6 +66,17 @@ describe('app', () => {
     expect(response.status).toBe(200);
     expect(response.body.city).toBe('amaya_bay');
     expect(response.body.timeScale.gameMinutesPerRealMinute).toBe(12);
+    expect(response.headers['x-request-id']).toBeTruthy();
+  });
+
+  it('exposes deployment health and readiness probes without authentication', async () => {
+    const app = createApp(deps());
+    const health = await request(app).get('/healthz');
+    const ready = await request(app).get('/readyz');
+    expect(health.status).toBe(200);
+    expect(health.body.status).toBe('ok');
+    expect(ready.status).toBe(200);
+    expect(ready.body.status).toBe('ready');
   });
 
   it('creates a household without accepting a client wallet balance', async () => {

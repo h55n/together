@@ -22,6 +22,8 @@ import type { JobSessionService } from './game/JobSessionService.js';
 import type { TransitService } from './game/TransitService.js';
 import type { ActivityService } from './game/ActivityService.js';
 import { logger } from './logging/logger.js';
+import { productionReadiness } from './runtime/productionReadiness.js';
+import { createFixedWindowRateLimiter } from './runtime/rateLimit.js';
 
 export type AppDependencies = {
   householdService: HouseholdService;
@@ -63,9 +65,36 @@ function bearerToken(request: Request): string | undefined {
 export function createApp(dependencies: AppDependencies) {
   const app = express();
   const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
+  app.set('trust proxy', 1);
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: [clientUrl, 'http://localhost:5173', 'http://localhost:4173'], credentials: true }));
+  app.use((request, response, next) => {
+    const requestId = request.header('x-request-id')?.slice(0, 128) || crypto.randomUUID();
+    const startedAt = performance.now();
+    response.setHeader('x-request-id', requestId);
+    response.on('finish', () => logger.info('HTTP request completed', {
+      requestId,
+      method: request.method,
+      path: request.path,
+      status: response.statusCode,
+      durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+    }));
+    next();
+  });
+  if (process.env.NODE_ENV === 'production' || process.env.API_RATE_LIMIT_PER_MINUTE) {
+    const configured = Number(process.env.API_RATE_LIMIT_PER_MINUTE ?? '240');
+    app.use('/api', createFixedWindowRateLimiter({
+      maxRequests: Number.isFinite(configured) ? Math.max(30, Math.min(2_000, Math.floor(configured))) : 240,
+      windowMs: 60_000,
+    }));
+  }
   app.use(express.json({ limit: '2mb' }));
+
+  app.get('/healthz', (_request, response) => response.json({ status: 'ok' }));
+  app.get('/readyz', (_request, response) => {
+    const readiness = productionReadiness();
+    response.status(readiness.ready ? 200 : 503).json({ status: readiness.ready ? 'ready' : 'not_ready', issues: readiness.issues });
+  });
 
   app.get('/api/health', (_request, response) => {
     response.json({
