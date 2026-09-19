@@ -35,6 +35,35 @@ test('dressing changes materially across districts instead of cloning one colony
 });
 
 
+
+
+test('procedural building fronts face the nearest public route instead of random directions', () => {
+  const cases = [
+    { chunkX: -2, chunkZ: 1, district: 'mogra_court' as const },
+    { chunkX: -1, chunkZ: 0, district: 'lantern_street' as const },
+    { chunkX: -2, chunkZ: -1, district: 'rain_tree_lane' as const },
+    { chunkX: 1, chunkZ: -1, district: 'the_common' as const },
+  ];
+
+  for (const entry of cases) {
+    const dressing = generateChunkDressing(entry.chunkX, entry.chunkZ, entry.district);
+    for (const building of dressing.buildings) {
+      const worldX = entry.chunkX * CHUNK_SIZE_METRES + building.x;
+      const worldZ = entry.chunkZ * CHUNK_SIZE_METRES + building.z;
+      const nearest = nearestAmayaBaySurfaceRoute(worldX, worldZ);
+      assert.ok(nearest);
+      const routeDx = nearest.point.x - worldX;
+      const routeDz = nearest.point.z - worldZ;
+      const routeLength = Math.hypot(routeDx, routeDz);
+      assert.ok(routeLength > 0);
+      const frontX = -Math.sin(building.rotationY);
+      const frontZ = -Math.cos(building.rotationY);
+      const alignment = (frontX * routeDx + frontZ * routeDz) / routeLength;
+      assert.ok(alignment > 0.995, `${building.id} front should address ${nearest.route.id}`);
+    }
+  }
+});
+
 test('procedural dressing respects the same world-space surface network that the client renders', () => {
   const cases = [
     { chunkX: -2, chunkZ: 1, district: 'mogra_court' as const },
