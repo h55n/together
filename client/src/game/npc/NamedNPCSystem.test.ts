@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { NamedNPCSystem } from './NamedNPCSystem';
 
@@ -5,7 +6,7 @@ describe('NamedNPCSystem', () => {
   it('renders named residents as articulated people with deterministic locomotion', () => {
     const system = new NamedNPCSystem();
     try {
-      const player = { x: -43, y: 0, z: 68 } as any;
+      const player = new THREE.Vector3(-43, 0, 68);
       system.update(0.1, 8 * 60, player);
 
       const roshan = system.root.getObjectByName('named-npc:roshan');
