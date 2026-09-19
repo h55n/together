@@ -2,26 +2,21 @@
 
 Status is evaluated against the strict exit criteria in `docs/PRD.md` / `docs/BUILD_PLAN.md`. "Implemented" does not mean the corresponding phase is marked complete when required browser/manual/asset verification was unavailable.
 
-## Verification baseline at handoff
+## Current verification baseline
 
-Green in this environment:
+Verified on branch `fix/audit-recovery-2026-09-17` at `2e0e9896cf6e64b902f2f2e19b626e11682625e2` by GitHub Actions run `35412228703`:
 
-- `node tools/verify-sandbox.mjs`
-- 161 automated domain/integration tests
-- client TypeScript
-- shared TypeScript
-- content TypeScript
-- content validation through the emitted validation module
-- repository/migration/secret/legacy-entrypoint integrity
+- frozen pnpm install on Node 24;
+- full workspace TypeScript;
+- ESLint;
+- shared/content/client/server automated tests;
+- content validation;
+- repository/migration/secret/legacy-entrypoint integrity;
+- production build;
+- Chromium installation;
+- real client+server Playwright solo-entry E2E through a rendered playable frame in explicit WebGL2 compatibility mode.
 
-Environment-blocked:
-
-- clean `pnpm install` (registry DNS unavailable; pnpm not installed)
-- full `pnpm typecheck/lint/test/validate/build`
-- Vite production build (copied Windows dependency tree lacks Linux Rollup native package)
-- full server `tsc` (copied dependency tree lacks declared Express/Supertest types/current Drizzle package)
-- Playwright/browser E2E
-- real target-hardware performance measurement
+Normal product startup remains WebGPU-first; real-device WebGPU/browser-matrix and target-hardware performance measurements remain outstanding.
 
 See `docs/VERIFICATION.md`.
 
@@ -45,7 +40,7 @@ Implemented:
 - migrations and verification utilities;
 - performance/debug overlay foundations.
 
-Strict blocker: two-browser boot/connect cannot be manually verified in this sandbox dependency state.
+Remaining acceptance gap: two-browser/device multiplayer boot/connect and real WebGPU target-browser acceptance have not yet been completed.
 
 ## Phase 1 — World feel vertical slice
 
@@ -81,11 +76,13 @@ Implemented:
 - 128m chunk streaming with active/visual/horizon rings;
 - deterministic district dressing and vegetation;
 - quality-dependent far residency;
+- shared world-space road/path/promenade network rendered through streamed terrain-following batches;
+- procedural building/prop/vegetation clearance against the same connective surface graph;
 - transport/location anchors and district identity.
 
 Missing/limited:
 
-- final authored terrain/road meshes;
+- final production-grade terrain/road art and district-specific surface polish;
 - production LOD assets;
 - fully baked navmesh/path service;
 - end-to-end measured traversal/performance on target hardware.
@@ -224,7 +221,7 @@ Missing: release-quality vehicle handling/animation/physics and activity-specifi
 
 Implemented:
 
-- ambient NPC pool/update tiers;
+- ambient NPC pool/update tiers rendered through two dynamic instanced batches for body/head geometry;
 - 12 named residents;
 - time schedules;
 - discrete household-specific memory flags;
@@ -339,11 +336,10 @@ Implemented:
 
 Outstanding:
 
-- clean connected dependency install/lockfile;
-- lint/full build/Playwright;
-- target hardware benchmark;
-- browser matrix;
-- broader network latency/loss soak;
+- target hardware benchmark for the Medium 1080p performance target;
+- real WebGPU/browser/controller matrix beyond the WebGL2 Chromium CI compatibility gate;
+- broader network latency/loss and multi-client soak;
+- production Supabase/TURN acceptance;
 - final asset compression/LOD benchmark.
 
 ## V3.1 technical-direction supersession
