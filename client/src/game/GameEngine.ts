@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueGameplayRole, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type Placement2D, type PlayerSnapshot, type VenueGameplayRole, type RecipeAction } from '@together/shared';
+import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueGameplayRole, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type MicroActionStep, type Placement2D, type PlayerSnapshot, type VenueGameplayRole, type RecipeAction } from '@together/shared';
 import { Renderer } from './core/Renderer';
 import { GameLoop } from './core/GameLoop';
 import { InputManager } from './core/InputManager';
@@ -42,6 +42,7 @@ export type GameEngineOptions = {
   onHomeStateChanged?: () => void;
   onInteractionPrompt?: (prompt: string | null) => void;
   onLocationChange?: (location: string | null) => void;
+  onDomesticStep?: (interactionId: string, step: MicroActionStep) => void;
   onDomesticAction?: (action: HomeAction, interactionId: string) => void;
   onVoiceState?: (state: { mode: VoiceMode; muted: boolean; pushToTalk: boolean }) => void;
   onMoment?: (message: string) => void;
@@ -209,6 +210,7 @@ export class GameEngine {
     const interactions = new InteractionSystem(interactionDefinitions, options.onInteractionPrompt);
     const microActions = new MicroActionRuntime(
       options.onInteractionPrompt,
+      (step, interactionId) => options.onDomesticStep?.(interactionId, step),
       options.onDomesticAction,
       () => interactions.setEnabled(true),
     );

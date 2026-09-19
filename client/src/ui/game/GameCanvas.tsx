@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import { DEFAULT_GAME_SETTINGS, normalizeGameSettings, resolveStartupGameSettings, scoreMemoryCapture, shouldAutoCapture, type ActivityId, type ActivityStep, type AvatarConfig, type GameSettings, type HomeAction, type JobId, type Placement2D, type RecipeStep, type StoryDefinition, type StoryTaskStateValue, type VoiceMode } from '@together/shared';
+import { DEFAULT_GAME_SETTINGS, normalizeGameSettings, resolveStartupGameSettings, scoreMemoryCapture, shouldAutoCapture, type ActivityId, type ActivityStep, type AvatarConfig, type GameSettings, type HomeAction, type MicroActionStep, type JobId, type Placement2D, type RecipeStep, type StoryDefinition, type StoryTaskStateValue, type VoiceMode } from '@together/shared';
 import { GameEngine } from '../../game/GameEngine';
 import type { WeatherState } from '../../game/weather/weatherModel';
 import type { NetworkSession } from '../../network/GameSocketClient';
@@ -24,6 +24,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const engineRef = useRef<GameEngine | null>(null);
   const engineCreateChainRef = useRef<Promise<void>>(Promise.resolve());
   const homeVersionRef = useRef(0);
+  const homeMutationChainRef = useRef<Promise<void>>(Promise.resolve());
   const lastAutomaticCaptureRef = useRef(-300_000);
   const captureBusyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,26 +127,50 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     });
   }, [authHeaders, location, networkSession]);
 
-  const persistDomesticAction = useCallback(async (action: HomeAction, interactionId: string): Promise<void> => {
-    if (!networkSession) return;
-    const execute = async (expectedVersion: number) => fetch(`/api/households/${networkSession.householdId}/home/domestic-actions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ action, expectedVersion, idempotencyKey: `${interactionId}:${crypto.randomUUID()}` }),
-    });
-    try {
+  const queueVersionedHomeMutation = useCallback((
+    execute: (expectedVersion: number) => Promise<Response>,
+    failureLabel: string,
+  ): void => {
+    const task = homeMutationChainRef.current.then(async () => {
       let response = await execute(homeVersionRef.current);
       if (!response.ok && response.status < 500) {
         const version = await refreshHomeVersion();
         response = await execute(version);
       }
-      if (!response.ok) throw new Error(`Could not save household action (${response.status})`);
+      if (!response.ok) throw new Error(`${failureLabel} (${response.status})`);
       const home = await response.json() as { version: number };
       homeVersionRef.current = home.version;
-    } catch (cause) {
+    });
+    homeMutationChainRef.current = task.catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, [authHeaders, networkSession, refreshHomeVersion]);
+    });
+  }, [refreshHomeVersion]);
+
+  const persistDomesticStep = useCallback((interactionId: string, step: MicroActionStep): void => {
+    if (!networkSession) return;
+    const idempotencyKey = `${interactionId}:${step.id}:${crypto.randomUUID()}`;
+    queueVersionedHomeMutation(
+      async (expectedVersion) => fetch(`/api/households/${networkSession.householdId}/home/domestic-steps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ interactionId, stepId: step.id, expectedVersion, idempotencyKey }),
+      }),
+      'Could not save embodied household step',
+    );
+  }, [authHeaders, networkSession, queueVersionedHomeMutation]);
+
+  const persistDomesticAction = useCallback((action: HomeAction, interactionId: string): void => {
+    if (!networkSession) return;
+    const idempotencyKey = `${interactionId}:complete:${crypto.randomUUID()}`;
+    queueVersionedHomeMutation(
+      async (expectedVersion) => fetch(`/api/households/${networkSession.householdId}/home/domestic-actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ action, expectedVersion, idempotencyKey }),
+      }),
+      'Could not save household action',
+    );
+  }, [authHeaders, networkSession, queueVersionedHomeMutation]);
 
   const setBookOpen = useCallback((open: boolean): void => {
     setMemoryOpen(open);
@@ -731,7 +756,8 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
           onHomeStateChanged: () => void refreshHomeState().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))),
           onInteractionPrompt: setInteractionPrompt,
           onLocationChange: setLocation,
-          onDomesticAction: (action, interactionId) => void persistDomesticAction(action, interactionId),
+          onDomesticStep: persistDomesticStep,
+          onDomesticAction: persistDomesticAction,
           onVoiceState: setVoiceState,
           onMoment: (message) => { setToast(message); window.setTimeout(() => setToast(null), 2600); },
           onVenueInteraction: (venue) => setVenueSession(venue),
@@ -777,7 +803,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       if (engineRef.current === ownedEngine) engineRef.current = null;
       ownedEngine = null;
     };
-  }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, propertyId, refreshHomeState, refreshMemories]);
+  }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, persistDomesticStep, propertyId, refreshHomeState, refreshMemories]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
