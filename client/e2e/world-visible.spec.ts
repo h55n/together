@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('first playable WebGL2 compatibility frame contains world geometry', async ({ page }) => {
   const runtimeErrors: string[] = [];
-  page.on('pageerror', (error) => runtimeErrors.push(error.message));
+  page.on('pageerror', (error) => runtimeErrors.push(error.stack ?? error.message));
   page.on('console', (message) => { if (message.type() === 'error') runtimeErrors.push(message.text()); });
 
   await page.goto('/?renderer=webgl2', { waitUntil: 'networkidle' });
@@ -14,7 +14,7 @@ test('first playable WebGL2 compatibility frame contains world geometry', async 
   await expect(canvas).toBeVisible();
   await expect(page.locator('.world-loading')).toBeHidden();
   await page.waitForTimeout(1200);
-  expect(runtimeErrors).toEqual([]);
+  if (runtimeErrors.length > 0) throw new Error(`Browser runtime errors:\n${runtimeErrors.join('\n---\n')}`);
   await expect(page.getByTestId('debug-overlay')).toContainText('WEBGL2');
 
   const screenshot = await canvas.screenshot();
