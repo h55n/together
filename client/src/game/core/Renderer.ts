@@ -21,6 +21,8 @@ type RuntimeRenderer = {
   setPixelRatio(value: number): void;
   setSize(width: number, height: number): void;
   render(scene: THREE.Scene, camera: THREE.Camera): void;
+  compile?: (scene: THREE.Scene, camera: THREE.Camera) => void;
+  compileAsync?: (scene: THREE.Scene, camera: THREE.Camera) => Promise<void>;
   dispose(): void;
   init?: () => Promise<void>;
 };
@@ -132,6 +134,12 @@ export class Renderer {
   resize(width: number, height: number, pixelRatio = window.devicePixelRatio): void {
     this.applyPixelRatio(pixelRatio);
     this.renderer.setSize(width, height);
+  }
+
+  async prewarm(scene: THREE.Scene, camera: THREE.Camera): Promise<void> {
+    if (this.renderer.compileAsync) await this.renderer.compileAsync(scene, camera);
+    else this.renderer.compile?.(scene, camera);
+    this.renderer.render(scene, camera);
   }
 
   dispose(): void {
