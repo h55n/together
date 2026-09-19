@@ -25,7 +25,7 @@ function meshBox(
   return mesh;
 }
 
-/** Authored procedural Phase-1 hero street; not intended as final shipping mesh art. */
+/** Authored code-built hero street. Stable gameplay anchors stay independent from visual detail. */
 export function buildLanternStreetHero(
   materials: MaterialLibrary,
   physics: PhysicsWorld,
@@ -60,6 +60,22 @@ export function buildLanternStreetHero(
   createResidentialFacade(group, materials, 14.8, -27, 0x849582, 3);
   createResidentialFacade(group, materials, 15.6, 17, 0xd7c8ae, 4);
   createShopRow(group, materials, -15.5, 26);
+  createStreetFoodStall(group, materials, 11.35, 43.5, -Math.PI / 2);
+
+  // Pedestrian markings and drain grates make the roadway read at walking height.
+  for (const crossingZ of [-37, 45]) {
+    for (let stripe = -3; stripe <= 3; stripe += 1) {
+      meshBox(group, [1.05, 0.018, 2.35], [stripe * 1.65, 0.028, crossingZ], materials.get('stone'), false);
+    }
+  }
+  for (const side of [-1, 1]) {
+    for (let z = -50; z <= 50; z += 10) {
+      meshBox(group, [0.52, 0.028, 1.75], [side * 8.9, 0.045, z], materials.get('metalDark'), false);
+      for (let bar = -2; bar <= 2; bar += 1) {
+        meshBox(group, [0.56, 0.018, 0.045], [side * 8.9, 0.064, z + bar * 0.27], materials.get('stone'), false);
+      }
+    }
+  }
 
   // Street furniture and lived-in contact details.
   for (const side of [-1, 1]) {
@@ -67,6 +83,11 @@ export function buildLanternStreetHero(
       createUtilityPole(group, materials, side * 10.9, z);
     }
   }
+  for (const z of [-45, -5, 33, 49]) {
+    createCable(group, materials, new THREE.Vector3(-10.9, 5.85, z), new THREE.Vector3(10.9, 5.85, z + 0.8));
+  }
+  createCable(group, materials, new THREE.Vector3(-10.9, 6.05, -45), new THREE.Vector3(-10.9, 6.0, 49));
+  createCable(group, materials, new THREE.Vector3(10.9, 6.05, -45), new THREE.Vector3(10.9, 6.0, 49));
   createBench(group, materials, -10.4, 4, Math.PI / 2);
   createBench(group, materials, 10.5, -4, -Math.PI / 2);
   createBicycle(group, materials, -10.3, -30, 0.15);
@@ -155,6 +176,46 @@ function createShopRow(group: THREE.Group, materials: MaterialLibrary, x: number
     meshBox(row, [0.16, 0.65, 4.4], [4.65, 3.4, zz], materials.get('wood'));
   }
   group.add(row);
+}
+
+function createStreetFoodStall(
+  group: THREE.Group,
+  materials: MaterialLibrary,
+  x: number,
+  z: number,
+  rotation: number,
+): void {
+  const stall = new THREE.Group();
+  stall.position.set(x, 0.1, z);
+  stall.rotation.y = rotation;
+  meshBox(stall, [2.6, 1.0, 1.45], [0, 0.55, 0], materials.get('wood'));
+  meshBox(stall, [2.9, 0.12, 1.75], [0, 2.18, 0], materials.get('terracottaPlaster'));
+  meshBox(stall, [2.65, 0.12, 0.6], [0, 1.28, -0.73], materials.get('metalDark'));
+  for (const xx of [-1.05, 1.05]) {
+    meshBox(stall, [0.08, 1.62, 0.08], [xx, 1.35, 0], materials.get('metalDark'));
+  }
+  for (const xx of [-0.72, 0, 0.72]) {
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.22, 8), materials.get('metalDark'));
+    pot.position.set(xx, 1.42, -0.35);
+    stall.add(pot);
+  }
+  group.add(stall);
+}
+
+function createCable(
+  group: THREE.Group,
+  materials: MaterialLibrary,
+  start: THREE.Vector3,
+  end: THREE.Vector3,
+): void {
+  const direction = end.clone().sub(start);
+  const length = direction.length();
+  if (length <= 1e-6) return;
+  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, length, 5), materials.get('metalDark'));
+  cable.position.copy(start).add(end).multiplyScalar(0.5);
+  cable.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+  cable.castShadow = false;
+  group.add(cable);
 }
 
 function createUtilityPole(group: THREE.Group, materials: MaterialLibrary, x: number, z: number): void {
