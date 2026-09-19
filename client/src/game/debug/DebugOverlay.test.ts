@@ -28,7 +28,12 @@ describe('DebugOverlay', () => {
       universalRendererLoaded: false,
     });
 
-    overlay.update(0.3, { weather: 'clear', gameTime: '17:20' });
+    overlay.update(0.3, {
+      weather: 'clear',
+      gameTime: '17:20',
+      cameraMode: 'first_person',
+      playerPosition: { x: -235, y: 3.2, z: 175 },
+    });
 
     const snapshot = JSON.parse(overlay.element.dataset.performanceSnapshot ?? '{}') as Record<string, unknown>;
     expect(snapshot).toMatchObject({
@@ -43,6 +48,11 @@ describe('DebugOverlay', () => {
       visualChunks: 12,
       horizonChunks: 4,
       pendingStreamingJobs: 3,
+    });
+    const controls = JSON.parse(overlay.element.dataset.controlSnapshot ?? '{}') as Record<string, unknown>;
+    expect(controls).toMatchObject({
+      cameraMode: 'first_person',
+      playerPosition: { x: -235, y: 3.2, z: 175 },
     });
     expect(overlay.element.textContent).toContain('p95');
     expect(overlay.element.textContent).toContain('75 meshes');
