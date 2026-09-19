@@ -11,6 +11,7 @@ import {
   type ResidencyRing,
 } from '@together/shared';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
+import type { PerformanceMonitor } from '../debug/PerformanceMonitor';
 import { compileStaticMeshesByMaterial } from '../assets/runtime/StaticBatchCompiler';
 import type { MaterialLibrary } from './MaterialLibrary';
 import { addChunkDressing } from './NeighborhoodDressing';
@@ -38,7 +39,7 @@ export function amayaBayBoundaryCuboids(): readonly AmayaBayBoundaryCuboid[] {
   ];
 }
 
-export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?: PhysicsWorld) {
+export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?: PhysicsWorld, monitor?: PerformanceMonitor) {
   const vegetation = new VegetationSystem(materials);
   return (chunkX: number, chunkZ: number, ring: Exclude<ResidencyRing, 'unloaded'>): THREE.Group => {
     const root = new THREE.Group();
@@ -48,6 +49,7 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
     const centerZ = chunkOriginZ + CHUNK_SIZE_METRES / 2;
     if (Math.abs(centerX) > AMAYA_BAY_CITY.sizeMetres / 2 + 64 || Math.abs(centerZ) > AMAYA_BAY_CITY.sizeMetres / 2 + 64) return root;
 
+    const terrainStarted = performance.now();
     const segments = ring === 'active' ? 10 : ring === 'visual' ? 5 : 1;
     const geometry = new THREE.PlaneGeometry(CHUNK_SIZE_METRES, CHUNK_SIZE_METRES, segments, segments);
     geometry.rotateX(-Math.PI / 2);
@@ -67,17 +69,21 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
     terrain.position.set(centerX, 0, centerZ);
     terrain.receiveShadow = ring === 'active';
     root.add(terrain);
+    monitor?.recordSystem('chunk-terrain', performance.now() - terrainStarted);
 
+    const surfacesStarted = performance.now();
     if (ring !== 'horizon') {
       const surfaceNetwork = createChunkSurfaceNetwork(chunkX, chunkZ, materials);
       if (surfaceNetwork.children.length > 0) root.add(surfaceNetwork);
     }
+    monitor?.recordSystem('chunk-surfaces', performance.now() - surfacesStarted);
 
     if (district) {
       const staticDressing = new THREE.Group();
       staticDressing.name = 'chunk-static-dressing';
       root.add(staticDressing);
 
+      const dressingStarted = performance.now();
       const dressing = generateChunkDressing(chunkX, chunkZ, district.id);
       addChunkDressing(staticDressing, dressing, chunkOriginX, chunkOriginZ, ring, materials, ring === 'active' ? physics : undefined);
       const venues = AMAYA_BAY_VENUES.filter((venue) =>
@@ -85,10 +91,13 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
         venue.position.z >= chunkOriginZ && venue.position.z < chunkOriginZ + CHUNK_SIZE_METRES
       );
       addVenueDressing(staticDressing, venues, ring, materials, ring === 'active' ? physics : undefined);
+      monitor?.recordSystem('chunk-dressing-build', performance.now() - dressingStarted);
 
+      const mergeStarted = performance.now();
       const disposeStaticDressing = staticDressing.userData.disposeChunk as (() => void) | undefined;
       delete staticDressing.userData.disposeChunk;
       compileStaticMeshesByMaterial(staticDressing);
+      monitor?.recordSystem('chunk-dressing-merge', performance.now() - mergeStarted);
       if (disposeStaticDressing) {
         const previousDispose = root.userData.disposeChunk as (() => void) | undefined;
         root.userData.disposeChunk = () => {
@@ -98,6 +107,7 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
       }
     }
 
+    const colliderStarted = performance.now();
     if (ring === 'active' && physics) {
       const index = geometry.getIndex();
       if (index) {
@@ -116,8 +126,10 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
         };
       }
     }
+    monitor?.recordSystem('chunk-terrain-collider', performance.now() - colliderStarted);
 
     if (ring === 'horizon') return root;
+    const vegetationStarted = performance.now();
     const vegetationRoot = new THREE.Group();
     vegetationRoot.name = 'chunk-vegetation';
     root.add(vegetationRoot);
@@ -142,7 +154,10 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
       vegetationRoot.add(tree);
       placedTrees += 1;
     }
+    monitor?.recordSystem('chunk-vegetation-build', performance.now() - vegetationStarted);
+    const vegetationMergeStarted = performance.now();
     compileStaticMeshesByMaterial(vegetationRoot);
+    monitor?.recordSystem('chunk-vegetation-merge', performance.now() - vegetationMergeStarted);
     return root;
   };
 }
