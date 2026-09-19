@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { VegetationSystem } from './VegetationSystem';
 
 const materialByKey = new Map<string, THREE.MeshStandardMaterial>();
@@ -48,6 +48,24 @@ describe('VegetationSystem', () => {
     expect(cluster.children.length).toBeLessThanOrEqual(4);
     const firstMesh = cluster.children[0] as THREE.Mesh;
     expect(firstMesh.castShadow).toBe(true);
+  });
+
+  it('batches mixed indexed and non-indexed species without Three.js merge errors', () => {
+    const vegetation = new VegetationSystem(materials);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const cluster = vegetation.createTreeCluster([
+        { species: 'rain_tree', seed: 11, scale: 1, position: { x: 0, y: 0, z: 0 } },
+        { species: 'palm', seed: 22, scale: 1, position: { x: 6, y: 0, z: 0 } },
+        { species: 'ornamental', seed: 33, scale: 1, position: { x: -6, y: 0, z: 0 } },
+      ], true);
+
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(cluster.children.length).toBeGreaterThan(0);
+      expect(cluster.children.every((child) => child.name.startsWith('static-batch:vegetation:'))).toBe(true);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('compiles a detailed tree variant into a small material-grouped runtime mesh set', () => {
