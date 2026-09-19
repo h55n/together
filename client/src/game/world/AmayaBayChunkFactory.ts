@@ -15,7 +15,7 @@ import type { PerformanceMonitor } from '../debug/PerformanceMonitor';
 import { compileStaticMeshesByMaterial } from '../assets/runtime/StaticBatchCompiler';
 import type { MaterialLibrary } from './MaterialLibrary';
 import { addChunkDressing } from './NeighborhoodDressing';
-import { VegetationSystem, type VegetationSpecies } from './VegetationSystem';
+import { VegetationSystem, type TreePlacement, type VegetationSpecies } from './VegetationSystem';
 import { PROPERTY_WORLD_RESERVATIONS } from './PropertyLocations';
 import { addVenueDressing } from './CityVenueDressing';
 import { createChunkSurfaceNetwork } from './CitySurfaceNetwork';
@@ -134,6 +134,7 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
     vegetationRoot.name = 'chunk-vegetation';
     root.add(vegetationRoot);
 
+    const placements: TreePlacement[] = [];
     const random = createSeededRandom((chunkX * 73856093) ^ (chunkZ * 19349663));
     const count = ring === 'active' ? (district?.id === 'mogra_park' || district?.id === 'rain_tree_lane' ? 14 : 9) : 4;
     let placedTrees = 0;
@@ -147,16 +148,17 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
       if (Math.abs(wx + 30) < 28 && Math.abs(wz - 75) < 75) continue;
       if (!pointClearsSurfaceRoutes(wx, wz, 2.2)) continue;
       if (PROPERTY_WORLD_RESERVATIONS.some(({ center, reserveRadius }) => Math.hypot(wx - center.x, wz - center.z) < reserveRadius)) continue;
-      const species = chooseSpecies(district?.id, random());
-      const tree = vegetation.createTree({ species, seed: Math.floor(random() * 1_000_000), scale: ring === 'visual' ? 0.72 : 0.85 + random() * 0.32 });
-      tree.position.set(wx, cityHeightAt(wx, wz), wz);
-      if (ring === 'visual') tree.traverse((object) => { if (object instanceof THREE.Mesh) object.castShadow = false; });
-      vegetationRoot.add(tree);
+      placements.push({
+        species: chooseSpecies(district?.id, random()),
+        seed: Math.floor(random() * 1_000_000),
+        scale: ring === 'visual' ? 0.72 : 0.85 + random() * 0.32,
+        position: { x: wx, y: cityHeightAt(wx, wz), z: wz },
+      });
       placedTrees += 1;
     }
     monitor?.recordSystem('chunk-vegetation-build', performance.now() - vegetationStarted);
     const vegetationMergeStarted = performance.now();
-    compileStaticMeshesByMaterial(vegetationRoot);
+    vegetationRoot.add(vegetation.createTreeCluster(placements, ring === 'active'));
     monitor?.recordSystem('chunk-vegetation-merge', performance.now() - vegetationMergeStarted);
     return root;
   };
