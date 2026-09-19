@@ -149,6 +149,27 @@ export class GameSocketClient {
     });
   }
 
+  async fetchVoiceIceServers(): Promise<RTCIceServer[]> {
+    const baseUrl = (import.meta.env.VITE_SERVER_URL || 'http://localhost:3001').replace(/\/$/, '');
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (this.session.accessToken) headers.Authorization = `Bearer ${this.session.accessToken}`;
+    else headers['x-dev-user-id'] = this.session.userId;
+    const response = await fetch(`${baseUrl}/api/voice/ice-config`, { headers, cache: 'no-store' });
+    if (!response.ok) throw new Error(`Voice network configuration failed (${response.status})`);
+    const payload = await response.json() as { iceServers?: unknown };
+    if (!Array.isArray(payload.iceServers)) throw new Error('Voice network configuration is invalid');
+    return payload.iceServers.flatMap((candidate): RTCIceServer[] => {
+      if (!candidate || typeof candidate !== 'object') return [];
+      const value = candidate as { urls?: unknown; username?: unknown; credential?: unknown };
+      if (typeof value.urls !== 'string' || !value.urls) return [];
+      return [{
+        urls: value.urls,
+        ...(typeof value.username === 'string' ? { username: value.username } : {}),
+        ...(typeof value.credential === 'string' ? { credential: value.credential } : {}),
+      }];
+    });
+  }
+
   joinVoice(mode: Exclude<VoiceMode, 'off'>): void {
     this.socket?.emit(socketEvents.voiceJoin, { mode });
   }

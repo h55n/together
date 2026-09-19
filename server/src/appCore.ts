@@ -25,6 +25,7 @@ import { logger } from './logging/logger.js';
 import { productionReadiness } from './runtime/productionReadiness.js';
 import { createFixedWindowRateLimiter } from './runtime/rateLimit.js';
 import { allowedClientOrigins } from './runtime/clientOrigins.js';
+import { createVoiceIceConfig } from './runtime/turnCredentials.js';
 
 export type AppDependencies = {
   householdService: HouseholdService;
@@ -117,6 +118,11 @@ export function createApp(dependencies: AppDependencies) {
       response.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
     }
   };
+
+  app.get('/api/voice/ice-config', authenticate, (request: AuthenticatedRequest, response) => {
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.json(createVoiceIceConfig(request.identity!.userId));
+  });
 
   app.get('/api/profile', authenticate, async (request: AuthenticatedRequest, response, next) => {
     try {

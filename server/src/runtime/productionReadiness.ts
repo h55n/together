@@ -10,6 +10,8 @@ export function productionReadiness(env: NodeJS.ProcessEnv = process.env): Produ
   required(env, 'SUPABASE_URL', issues);
   required(env, 'SUPABASE_SERVICE_ROLE_KEY', issues);
   required(env, 'CLIENT_URL', issues);
+  required(env, 'TURN_URL', issues);
+  required(env, 'TURN_SHARED_SECRET', issues);
 
   const clientUrl = env.CLIENT_URL?.trim();
   if (clientUrl) {

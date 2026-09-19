@@ -12,6 +12,8 @@ describe('productionReadiness', () => {
     expect(result.issues).toContain('SUPABASE_URL is required in production');
     expect(result.issues).toContain('SUPABASE_SERVICE_ROLE_KEY is required in production');
     expect(result.issues).toContain('CLIENT_URL is required in production');
+    expect(result.issues).toContain('TURN_URL is required in production');
+    expect(result.issues).toContain('TURN_SHARED_SECRET is required in production');
     expect(result.issues).toContain('ALLOW_DEV_AUTH must not be enabled in production');
   });
 
@@ -21,6 +23,8 @@ describe('productionReadiness', () => {
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role',
       CLIENT_URL: 'https://together.example.com',
+      TURN_URL: 'turns:turn.example.com:5349',
+      TURN_SHARED_SECRET: 'server-only-secret',
       ALLOW_DEV_AUTH: 'false',
     })).toEqual({ ready: true, issues: [] });
   });
