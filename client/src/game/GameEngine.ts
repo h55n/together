@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueGameplayRole, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type MicroActionStep, type Placement2D, type PlayerSnapshot, type VenueGameplayRole, type RecipeAction } from '@together/shared';
+import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, KAYAK_LAUNCH_POSITION, KAYAK_RETURN_POSITION, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueGameplayRole, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type MicroActionStep, type Placement2D, type PlayerSnapshot, type VenueGameplayRole, type RecipeAction } from '@together/shared';
 import { Renderer } from './core/Renderer';
 import { GameLoop } from './core/GameLoop';
 import { InputManager } from './core/InputManager';
