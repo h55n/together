@@ -1,4 +1,4 @@
-import { advanceTransportSpeed, type AvatarAction, type TransportMode } from '@together/shared';
+import { advanceTransportHeading, advanceTransportSpeed, type AvatarAction, type TransportMode } from '@together/shared';
 import type { InputSnapshot } from '../core/InputManager';
 import type { PhysicsWorld, PlayerPhysicsHandle } from '../physics/PhysicsWorld';
 import type { PlayerAvatar } from './PlayerAvatar';
@@ -13,6 +13,8 @@ export class PlayerController {
   private microActionRemaining = 0;
   private transportMode: TransportMode = 'on_foot';
   private transportSpeed = 0;
+  private transportYaw = 0;
+  private transportHeadingInitialized = false;
   private interactionLocked = false;
 
   constructor(
@@ -44,8 +46,13 @@ export class PlayerController {
     if (this.transportMode === 'bicycle' || this.transportMode === 'scooter' || this.transportMode === 'kayak') {
       const throttle = Math.max(0, input.moveZ);
       this.transportSpeed = advanceTransportSpeed(this.transportMode, this.transportSpeed, throttle, input.moveZ < -0.05, deltaSeconds);
-      const steer = Math.max(-0.65, Math.min(0.65, input.moveX * 0.65));
-      movement = movementVector({ moveX: steer, moveZ: 1, jog: false }, cameraYaw, this.transportSpeed);
+      if (!this.transportHeadingInitialized) {
+        this.transportYaw = cameraYaw;
+        this.transportHeadingInitialized = true;
+      }
+      const steer = Math.max(-1, Math.min(1, input.moveX));
+      this.transportYaw = advanceTransportHeading(this.transportMode, this.transportYaw, steer, this.transportSpeed, deltaSeconds);
+      movement = movementVector({ moveX: 0, moveZ: 1, jog: false }, this.transportYaw, this.transportSpeed);
       this.moving = this.transportSpeed > 0.08;
     } else {
       movement = movementVector(input, cameraYaw);
@@ -59,7 +66,11 @@ export class PlayerController {
 
   syncVisual(yaw: number, deltaSeconds: number): void {
     const position = this.physicsHandle.body.translation();
-    this.avatar.setTransform(position, yaw);
+    if (this.transportMode !== 'on_foot' && !this.transportHeadingInitialized) {
+      this.transportYaw = yaw;
+      this.transportHeadingInitialized = true;
+    }
+    this.avatar.setTransform(position, this.presentationYaw(yaw));
     if (this.microAction) {
       this.microActionRemaining -= deltaSeconds;
       if (this.microActionRemaining <= 0) {
@@ -78,12 +89,19 @@ export class PlayerController {
   setTransportMode(mode: 'on_foot' | 'bicycle' | 'scooter' | 'kayak' | 'auto_rickshaw'): void {
     this.transportMode = mode;
     this.transportSpeed = 0;
+    this.transportHeadingInitialized = mode === 'on_foot' || mode === 'auto_rickshaw' ? false : this.transportHeadingInitialized;
     this.microAction = null;
     this.avatar.setTransportMode(mode);
   }
 
   getTransportMode(): 'on_foot' | 'bicycle' | 'scooter' | 'kayak' | 'auto_rickshaw' {
     return this.transportMode as 'on_foot' | 'bicycle' | 'scooter' | 'kayak' | 'auto_rickshaw';
+  }
+
+  presentationYaw(cameraYaw: number): number {
+    return this.transportMode === 'bicycle' || this.transportMode === 'scooter' || this.transportMode === 'kayak'
+      ? this.transportYaw
+      : cameraYaw;
   }
 
   setWorldPosition(position: { x: number; y: number; z: number }): void {

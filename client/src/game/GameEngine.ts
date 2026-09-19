@@ -516,7 +516,7 @@ export class GameEngine {
         seq: this.networkSeq++,
         sentAt: performance.now(),
         position,
-        yaw: this.camera.yaw,
+        yaw: this.player.presentationYaw(this.camera.yaw),
         animation: this.player.animationTag(),
         transport: networkTransport(this.player.getTransportMode()),
       });
