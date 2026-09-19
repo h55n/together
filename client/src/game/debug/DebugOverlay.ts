@@ -22,10 +22,18 @@ export class DebugOverlay {
     if (this.elapsed < 0.25) return;
     this.elapsed = 0;
     const p = this.performanceMonitor.read();
+    this.element.dataset.performanceSnapshot = JSON.stringify({
+      renderer: this.rendererInfo.backend,
+      ...p,
+    });
     this.element.textContent = [
       `${this.rendererInfo.backend.toUpperCase()} · ${p.fps.toFixed(0)} fps · ${p.cpuFrameMs.toFixed(1)} ms CPU`,
+      `p95 ${p.p95FrameMs.toFixed(1)} · p99 ${p.p99FrameMs.toFixed(1)} ms · hitches 33/50 ${p.framesOver33ms}/${p.framesOver50ms}`,
       `${p.drawCalls} draws · ${(p.triangles / 1000).toFixed(0)}k tris`,
-      `chunks A/V/H ${p.activeChunks}/${p.visualChunks}/${p.horizonChunks}`,
+      `${p.meshes} meshes · ${p.instancedMeshes} instanced · ${p.instances} instances`,
+      `${p.geometries} geoms · ${p.materials} mats · ${p.activeColliders} colliders`,
+      `chunks A/V/H ${p.activeChunks}/${p.visualChunks}/${p.horizonChunks} · queue ${p.pendingStreamingJobs}`,
+      `stream gen/commit ${p.streamingGenerationMs.toFixed(1)}/${p.streamingCommitMs.toFixed(1)} ms`,
       `${extras.gameTime} · ${extras.weather.replaceAll('_', ' ')}`,
       `V camera · E interact · Shift jog`,
     ].join('\n');
