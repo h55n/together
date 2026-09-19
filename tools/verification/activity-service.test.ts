@@ -32,3 +32,24 @@ test('activity sessions only advance through authored embodied steps and complet
   assert.equal(completed.state.status, 'complete');
   assert.equal(completed.state.score, undefined);
 });
+
+test('activities with a minimum household presence cannot advance early', async () => {
+  const { service, household } = await setup();
+  const session = await service.start(household.id, 'u1', 'board_game', 'activity-board-minimum-0001');
+  await assert.rejects(() => service.advance(session.id, 'u1', 'deal'), /requires at least 2 household members/i);
+  await service.join(session.id, 'u2');
+  const advanced = await service.advance(session.id, 'u1', 'deal');
+  assert.deepEqual(advanced.state.completedStepIds, ['deal']);
+});
+
+test('concurrent activity join and progress preserve both authoritative changes', async () => {
+  const { service, household } = await setup();
+  const session = await service.start(household.id, 'u1', 'picnic', 'activity-concurrent-0001');
+  await Promise.all([
+    service.join(session.id, 'u2'),
+    service.advance(session.id, 'u1', 'place_mat'),
+  ]);
+  const saved = (await service.list(household.id, 'u1')).find((entry) => entry.id === session.id);
+  assert.deepEqual(new Set(saved?.state.participants), new Set(['u1', 'u2']));
+  assert.deepEqual(saved?.state.completedStepIds, ['place_mat']);
+});

@@ -569,6 +569,14 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     finally { setCookingBusy(false); }
   }, [authHeaders, captureAutomaticMemory, cookingSession, networkSession]);
 
+  const refreshActiveActivity = useCallback(async (): Promise<void> => {
+    if (!networkSession) return;
+    const response = await fetch(`/api/households/${networkSession.householdId}/activities`, { headers: authHeaders() });
+    if (!response.ok) throw new Error(`Activity list failed (${response.status})`);
+    const sessions = await response.json() as ActivitySessionView[];
+    setActivitySession((current) => current ? (sessions.find((candidate) => candidate.id === current.id) ?? current) : current);
+  }, [authHeaders, networkSession]);
+
   const openActivity = useCallback(async (activityId: ActivityId): Promise<void> => {
     if (!networkSession) { setToast('Join a household to share persistent activities.'); return; }
     setActivityBusy(true); setActivityMessage(null); setVenueSession(null); setJobSession(null); setCookingOpen(false);
@@ -755,6 +763,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
           onNetworkError: setError,
           onHomeStateChanged: () => void refreshHomeState().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))),
           onCookingStateChanged: () => void refreshKitchen().catch((cause: unknown) => setCookingMessage(cause instanceof Error ? cause.message : String(cause))),
+          onActivityStateChanged: () => void refreshActiveActivity().catch((cause: unknown) => setActivityMessage(cause instanceof Error ? cause.message : String(cause))),
           onInteractionPrompt: setInteractionPrompt,
           onLocationChange: setLocation,
           onDomesticStep: persistDomesticStep,
@@ -804,7 +813,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       if (engineRef.current === ownedEngine) engineRef.current = null;
       ownedEngine = null;
     };
-  }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, persistDomesticStep, propertyId, refreshHomeState, refreshKitchen, refreshMemories]);
+  }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, persistDomesticStep, propertyId, refreshActiveActivity, refreshHomeState, refreshKitchen, refreshMemories]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {

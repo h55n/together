@@ -2,6 +2,8 @@ import { activityParticipantLimit, advanceActivityState, createActivityState, jo
 import type { ActivitySessionRecord, GameRepository, HouseholdRecord } from '../db/GameRepository.js';
 
 export class ActivityService {
+  private readonly sessionMutationTails = new Map<string, Promise<void>>();
+
   constructor(private readonly repository: GameRepository) {}
 
   async start(householdId: string, userId: string, activityId: ActivityId, idempotencyKey: string): Promise<ActivitySessionRecord> {
@@ -24,27 +26,51 @@ export class ActivityService {
   }
 
   async join(sessionId: string, userId: string): Promise<ActivitySessionRecord> {
-    const session = await this.requireSession(sessionId);
-    await this.authorize(session.householdId, userId);
-    session.state = joinActivityState(session.state, userId, activityParticipantLimit(session.activityId)[1]);
-    session.updatedAt = new Date().toISOString();
-    await this.repository.saveActivitySession(session);
-    return session;
+    return this.withSessionMutation(sessionId, async () => {
+      const session = await this.requireSession(sessionId);
+      await this.authorize(session.householdId, userId);
+      session.state = joinActivityState(session.state, userId, activityParticipantLimit(session.activityId)[1]);
+      session.updatedAt = new Date().toISOString();
+      await this.repository.saveActivitySession(session);
+      return session;
+    });
   }
 
   async advance(sessionId: string, userId: string, stepId: string): Promise<ActivitySessionRecord> {
-    const session = await this.requireSession(sessionId);
-    await this.authorize(session.householdId, userId);
-    if (!session.state.participants.includes(userId)) throw new Error('Join this activity before taking a turn');
-    session.state = advanceActivityState(session.state, stepId);
-    session.updatedAt = new Date().toISOString();
-    await this.repository.saveActivitySession(session);
-    return session;
+    return this.withSessionMutation(sessionId, async () => {
+      const session = await this.requireSession(sessionId);
+      await this.authorize(session.householdId, userId);
+      if (!session.state.participants.includes(userId)) throw new Error('Join this activity before taking a turn');
+      const [minimumParticipants] = activityParticipantLimit(session.activityId);
+      if (session.state.participants.length < minimumParticipants) {
+        throw new Error(`This activity requires at least ${minimumParticipants} household members`);
+      }
+      session.state = advanceActivityState(session.state, stepId);
+      session.updatedAt = new Date().toISOString();
+      await this.repository.saveActivitySession(session);
+      return session;
+    });
   }
 
   async list(householdId: string, userId: string): Promise<ActivitySessionRecord[]> {
     await this.authorize(householdId, userId);
     return this.repository.listActivitySessions(householdId);
+  }
+
+  private async withSessionMutation<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.sessionMutationTails.get(sessionId) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const tail = previous.catch(() => undefined).then(() => gate);
+    this.sessionMutationTails.set(sessionId, tail);
+
+    await previous.catch(() => undefined);
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.sessionMutationTails.get(sessionId) === tail) this.sessionMutationTails.delete(sessionId);
+    }
   }
 
   private async requireSession(id: string): Promise<ActivitySessionRecord> {
