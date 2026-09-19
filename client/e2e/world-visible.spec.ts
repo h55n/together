@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('first playable WebGL2 compatibility frame contains world geometry', async ({ page }) => {
+test('first playable WebGL2 compatibility frame contains world geometry', async ({ page }, testInfo) => {
   const runtimeErrors: string[] = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.stack ?? error.message));
   page.on('console', (message) => { if (message.type() === 'error') runtimeErrors.push(message.text()); });
@@ -15,7 +15,47 @@ test('first playable WebGL2 compatibility frame contains world geometry', async 
   await expect(page.locator('.world-loading')).toBeHidden();
   await page.waitForTimeout(1200);
   if (runtimeErrors.length > 0) throw new Error(`Browser runtime errors:\n${runtimeErrors.join('\n---\n')}`);
-  await expect(page.getByTestId('debug-overlay')).toContainText('WEBGL2');
+  const debugOverlay = page.getByTestId('debug-overlay');
+  await expect(debugOverlay).toContainText('WEBGL2');
+  await expect.poll(async () => debugOverlay.getAttribute('data-performance-snapshot')).not.toBeNull();
+
+  const metrics = await debugOverlay.evaluate((element) => {
+    const raw = (element as HTMLElement).dataset.performanceSnapshot;
+    if (!raw) throw new Error('Performance snapshot was not published');
+    return JSON.parse(raw) as {
+      renderer: string;
+      fps: number;
+      cpuFrameMs: number;
+      p95FrameMs: number;
+      p99FrameMs: number;
+      drawCalls: number;
+      triangles: number;
+      meshes: number;
+      instancedMeshes: number;
+      instances: number;
+      activeColliders: number;
+      activeChunks: number;
+      visualChunks: number;
+      horizonChunks: number;
+      pendingStreamingJobs: number;
+      streamingGenerationMs: number;
+      streamingCommitMs: number;
+      systemTimings: Record<string, number>;
+    };
+  });
+
+  expect(metrics.renderer).toBe('webgl2');
+  expect(metrics.drawCalls).toBeGreaterThan(0);
+  expect(metrics.triangles).toBeGreaterThan(0);
+  expect(metrics.meshes).toBeGreaterThan(0);
+  expect(metrics.instancedMeshes).toBeGreaterThanOrEqual(2);
+  expect(metrics.instances).toBeGreaterThanOrEqual(32);
+  expect(metrics.activeColliders).toBeGreaterThan(0);
+  expect(metrics.activeChunks).toBeGreaterThan(0);
+  await testInfo.attach('first-playable-performance.json', {
+    body: JSON.stringify(metrics, null, 2),
+    contentType: 'application/json',
+  });
 
   const screenshot = await canvas.screenshot();
   const frame = await page.evaluate(async (base64) => {
