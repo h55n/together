@@ -23,7 +23,7 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     points: [
       { x: -350, z: 100 }, { x: -300, z: 102 }, { x: -250, z: 105 },
       { x: -205, z: 108 }, { x: -160, z: 110 }, { x: -90, z: 128 }, { x: -30, z: 132 },
-      { x: -30, z: 18 }, { x: 20, z: -10 }, { x: 55, z: -45 }, { x: 65, z: -125 },
+      { x: -30, z: 18 }, { x: 20, z: -10 }, { x: 36.43, z: -26.43 }, { x: 55, z: -45 }, { x: 65, z: -125 },
       { x: 72, z: -210 }, { x: 75, z: -280 },
     ],
   },
@@ -32,8 +32,8 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     kind: 'road',
     width: 7.2,
     points: [
-      { x: -30, z: 142 }, { x: 30, z: 138 }, { x: 90, z: 90 },
-      { x: 130, z: 55 }, { x: 200, z: 55 }, { x: 260, z: 60 },
+      { x: -30, z: 132 }, { x: 30, z: 138 }, { x: 90, z: 90 },
+      { x: 115, z: 68 }, { x: 130, z: 55 }, { x: 200, z: 55 }, { x: 260, z: 60 },
       { x: 270, z: 130 }, { x: 265, z: 200 }, { x: 260, z: 220 },
     ],
   },
@@ -44,7 +44,7 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     points: [
       { x: -300, z: -55 }, { x: -245, z: -58 }, { x: -205, z: -60 },
       { x: -140, z: -55 }, { x: -70, z: -25 }, { x: 0, z: -20 },
-      { x: 85, z: -35 }, { x: 145, z: -75 }, { x: 160, z: -110 },
+      { x: 36.43, z: -26.43 }, { x: 85, z: -35 }, { x: 145, z: -75 }, { x: 160, z: -110 },
       { x: 215, z: -115 }, { x: 270, z: -105 },
     ],
   },
@@ -54,7 +54,7 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     width: 11,
     points: [
       { x: -80, z: -292 }, { x: -20, z: -290 }, { x: 45, z: -282 },
-      { x: 110, z: -270 }, { x: 175, z: -248 },
+      { x: 75, z: -280 }, { x: 110, z: -270 }, { x: 175, z: -248 },
     ],
   },
   {
@@ -62,7 +62,7 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     kind: 'path',
     width: 4.2,
     points: [
-      { x: 125, z: 80 }, { x: 145, z: 115 }, { x: 170, z: 145 },
+      { x: 115, z: 68 }, { x: 125, z: 80 }, { x: 145, z: 115 }, { x: 170, z: 145 },
       { x: 205, z: 165 }, { x: 225, z: 135 }, { x: 220, z: 100 },
     ],
   },
@@ -71,12 +71,64 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     kind: 'path',
     width: 4,
     points: [
-      { x: 215, z: 250 }, { x: 245, z: 225 }, { x: 300, z: 215 },
+      { x: 260, z: 220 }, { x: 245, z: 225 }, { x: 300, z: 215 },
       { x: 330, z: 245 }, { x: 330, z: 300 }, { x: 305, z: 335 },
-      { x: 255, z: 330 }, { x: 225, z: 300 }, { x: 215, z: 250 },
+      { x: 255, z: 330 }, { x: 225, z: 300 }, { x: 260, z: 220 },
+    ],
+  },
+  {
+    id: 'rain-tree-lane-walk',
+    kind: 'path',
+    width: 3.6,
+    points: [
+      { x: -245, z: -58 }, { x: -242, z: -82 }, { x: -210, z: -102 },
+      { x: -180, z: -114 }, { x: -167, z: -118 },
+    ],
+  },
+  {
+    id: 'mogra-neighbourhood-walk',
+    kind: 'path',
+    width: 3.6,
+    points: [
+      { x: -250, z: 105 }, { x: -260, z: 124 }, { x: -268, z: 145 },
+      { x: -270, z: 165 },
     ],
   },
 ] as const;
+
+export function surfaceNetworkConnected(): boolean {
+  if (AMAYA_BAY_SURFACE_ROUTES.length === 0) return true;
+  const adjacency = new Map<string, Set<string>>();
+  for (const route of AMAYA_BAY_SURFACE_ROUTES) adjacency.set(route.id, new Set());
+
+  for (let leftIndex = 0; leftIndex < AMAYA_BAY_SURFACE_ROUTES.length; leftIndex += 1) {
+    const left = AMAYA_BAY_SURFACE_ROUTES[leftIndex]!;
+    for (let rightIndex = leftIndex + 1; rightIndex < AMAYA_BAY_SURFACE_ROUTES.length; rightIndex += 1) {
+      const right = AMAYA_BAY_SURFACE_ROUTES[rightIndex]!;
+      if (!routesSharePoint(left, right)) continue;
+      adjacency.get(left.id)?.add(right.id);
+      adjacency.get(right.id)?.add(left.id);
+    }
+  }
+
+  const visited = new Set<string>();
+  const queue = [AMAYA_BAY_SURFACE_ROUTES[0]!.id];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    for (const neighbour of adjacency.get(id) ?? []) {
+      if (!visited.has(neighbour)) queue.push(neighbour);
+    }
+  }
+  return visited.size === AMAYA_BAY_SURFACE_ROUTES.length;
+}
+
+function routesSharePoint(left: CitySurfaceRoute, right: CitySurfaceRoute, epsilon = 0.05): boolean {
+  return left.points.some((leftPoint) =>
+    right.points.some((rightPoint) => Math.hypot(leftPoint.x - rightPoint.x, leftPoint.z - rightPoint.z) <= epsilon)
+  );
+}
 
 export type NearestSurfaceRoute = {
   route: CitySurfaceRoute;
