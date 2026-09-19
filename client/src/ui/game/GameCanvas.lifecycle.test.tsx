@@ -1,4 +1,4 @@
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { namedNpcs, npcDialogue } from '@together/content';
@@ -35,6 +35,17 @@ async function renderGame(props: Parameters<typeof GameCanvas>[0] = {}): Promise
   return { root, host };
 }
 
+async function renderStrictGame(props: Parameters<typeof GameCanvas>[0] = {}): Promise<{ root: Root; host: HTMLDivElement }> {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  await act(async () => {
+    root.render(<React.StrictMode><GameCanvas {...props} /></React.StrictMode>);
+    await Promise.resolve();
+  });
+  return { root, host };
+}
+
 async function flushAsyncWork(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -60,6 +71,17 @@ describe('GameCanvas engine lifecycle', () => {
       mounted = null;
     }
     vi.unstubAllGlobals();
+  });
+
+  it('does not overlap async engine creation when React StrictMode replays effects', async () => {
+    const engine = engineStub();
+    create.mockResolvedValue(engine);
+
+    mounted = await renderStrictGame();
+    await flushAsyncWork();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(engine.start).toHaveBeenCalledTimes(1);
   });
 
   it('keeps normal startup WebGPU-first instead of forcing WebGL2 compatibility mode', async () => {
