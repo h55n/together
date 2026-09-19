@@ -5,6 +5,7 @@ import {
   AMAYA_BAY_SURFACE_ROUTES,
   distanceToSurfaceRoute,
   nearestAmayaBaySurfaceRoute,
+  surfaceNetworkConnected,
   surfaceRoutesStayInsideCity,
 } from './surfaces.js';
 
@@ -34,4 +35,22 @@ test('route distance uses the nearest point on each polyline segment', () => {
   };
   assert.equal(distanceToSurfaceRoute(5, 4, route), 4);
   assert.equal(distanceToSurfaceRoute(15, 0, route), 5);
+});
+
+
+test('the authored street, promenade and walking routes form one connected city network', () => {
+  assert.equal(surfaceNetworkConnected(), true);
+  const ids = new Set(AMAYA_BAY_SURFACE_ROUTES.map((route) => route.id));
+  for (const id of [
+    'main-spine',
+    'east-arc',
+    'common-cross',
+    'waterfront-promenade',
+    'mogra-park-walk',
+    'hill-garden-loop',
+    'rain-tree-lane-walk',
+    'mogra-neighbourhood-walk',
+  ]) {
+    assert.ok(ids.has(id), `missing connected surface route ${id}`);
+  }
 });
