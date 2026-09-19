@@ -87,30 +87,96 @@ export class AmayaBayEnvironment {
   }
 
   private createBaySteps(): THREE.Group {
-    const root = new THREE.Group(); root.name = 'landmark:bay-steps';
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(620, 220), this.materials.get('water')); water.rotation.x = -Math.PI / 2; water.position.set(70, -0.05, -405); root.add(water);
-    for (let i = 0; i < 7; i += 1) addBox(root, [210, 0.28, 5], [75, 0.14 + i * 0.16, -300 - i * 4.4], this.materials.get('stone'), false);
-    const promenade = addBox(root, [220, 0.24, 22], [75, 0.22, -270], this.materials.get('concrete'), false); promenade.receiveShadow = true;
-    const pier = addBox(root, [4, 0.35, 54], [118, 0.25, -336], this.materials.get('wood')); pier.receiveShadow = true;
-    for (let i = 0; i < 9; i += 1) {
-      addBox(root, [0.12, 2, 0.12], [118 - 1.65, 0.9, -314 - i * 6], this.materials.get('metalDark'));
-      addBox(root, [0.12, 2, 0.12], [118 + 1.65, 0.9, -314 - i * 6], this.materials.get('metalDark'));
+    const root = new THREE.Group();
+    root.name = 'landmark:bay-steps';
+
+    const promenadeY = cityHeightAt(75, -270);
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(620, 220), this.materials.get('water'));
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(70, -0.05, -405);
+    root.add(water);
+
+    // A layered coast reads as promenade -> seawall -> sitting steps -> beach/water, not one flat slab.
+    const beach = addBox(root, [255, 0.1, 23], [62, 0.015, -332], this.materials.get('soil'), false);
+    beach.receiveShadow = true;
+    addBox(root, [228, 0.55, 2.3], [72, promenadeY + 0.16, -283.8], this.materials.get('stone'), false);
+    for (let i = 0; i < 7; i += 1) {
+      const stepY = Math.max(0.08, promenadeY - 0.08 - i * 0.12);
+      addBox(root, [214 - i * 1.5, 0.24, 4.3], [74, stepY, -289 - i * 4.0], this.materials.get('stone'), false);
     }
+
+    const promenade = addBox(root, [224, 0.24, 24], [75, promenadeY + 0.12, -270], this.materials.get('concrete'), false);
+    promenade.receiveShadow = true;
+    addBox(root, [224, 0.08, 2.0], [75, promenadeY + 0.25, -258.8], this.materials.get('stone'), false);
+
+    // Waterfront rail, lamps and benches establish a believable public-space rhythm.
+    for (let x = -24; x <= 176; x += 16) {
+      addBox(root, [0.1, 1.0, 0.1], [x, promenadeY + 0.76, -282.6], this.materials.get('metalDark'), false);
+    }
+    addBox(root, [202, 0.08, 0.08], [76, promenadeY + 1.18, -282.6], this.materials.get('metalDark'), false);
+    for (let x = -10; x <= 160; x += 34) {
+      addBox(root, [1.9, 0.14, 0.55], [x, promenadeY + 0.48, -265.0], this.materials.get('wood'));
+      addBox(root, [1.9, 0.12, 0.48], [x, promenadeY + 0.84, -264.72], this.materials.get('wood'));
+      for (const lx of [-0.72, 0.72]) {
+        addBox(root, [0.1, 0.48, 0.1], [x + lx, promenadeY + 0.24, -265.0], this.materials.get('metalDark'));
+      }
+    }
+    for (let x = -20; x <= 170; x += 38) {
+      addBox(root, [0.12, 3.7, 0.12], [x, promenadeY + 1.86, -260.5], this.materials.get('metalDark'));
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 6), this.materials.get('curtainWarm'));
+      lamp.position.set(x, promenadeY + 3.72, -260.5);
+      root.add(lamp);
+    }
+
+    // Pier and sunset lookout.
+    const pier = addBox(root, [5.2, 0.35, 58], [118, 0.25, -338], this.materials.get('wood'));
+    pier.receiveShadow = true;
+    for (let i = 0; i < 10; i += 1) {
+      const z = -313 - i * 6;
+      addBox(root, [0.12, 1.65, 0.12], [115.7, 0.84, z], this.materials.get('metalDark'));
+      addBox(root, [0.12, 1.65, 0.12], [120.3, 0.84, z], this.materials.get('metalDark'));
+    }
+    addBox(root, [12, 0.28, 8], [118, 0.28, -369], this.materials.get('wood'));
+    addBox(root, [9, 0.12, 0.5], [118, 0.72, -372.7], this.materials.get('metalDark'));
+
     const cycle = locationAnchor('bay_cycle_hut')!;
-    addBox(root, [9, 3.6, 5], [cycle.position.x, 2.0, cycle.position.z], this.materials.get('sagePlaster'));
-    addBox(root, [10, 0.18, 6], [cycle.position.x, 3.9, cycle.position.z], this.materials.get('wood'));
+    const cycleY = cityHeightAt(cycle.position.x, cycle.position.z);
+    addBox(root, [10, 3.8, 5.8], [cycle.position.x, cycleY + 1.9, cycle.position.z], this.materials.get('sagePlaster'));
+    addBox(root, [11.2, 0.22, 7], [cycle.position.x, cycleY + 3.94, cycle.position.z], this.materials.get('wood'));
+    addBox(root, [5.8, 2.0, 0.1], [cycle.position.x - 1.4, cycleY + 1.25, cycle.position.z - 2.95], this.materials.get('glass'), false);
+    addBox(root, [1.3, 2.25, 0.12], [cycle.position.x + 3.3, cycleY + 1.18, cycle.position.z - 2.96], this.materials.get('wood'));
+
     const kayak = locationAnchor('bay_kayak_hut')!;
-    addBox(root, [8, 3.2, 5], [kayak.position.x, 1.7, kayak.position.z], this.materials.get('warmPlaster'));
-    addBox(root, [9, 0.15, 6], [kayak.position.x, 3.35, kayak.position.z], this.materials.get('terracottaPlaster'));
-    for (let i = 0; i < 3; i += 1) {
-      const boat = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 2.3, 4, 8), this.materials.get(i === 1 ? 'terracottaPlaster' : 'sagePlaster'));
+    const kayakY = cityHeightAt(kayak.position.x, kayak.position.z);
+    addBox(root, [9, 3.4, 5.8], [kayak.position.x, kayakY + 1.7, kayak.position.z], this.materials.get('warmPlaster'));
+    addBox(root, [10.2, 0.2, 7], [kayak.position.x, kayakY + 3.52, kayak.position.z], this.materials.get('terracottaPlaster'));
+    addBox(root, [5.1, 1.85, 0.1], [kayak.position.x - 1.2, kayakY + 1.22, kayak.position.z - 2.95], this.materials.get('glass'), false);
+    addBox(root, [1.25, 2.1, 0.12], [kayak.position.x + 3.1, kayakY + 1.08, kayak.position.z - 2.96], this.materials.get('wood'));
+
+    // Rental racks/boats communicate activities before the player interacts with them.
+    for (let i = 0; i < 4; i += 1) {
+      const boat = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 2.35, 4, 8), this.materials.get(i % 2 === 0 ? 'terracottaPlaster' : 'sagePlaster'));
       boat.rotation.z = Math.PI / 2;
-      boat.position.set(kayak.position.x - 4 + i * 4, 0.48, kayak.position.z - 4.2);
+      boat.position.set(kayak.position.x - 5.2 + i * 3.5, Math.max(0.42, kayakY + 0.34), kayak.position.z - 4.6);
       root.add(boat);
     }
+    for (let i = 0; i < 5; i += 1) {
+      const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.31, 0.025, 5, 14), this.materials.get('metalDark'));
+      wheel.rotation.y = Math.PI / 2;
+      wheel.position.set(cycle.position.x - 4.2 + i * 2.0, cycleY + 0.34, cycle.position.z - 4.1);
+      root.add(wheel);
+    }
+
+    // Small food cart keeps the waterfront socially legible without turning it into a busy fairground.
+    const cartX = 18;
+    addBox(root, [2.8, 1.1, 1.5], [cartX, promenadeY + 0.58, -262.5], this.materials.get('wood'));
+    addBox(root, [3.4, 0.14, 2.1], [cartX, promenadeY + 2.05, -262.5], this.materials.get('terracottaPlaster'));
+    for (const cx of [-1.15, 1.15]) {
+      addBox(root, [0.08, 1.48, 0.08], [cartX + cx, promenadeY + 1.3, -262.5], this.materials.get('metalDark'));
+    }
+
     return root;
   }
-
   private createRainTreeLane(): THREE.Group {
     const root = new THREE.Group(); root.name = 'landmark:rain-tree-lane';
     const vegetation = new VegetationSystem(this.materials); const y = cityHeightAt(-210, -95);
