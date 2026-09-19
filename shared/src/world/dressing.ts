@@ -1,7 +1,7 @@
 import { CHUNK_SIZE_METRES } from './chunks.js';
 import { createSeededRandom } from './random.js';
 import type { DistrictId } from './city.js';
-import { buildingFootprintClearsSurfaceRoutes, pointClearsSurfaceRoutes } from './surfaces.js';
+import { buildingFootprintClearsSurfaceRoutes, nearestAmayaBaySurfaceRoute, pointClearsSurfaceRoutes } from './surfaces.js';
 
 export type BuildingStyle =
   | 'mogra_balcony'
@@ -83,10 +83,14 @@ export function generateChunkDressing(chunkX: number, chunkZ: number, districtId
     if (!buildingFootprintClearsSurfaceRoutes(worldX, worldZ, width, depth)) continue;
     if (buildings.some((other) => Math.abs(other.x - x) < (other.width + width) * 0.55 && Math.abs(other.z - z) < (other.depth + depth) * 0.55)) continue;
     const style = styles[Math.floor(random() * styles.length)]!;
+    const nearestRoute = nearestAmayaBaySurfaceRoute(worldX, worldZ);
+    const streetFacingYaw = nearestRoute
+      ? Math.atan2(worldX - nearestRoute.point.x, worldZ - nearestRoute.point.z)
+      : 0;
     buildings.push({
       id: `${districtId}:${chunkX}:${chunkZ}:b${buildings.length}`,
       x, z, width, depth, height,
-      rotationY: (random() - 0.5) * 0.18,
+      rotationY: streetFacingYaw + (random() - 0.5) * 0.08,
       style,
       facadeLayers: denseCommercial ? 3 : 2 + Math.floor(random() * 2),
       balconyCount: style === 'mogra_balcony' || style === 'pg_veranda' ? 1 + Math.floor(random() * 3) : Math.floor(random() * 2),
