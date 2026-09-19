@@ -13,8 +13,9 @@ test('first playable WebGL2 compatibility frame contains world geometry', async 
   const canvas = page.getByLabel('Amaya Bay 3D world');
   await expect(canvas).toBeVisible();
   await expect(page.locator('.world-loading')).toBeHidden();
-  await expect(page.getByTestId('debug-overlay')).toContainText('WEBGL2');
   await page.waitForTimeout(1200);
+  expect(runtimeErrors).toEqual([]);
+  await expect(page.getByTestId('debug-overlay')).toContainText('WEBGL2');
 
   const screenshot = await canvas.screenshot();
   const frame = await page.evaluate(async (base64) => {
@@ -34,6 +35,5 @@ test('first playable WebGL2 compatibility frame contains world geometry', async 
     return { colors: colors.size };
   }, screenshot.toString('base64'));
 
-  expect(runtimeErrors).toEqual([]);
   expect(frame.colors).toBeGreaterThan(12);
 });
