@@ -3,6 +3,7 @@ import { items } from '@together/content';
 import { FURNITURE_CATALOG, jobForVenue, type JobId, type VenueGameplayRole } from '@together/shared';
 import type { NetworkSession } from '../../network/GameSocketClient';
 import { authHeadersForIdentity } from '../../auth/clientAuth';
+import { apiFetch } from '../../network/api';
 
 export type VenueSession = { venueId: string; displayName: string; role: VenueGameplayRole };
 
@@ -24,7 +25,7 @@ export function VenuePanel(props: {
     if (!props.networkSession) return;
     setBusyItem(itemId); setMessage(null);
     try {
-      const response = await fetch(`/api/households/${props.networkSession.householdId}/groceries`, {
+      const response = await apiFetch(`/api/households/${props.networkSession.householdId}/groceries`, {
         method: 'POST',
         headers: authHeadersForIdentity(props.networkSession, true),
         body: JSON.stringify({ itemId, quantity: 1, wallet, idempotencyKey: `grocery:${crypto.randomUUID()}` }),
@@ -43,7 +44,7 @@ export function VenuePanel(props: {
     if (!props.networkSession) return;
     setBusyItem(itemId); setMessage(null);
     try {
-      const response = await fetch(`/api/households/${props.networkSession.householdId}/purchases`, {
+      const response = await apiFetch(`/api/households/${props.networkSession.householdId}/purchases`, {
         method: 'POST',
         headers: authHeadersForIdentity(props.networkSession, true),
         body: JSON.stringify({ itemId, wallet, idempotencyKey: `furniture:${crypto.randomUUID()}` }),

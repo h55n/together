@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { memoryImageIdFromPath } from '@together/shared';
 import type { NetworkSession } from '../../network/GameSocketClient';
 import { authHeadersForIdentity } from '../../auth/clientAuth';
+import { apiFetch } from '../../network/api';
 
 export type MemoryView = {
   id: string;
@@ -41,7 +42,7 @@ export function MemoryBook(props: {
         const imageId = memoryImageIdFromPath(memory.screenshotPath);
         if (!imageId) continue;
         try {
-          const response = await fetch(`/api/households/${networkSession.householdId}/memory-images/${imageId}`, {
+          const response = await apiFetch(`/api/households/${networkSession.householdId}/memory-images/${imageId}`, {
             headers: authHeadersForIdentity(networkSession),
           });
           if (!response.ok) continue;

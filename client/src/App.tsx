@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, t
 import type { AvatarConfig, HouseholdType, StarterPropertyDefinition, VoteChoice } from '@together/shared';
 import { GameCanvas } from './ui/game/GameCanvas';
 import { authHeadersForIdentity, resolveClientIdentity, subscribeClientIdentity, type ClientIdentity } from './auth/clientAuth';
+import { apiFetch } from './network/api';
 
 export type HouseholdMemberSummary = {
   userId: string;
@@ -67,12 +68,12 @@ export default function App(): ReactElement {
     if (!id || !identity) return;
     setBusy(true);
     try {
-      const response = await fetch(`/api/households/${id}`, { headers: authHeadersForIdentity(identity) });
+      const response = await apiFetch(`/api/households/${id}`, { headers: authHeadersForIdentity(identity) });
       const data = await readJson<HouseholdSummary>(response);
       setHousehold(data);
       localStorage.setItem('together:household-id', data.id);
       if (data.propertyId) setStep('home');
-      const propertyResponse = await fetch(`/api/households/${id}/properties`, { headers: authHeadersForIdentity(identity) });
+      const propertyResponse = await apiFetch(`/api/households/${id}/properties`, { headers: authHeadersForIdentity(identity) });
       const propertyData = await readJson<PropertyPayload>(propertyResponse);
       setProperties(propertyData.properties);
       setPropertyVote(propertyData.vote);
@@ -104,7 +105,7 @@ export default function App(): ReactElement {
   const startSoloExplorer = async () => {
     setBusy(true); setMessage(null);
     try {
-      const response = await fetch('/api/solo-explorer', { method: 'POST', headers: authHeaders, body: '{}' });
+      const response = await apiFetch('/api/solo-explorer', { method: 'POST', headers: authHeaders, body: '{}' });
       const data = await readJson<HouseholdSummary>(response);
       setHousehold(data); localStorage.setItem('together:household-id', data.id); setStep('home');
     } catch (error) { setMessage(errorMessage(error)); }
@@ -124,7 +125,7 @@ export default function App(): ReactElement {
           const value = displayName.trim();
           if (!value) return;
           setBusy(true); setMessage(null);
-          void fetch('/api/profile', { method: 'PUT', headers: authHeaders, body: JSON.stringify({ displayName: value, avatarConfig, settings: {} }) })
+          void apiFetch('/api/profile', { method: 'PUT', headers: authHeaders, body: JSON.stringify({ displayName: value, avatarConfig, settings: {} }) })
             .then(async (response) => { if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? 'Could not save profile'); })
             .then(() => {
               localStorage.setItem('together:display-name', value);
@@ -153,7 +154,7 @@ export default function App(): ReactElement {
       onCreate={async (name, type) => {
         setBusy(true); setMessage(null);
         try {
-          const response = await fetch('/api/households', { method: 'POST', headers: authHeaders, body: JSON.stringify({ name, type }) });
+          const response = await apiFetch('/api/households', { method: 'POST', headers: authHeaders, body: JSON.stringify({ name, type }) });
           const data = await readJson<HouseholdSummary>(response);
           setHousehold(data); localStorage.setItem('together:household-id', data.id); setStep('home');
         } catch (error) { setMessage(errorMessage(error)); }
@@ -163,7 +164,7 @@ export default function App(): ReactElement {
       onJoin={async (code) => {
         setBusy(true); setMessage(null);
         try {
-          const response = await fetch(`/api/households/join/${code.trim().toUpperCase()}`, { method: 'POST', headers: authHeaders, body: '{}' });
+          const response = await apiFetch(`/api/households/join/${code.trim().toUpperCase()}`, { method: 'POST', headers: authHeaders, body: '{}' });
           const data = await readJson<HouseholdSummary>(response);
           setHousehold(data); localStorage.setItem('together:household-id', data.id); setStep('home');
         } catch (error) { setMessage(errorMessage(error)); }
@@ -187,7 +188,7 @@ export default function App(): ReactElement {
               onOpen={async (propertyId) => {
                 setBusy(true); setMessage(null);
                 try {
-                  const response = await fetch(`/api/households/${household.id}/property-votes`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ propertyId }) });
+                  const response = await apiFetch(`/api/households/${household.id}/property-votes`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ propertyId }) });
                   setPropertyVote(await readJson<PropertyVote>(response));
                 } catch (error) { setMessage(errorMessage(error)); }
                 finally { setBusy(false); }
@@ -196,7 +197,7 @@ export default function App(): ReactElement {
                 if (!propertyVote) return;
                 setBusy(true); setMessage(null);
                 try {
-                  const response = await fetch(`/api/property-votes/${propertyVote.id}/cast`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ choice }) });
+                  const response = await apiFetch(`/api/property-votes/${propertyVote.id}/cast`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ choice }) });
                   const vote = await readJson<PropertyVote>(response);
                   setPropertyVote(vote);
                   if (vote.resolution === 'approved') await refreshHousehold(household.id);
