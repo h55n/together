@@ -81,12 +81,13 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
 export type NearestSurfaceRoute = {
   route: CitySurfaceRoute;
   distance: number;
+  point: SurfacePoint;
 };
 
 export function distanceToSurfaceRoute(x: number, z: number, route: CitySurfaceRoute): number {
   let nearest = Number.POSITIVE_INFINITY;
   for (let index = 1; index < route.points.length; index += 1) {
-    nearest = Math.min(nearest, distanceToSegment(x, z, route.points[index - 1]!, route.points[index]!));
+    nearest = Math.min(nearest, nearestPointOnSegment(x, z, route.points[index - 1]!, route.points[index]!).distance);
   }
   return nearest;
 }
@@ -94,8 +95,12 @@ export function distanceToSurfaceRoute(x: number, z: number, route: CitySurfaceR
 export function nearestAmayaBaySurfaceRoute(x: number, z: number): NearestSurfaceRoute | null {
   let result: NearestSurfaceRoute | null = null;
   for (const route of AMAYA_BAY_SURFACE_ROUTES) {
-    const distance = distanceToSurfaceRoute(x, z, route);
-    if (!result || distance < result.distance) result = { route, distance };
+    for (let index = 1; index < route.points.length; index += 1) {
+      const nearest = nearestPointOnSegment(x, z, route.points[index - 1]!, route.points[index]!);
+      if (!result || nearest.distance < result.distance) {
+        result = { route, distance: nearest.distance, point: nearest.point };
+      }
+    }
   }
   return result;
 }
@@ -125,12 +130,20 @@ export function surfaceRoutesStayInsideCity(): boolean {
   );
 }
 
-function distanceToSegment(x: number, z: number, start: SurfacePoint, end: SurfacePoint): number {
+function nearestPointOnSegment(
+  x: number,
+  z: number,
+  start: SurfacePoint,
+  end: SurfacePoint,
+): { distance: number; point: SurfacePoint } {
   const dx = end.x - start.x;
   const dz = end.z - start.z;
   const lengthSquared = dx * dx + dz * dz;
-  if (lengthSquared <= 1e-10) return Math.hypot(x - start.x, z - start.z);
+  if (lengthSquared <= 1e-10) {
+    return { distance: Math.hypot(x - start.x, z - start.z), point: { ...start } };
+  }
   const projection = ((x - start.x) * dx + (z - start.z) * dz) / lengthSquared;
   const t = Math.max(0, Math.min(1, projection));
-  return Math.hypot(x - (start.x + dx * t), z - (start.z + dz * t));
+  const point = { x: start.x + dx * t, z: start.z + dz * t };
+  return { distance: Math.hypot(x - point.x, z - point.z), point };
 }
