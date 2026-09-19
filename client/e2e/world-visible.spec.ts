@@ -52,6 +52,7 @@ test('first playable WebGL2 compatibility frame contains world geometry', async 
   expect(metrics.instances).toBeGreaterThanOrEqual(32);
   expect(metrics.activeColliders).toBeGreaterThan(0);
   expect(metrics.activeChunks).toBeGreaterThan(0);
+  console.log(`FIRST_PLAYABLE_PERF ${JSON.stringify(metrics)}`);
   await testInfo.attach('first-playable-performance.json', {
     body: JSON.stringify(metrics, null, 2),
     contentType: 'application/json',
