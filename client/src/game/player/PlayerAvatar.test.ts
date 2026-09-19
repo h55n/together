@@ -21,6 +21,15 @@ test('builds an articulated embodied rig with elbows, knees and a first-person-s
     const rightKnee = avatar.root.getObjectByName('avatar:right-knee');
     assert.ok(Math.abs(leftKnee?.rotation.x ?? 0) > 0.5);
     assert.ok(Math.abs(rightKnee?.rotation.x ?? 0) > 0.5);
+
+    avatar.updateMotion(0.1, 'cut');
+    assert.equal(avatar.root.getObjectByName('avatar:prop:knife')?.visible, true);
+    assert.equal(avatar.root.getObjectByName('avatar:prop:produce')?.visible, true);
+
+    avatar.updateMotion(0.1, 'wash');
+    assert.equal(avatar.root.getObjectByName('avatar:prop:knife')?.visible, false);
+    assert.equal(avatar.root.getObjectByName('avatar:prop:dish')?.visible, true);
+    assert.equal(avatar.root.getObjectByName('avatar:prop:sponge')?.visible, true);
   } finally {
     avatar.dispose();
   }
