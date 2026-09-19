@@ -181,7 +181,7 @@ export class GameEngine {
     const namedNpcs = new NamedNPCSystem();
     scene.add(namedNpcs.root);
     const enginePerformance = new PerformanceMonitor();
-    const worldStreamer = new WorldStreamer(createAmayaBayChunkFactory(materials, physics), enginePerformance);
+    const worldStreamer = new WorldStreamer(createAmayaBayChunkFactory(materials, physics, enginePerformance), enginePerformance);
     scene.add(worldStreamer.root);
     camera.addCollisionRoot(worldStreamer.root);
     const interactionDefinitions: WorldInteraction[] = [
