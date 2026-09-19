@@ -22,6 +22,7 @@ export class DebugOverlay {
     gameTime: string;
     cameraMode: 'first_person' | 'third_person';
     playerPosition: { x: number; y: number; z: number };
+    remotePlayers: readonly { userId: string; position: { x: number; y: number; z: number } }[];
   }): void {
     this.elapsed += deltaSeconds;
     if (this.elapsed < 0.25) return;
@@ -35,6 +36,9 @@ export class DebugOverlay {
       cameraMode: extras.cameraMode,
       playerPosition: extras.playerPosition,
     });
+    this.element.dataset.networkSnapshot = JSON.stringify({
+      remotePlayers: extras.remotePlayers,
+    });
     this.element.textContent = [
       `${this.rendererInfo.backend.toUpperCase()} · ${p.fps.toFixed(0)} fps · ${p.cpuFrameMs.toFixed(1)} ms CPU`,
       `p95 ${p.p95FrameMs.toFixed(1)} · p99 ${p.p99FrameMs.toFixed(1)} ms · hitches 33/50 ${p.framesOver33ms}/${p.framesOver50ms}`,
@@ -43,7 +47,7 @@ export class DebugOverlay {
       `${p.geometries} geoms · ${p.materials} mats · ${p.activeColliders} colliders`,
       `chunks A/V/H ${p.activeChunks}/${p.visualChunks}/${p.horizonChunks} · queue ${p.pendingStreamingJobs}`,
       `stream gen/commit ${p.streamingGenerationMs.toFixed(1)}/${p.streamingCommitMs.toFixed(1)} ms`,
-      `${extras.gameTime} · ${extras.weather.replaceAll('_', ' ')}`,
+      `${extras.gameTime} · ${extras.weather.replaceAll('_', ' ')} · ${extras.remotePlayers.length} peer${extras.remotePlayers.length === 1 ? '' : 's'}`,
       `V camera · E interact · Shift jog`,
     ].join('\n');
   }
