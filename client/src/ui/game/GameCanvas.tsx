@@ -754,6 +754,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
           onConnectionState: setConnection,
           onNetworkError: setError,
           onHomeStateChanged: () => void refreshHomeState().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))),
+          onCookingStateChanged: () => void refreshKitchen().catch((cause: unknown) => setCookingMessage(cause instanceof Error ? cause.message : String(cause))),
           onInteractionPrompt: setInteractionPrompt,
           onLocationChange: setLocation,
           onDomesticStep: persistDomesticStep,
@@ -803,7 +804,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       if (engineRef.current === ownedEngine) engineRef.current = null;
       ownedEngine = null;
     };
-  }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, persistDomesticStep, propertyId, refreshHomeState, refreshMemories]);
+  }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, persistDomesticStep, propertyId, refreshHomeState, refreshKitchen, refreshMemories]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {

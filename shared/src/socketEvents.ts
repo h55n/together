@@ -15,6 +15,7 @@ export const socketEvents = {
   homeFurnitureRemove: 'home:furniture_remove',
   homeSurfaceChange: 'home:surface_change',
   homeObjectState: 'home:object_state',
+  cookingState: 'cooking:state',
   storyTrigger: 'story:trigger',
   storyTaskUpdate: 'story:task_update',
   storyChoice: 'story:choice',
