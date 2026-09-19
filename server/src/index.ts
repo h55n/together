@@ -27,8 +27,13 @@ import { logger } from './logging/logger.js';
 import { registerSocketServer } from './socket/registerSocketServer.js';
 import { createMemoryImageStore } from './storage/createMemoryImageStore.js';
 import { allowedClientOrigins } from './runtime/clientOrigins.js';
+import { productionReadiness } from './runtime/productionReadiness.js';
 
 const port = Number(process.env.PORT ?? 3001);
+const startupReadiness = productionReadiness();
+if (!startupReadiness.ready) {
+  throw new Error(`Production readiness failed: ${startupReadiness.issues.join('; ')}`);
+}
 const clientOrigins = allowedClientOrigins();
 const repository = createGameRepository();
 const authService = createAuthService();
