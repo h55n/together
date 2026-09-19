@@ -18,6 +18,12 @@ export default defineConfig({
     timeout: 120_000,
     stdout: 'pipe',
     stderr: 'pipe',
+    env: {
+      ...process.env,
+      ALLOW_DEV_AUTH: 'true',
+      CLIENT_URL: 'http://localhost:5173',
+      VITE_SERVER_URL: 'http://localhost:3001',
+    },
   },
   projects: [
     {
