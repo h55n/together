@@ -53,6 +53,34 @@ test('first playable WebGL2 compatibility frame contains world geometry', async 
   expect(metrics.activeColliders).toBeGreaterThan(0);
   expect(metrics.activeChunks).toBeGreaterThan(0);
   console.log(`FIRST_PLAYABLE_PERF ${JSON.stringify(metrics)}`);
+
+  const readControls = async () => debugOverlay.evaluate((element) => {
+    const raw = (element as HTMLElement).dataset.controlSnapshot;
+    if (!raw) throw new Error('Control snapshot was not published');
+    return JSON.parse(raw) as {
+      cameraMode: 'first_person' | 'third_person';
+      playerPosition: { x: number; y: number; z: number };
+    };
+  });
+
+  const initialControls = await readControls();
+  expect(initialControls.cameraMode).toBe('first_person');
+
+  await page.keyboard.down('w');
+  await page.waitForTimeout(350);
+  await page.keyboard.up('w');
+  await page.waitForTimeout(350);
+  const movedControls = await readControls();
+  const movedDistance = Math.hypot(
+    movedControls.playerPosition.x - initialControls.playerPosition.x,
+    movedControls.playerPosition.z - initialControls.playerPosition.z,
+  );
+  expect(movedDistance).toBeGreaterThan(0.12);
+
+  await page.keyboard.press('v');
+  await page.waitForTimeout(350);
+  const thirdPersonControls = await readControls();
+  expect(thirdPersonControls.cameraMode).toBe('third_person');
   await testInfo.attach('first-playable-performance.json', {
     body: JSON.stringify(metrics, null, 2),
     contentType: 'application/json',
