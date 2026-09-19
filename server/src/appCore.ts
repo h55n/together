@@ -24,6 +24,7 @@ import type { ActivityService } from './game/ActivityService.js';
 import { logger } from './logging/logger.js';
 import { productionReadiness } from './runtime/productionReadiness.js';
 import { createFixedWindowRateLimiter } from './runtime/rateLimit.js';
+import { allowedClientOrigins } from './runtime/clientOrigins.js';
 
 export type AppDependencies = {
   householdService: HouseholdService;
@@ -64,10 +65,10 @@ function bearerToken(request: Request): string | undefined {
 
 export function createApp(dependencies: AppDependencies) {
   const app = express();
-  const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
+  const clientOrigins = allowedClientOrigins();
   app.set('trust proxy', 1);
   app.use(helmet({ contentSecurityPolicy: false }));
-  app.use(cors({ origin: [clientUrl, 'http://localhost:5173', 'http://localhost:4173'], credentials: true }));
+  app.use(cors({ origin: clientOrigins, credentials: true }));
   app.use((request, response, next) => {
     const requestId = request.header('x-request-id')?.slice(0, 128) || crypto.randomUUID();
     const startedAt = performance.now();

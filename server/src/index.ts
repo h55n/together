@@ -26,9 +26,10 @@ import { TimeService } from './game/TimeService.js';
 import { logger } from './logging/logger.js';
 import { registerSocketServer } from './socket/registerSocketServer.js';
 import { createMemoryImageStore } from './storage/createMemoryImageStore.js';
+import { allowedClientOrigins } from './runtime/clientOrigins.js';
 
 const port = Number(process.env.PORT ?? 3001);
-const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
+const clientOrigins = allowedClientOrigins();
 const repository = createGameRepository();
 const authService = createAuthService();
 const householdService = new HouseholdService(repository);
@@ -73,7 +74,7 @@ const app = createApp({
 });
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: [clientUrl, 'http://localhost:5173'], credentials: true },
+  cors: { origin: clientOrigins, credentials: true },
   transports: ['websocket', 'polling'],
 });
 publishHouseholdEvent = (householdId, event, payload) => {
@@ -98,5 +99,42 @@ activeTimeTimer.unref();
 httpServer.listen(port, () => {
   logger.info('Together server started', { port, city: 'amaya_bay', environment: process.env.NODE_ENV ?? 'development' });
 });
+
+let shutdownStarted = false;
+async function gracefulShutdown(signal: 'SIGTERM' | 'SIGINT'): Promise<void> {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  logger.info('Together server shutdown started', { signal });
+  clearInterval(timeTimer);
+  clearInterval(activeTimeTimer);
+  await timeService.persist().catch((error) => logger.warn('Could not persist city time during shutdown', {
+    error: error instanceof Error ? error.message : String(error),
+  }));
+  io.disconnectSockets(true);
+  await new Promise<void>((resolve) => io.close(() => resolve()));
+  if (httpServer.listening) {
+    await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+  }
+  logger.info('Together server shutdown complete', { signal });
+}
+
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    const timeout = setTimeout(() => {
+      logger.error('Together server shutdown timed out', { signal });
+      process.exit(1);
+    }, Number(process.env.SHUTDOWN_TIMEOUT_MS ?? 10_000));
+    timeout.unref();
+    void gracefulShutdown(signal)
+      .then(() => {
+        clearTimeout(timeout);
+        process.exit(0);
+      })
+      .catch((error) => {
+        logger.error('Together server shutdown failed', { signal, error: error instanceof Error ? error.message : String(error) });
+        process.exit(1);
+      });
+  });
+}
 
 export { app, httpServer, io };
