@@ -12,6 +12,7 @@ vi.mock('../../game/GameEngine', () => ({
 function engineStub() {
   return {
     applySettings: vi.fn(),
+    prepareFirstPlayable: vi.fn(async () => undefined),
     start: vi.fn(),
     dispose: vi.fn(),
     setInputEnabled: vi.fn(),
@@ -73,6 +74,26 @@ describe('GameCanvas engine lifecycle', () => {
     vi.unstubAllGlobals();
   });
 
+  it('does not start gameplay until the first-playable warmup resolves', async () => {
+    let releaseWarmup!: () => void;
+    const warmup = new Promise<void>((resolve) => { releaseWarmup = resolve; });
+    const engine = engineStub();
+    engine.prepareFirstPlayable = vi.fn(() => warmup);
+    create.mockResolvedValue(engine);
+
+    mounted = await renderGame();
+    await flushAsyncWork();
+
+    expect(engine.prepareFirstPlayable).toHaveBeenCalledTimes(1);
+    expect(engine.start).not.toHaveBeenCalled();
+
+    await act(async () => { releaseWarmup(); await warmup; });
+    await flushAsyncWork();
+
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    expect(mounted.host.querySelector('.world-loading')).toBeNull();
+  });
+
   it('does not overlap async engine creation when React StrictMode replays effects', async () => {
     const engine = engineStub();
     create.mockResolvedValue(engine);
@@ -81,6 +102,7 @@ describe('GameCanvas engine lifecycle', () => {
     await flushAsyncWork();
 
     expect(create).toHaveBeenCalledTimes(1);
+    expect(engine.prepareFirstPlayable).toHaveBeenCalledTimes(1);
     expect(engine.start).toHaveBeenCalledTimes(1);
   });
 
