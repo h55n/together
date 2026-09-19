@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { locationAnchor, scheduleActionAt, cityHeightAt } from '@together/shared';
+import { createAmayaBayPatrolPath, locationAnchor, scheduleActionAt, cityHeightAt, type SurfacePoint } from '@together/shared';
 import { namedNpcs } from '@together/content';
 
 const CLOTHING = [0x6c6958, 0x466a67, 0x925f4f, 0x586a7b, 0x756948, 0x4e7351, 0x7d665f, 0x536879, 0x9b6b55, 0x645d7a];
@@ -23,7 +23,11 @@ export class NamedNPCSystem {
     rig.root.userData.npcId = definition.id;
     rig.root.userData.displayName = definition.displayName;
     this.root.add(rig.root);
-    return { definition, ...rig, phase: index * 0.83 };
+    const anchor = locationAnchor(definition.homeOrWork);
+    const patrol = anchor
+      ? createAmayaBayPatrolPath(anchor.position, 20 + (index % 4) * 4, index % 2 === 0 ? 1 : -1)
+      : [];
+    return { definition, ...rig, phase: index * 0.83, patrol };
   });
 
   constructor() {
@@ -49,26 +53,26 @@ export class NamedNPCSystem {
 
       const baseX = anchor.position.x + Math.sin(entry.phase * 2.2) * 2.4;
       const baseZ = anchor.position.z + Math.cos(entry.phase * 1.7) * 2.4;
-      const distance = Math.hypot(playerPosition.x - baseX, playerPosition.z - baseZ);
+      const mobile = isMobileScheduleAction(action) && entry.patrol.length >= 2;
+      const patrolSample = mobile ? samplePingPongPath(entry.patrol, time * 0.75 + entry.phase * 3) : null;
+      const x = patrolSample?.point.x ?? baseX;
+      const z = patrolSample?.point.z ?? baseZ;
+      const distance = Math.hypot(playerPosition.x - x, playerPosition.z - z);
       entry.root.visible = distance < 135;
       if (!entry.root.visible) continue;
 
-      const working = /work|market|nursery|shop|service|courtyard|neighbourhood|open|close/.test(action);
-      const radius = working ? 1.5 : 0.35;
-      const routePhase = time * (working ? 0.22 : 0.08) + entry.phase;
-      const x = baseX + Math.sin(routePhase) * radius;
-      const z = baseZ + Math.cos(routePhase) * radius;
       entry.root.position.set(x, cityHeightAt(x, z), z);
-      entry.root.rotation.y = Math.atan2(Math.cos(routePhase), -Math.sin(routePhase));
+      entry.root.rotation.y = patrolSample?.yaw ?? entry.phase;
       entry.root.userData.scheduleAction = action;
+      entry.root.userData.navigationMode = mobile ? 'surface_patrol' : 'stationary';
 
-      const stride = working ? Math.sin(time * 4.2 + entry.phase) * 0.42 : Math.sin(time * 1.1 + entry.phase) * 0.025;
+      const stride = mobile ? Math.sin(time * 4.2 + entry.phase) * 0.42 : Math.sin(time * 1.1 + entry.phase) * 0.025;
       entry.leftArm.rotation.x = stride;
       entry.rightArm.rotation.x = -stride;
       entry.leftLeg.rotation.x = -stride * 0.9;
       entry.rightLeg.rotation.x = stride * 0.9;
-      entry.torso.rotation.z = Math.sin(time * 2 + entry.phase) * (working ? 0.015 : 0.006);
-      entry.torso.position.y = Math.abs(Math.sin(time * (working ? 4.2 : 1.1) + entry.phase)) * (working ? 0.012 : 0.004);
+      entry.torso.rotation.z = Math.sin(time * 2 + entry.phase) * (mobile ? 0.015 : 0.006);
+      entry.torso.position.y = Math.abs(Math.sin(time * (mobile ? 4.2 : 1.1) + entry.phase)) * (mobile ? 0.012 : 0.004);
 
       // Nearby named residents acknowledge the player's presence without snapping their whole body.
       const toPlayerX = playerPosition.x - x;
@@ -92,6 +96,54 @@ export class NamedNPCSystem {
       }
     });
   }
+}
+
+function isMobileScheduleAction(action: string): boolean {
+  return /courtyard|neighbourhood|nursery|community|open_cafe|close_cafe/.test(action);
+}
+
+function samplePingPongPath(
+  points: readonly SurfacePoint[],
+  travelledMetres: number,
+): { point: SurfacePoint; yaw: number } | null {
+  if (points.length < 2) return null;
+  const segmentLengths: number[] = [];
+  let totalLength = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const length = Math.hypot(points[index]!.x - points[index - 1]!.x, points[index]!.z - points[index - 1]!.z);
+    segmentLengths.push(length);
+    totalLength += length;
+  }
+  if (totalLength <= 1e-6) return null;
+
+  const cycle = totalLength * 2;
+  const wrapped = ((travelledMetres % cycle) + cycle) % cycle;
+  const reverse = wrapped > totalLength;
+  let targetDistance = reverse ? cycle - wrapped : wrapped;
+
+  for (let index = 0; index < segmentLengths.length; index += 1) {
+    const length = segmentLengths[index]!;
+    if (targetDistance > length && index < segmentLengths.length - 1) {
+      targetDistance -= length;
+      continue;
+    }
+    const start = points[index]!;
+    const end = points[index + 1]!;
+    const t = length <= 1e-6 ? 0 : Math.min(1, targetDistance / length);
+    const point = {
+      x: start.x + (end.x - start.x) * t,
+      z: start.z + (end.z - start.z) * t,
+    };
+    const dx = (end.x - start.x) * (reverse ? -1 : 1);
+    const dz = (end.z - start.z) * (reverse ? -1 : 1);
+    return { point, yaw: Math.atan2(-dx, -dz) };
+  }
+
+  const final = points.at(-1)!;
+  const previous = points.at(-2)!;
+  const dx = (final.x - previous.x) * (reverse ? -1 : 1);
+  const dz = (final.z - previous.z) * (reverse ? -1 : 1);
+  return { point: { ...final }, yaw: Math.atan2(-dx, -dz) };
 }
 
 function createActor(color: number): ActorRig {
