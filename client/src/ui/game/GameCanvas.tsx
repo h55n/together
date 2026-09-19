@@ -751,10 +751,16 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
           return;
         }
 
+        engine.applySettings(settingsRef.current);
+        await engine.prepareFirstPlayable();
+        if (cancelled) {
+          engine.dispose();
+          return;
+        }
+
         ownedEngine = engine;
         engineRef.current = engine;
         void refreshHomeState().catch(() => undefined);
-        engine.applySettings(settingsRef.current);
         engine.start();
         setReady(true);
       } catch (cause) {
