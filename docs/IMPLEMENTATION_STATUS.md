@@ -4,7 +4,7 @@ Status is evaluated against the strict exit criteria in `docs/PRD.md` / `docs/BU
 
 ## Current verification baseline
 
-Verified on branch `fix/audit-recovery-2026-09-17` at `2e0e9896cf6e64b902f2f2e19b626e11682625e2` by GitHub Actions run `35412228703`:
+Verified on branch `fix/audit-recovery-2026-09-17` at `b9b549e99901b28fbfccea9c944be45b8ac0d5e5` by GitHub Actions run `35433112762`:
 
 - frozen pnpm install on Node 24;
 - full workspace TypeScript;
@@ -14,9 +14,11 @@ Verified on branch `fix/audit-recovery-2026-09-17` at `2e0e9896cf6e64b902f2f2e19
 - repository/migration/secret/legacy-entrypoint integrity;
 - production build;
 - Chromium installation;
-- real client+server Playwright solo-entry E2E through a rendered playable frame in explicit WebGL2 compatibility mode.
+- real client+server Playwright solo-entry E2E through a rendered playable frame in explicit WebGL2 compatibility mode;
+- live browser W movement through Rapier and V first-person/third-person camera switching;
+- bounded first-playable preload/physics/renderer warmup before control is released.
 
-Normal product startup remains WebGPU-first; real-device WebGPU/browser-matrix and target-hardware performance measurements remain outstanding.
+Normal product startup remains WebGPU-first; real-device WebGPU/browser-matrix and target-hardware performance measurements remain outstanding. The connected headless WebGL2 diagnostic sample at this baseline measured 88.7 FPS, p95 17.2 ms, p99 18.2 ms, 148 draw calls and 223,782 triangles with no sampled frames over 33 ms; treat these as CI diagnostics only.
 
 See `docs/VERIFICATION.md`.
 
