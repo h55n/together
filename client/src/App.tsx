@@ -50,7 +50,7 @@ export default function App(): ReactElement {
 
   useEffect(() => {
     let cancelled = false;
-    let unsubscribe = () => undefined;
+    let unsubscribe: () => void = () => undefined;
     void resolveClientIdentity()
       .then((resolved) => {
         if (cancelled) return;
