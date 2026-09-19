@@ -19,7 +19,9 @@ export type PerformanceSnapshot = {
   pendingStreamingJobs: number;
   streamingGenerationMs: number;
   streamingCommitMs: number;
+  streamingMaxCommitMs: number;
   systemTimings: Readonly<Record<string, number>>;
+  systemMaxTimings: Readonly<Record<string, number>>;
 };
 
 const MAX_FRAME_SAMPLES = 240;
@@ -49,7 +51,9 @@ export class PerformanceMonitor {
     pendingStreamingJobs: 0,
     streamingGenerationMs: 0,
     streamingCommitMs: 0,
+    streamingMaxCommitMs: 0,
     systemTimings: {},
+    systemMaxTimings: {},
   };
 
   recordFrame(frameMs: number): void {
@@ -83,13 +87,20 @@ export class PerformanceMonitor {
   }
 
   recordStreaming(pendingStreamingJobs: number, generationMs: number, commitMs: number): void {
+    const normalizedCommit = Math.max(0, commitMs);
     this.snapshot.pendingStreamingJobs = pendingStreamingJobs;
-    this.snapshot.streamingGenerationMs = generationMs;
-    this.snapshot.streamingCommitMs = commitMs;
+    this.snapshot.streamingGenerationMs = Math.max(0, generationMs);
+    this.snapshot.streamingCommitMs = normalizedCommit;
+    this.snapshot.streamingMaxCommitMs = Math.max(this.snapshot.streamingMaxCommitMs, normalizedCommit);
   }
 
   recordSystem(name: string, milliseconds: number): void {
-    this.snapshot.systemTimings = { ...this.snapshot.systemTimings, [name]: Math.max(0, milliseconds) };
+    const normalized = Math.max(0, milliseconds);
+    this.snapshot.systemTimings = { ...this.snapshot.systemTimings, [name]: normalized };
+    this.snapshot.systemMaxTimings = {
+      ...this.snapshot.systemMaxTimings,
+      [name]: Math.max(this.snapshot.systemMaxTimings[name] ?? 0, normalized),
+    };
   }
 
   read(): Readonly<PerformanceSnapshot> {
