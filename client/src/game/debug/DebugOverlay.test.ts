@@ -33,6 +33,7 @@ describe('DebugOverlay', () => {
       gameTime: '17:20',
       cameraMode: 'first_person',
       playerPosition: { x: -235, y: 3.2, z: 175 },
+      remotePlayers: [{ userId: 'remote-a', position: { x: -232, y: 3.2, z: 176 } }],
     });
 
     const snapshot = JSON.parse(overlay.element.dataset.performanceSnapshot ?? '{}') as Record<string, unknown>;
@@ -53,6 +54,10 @@ describe('DebugOverlay', () => {
     expect(controls).toMatchObject({
       cameraMode: 'first_person',
       playerPosition: { x: -235, y: 3.2, z: 175 },
+    });
+    const network = JSON.parse(overlay.element.dataset.networkSnapshot ?? '{}') as Record<string, unknown>;
+    expect(network).toMatchObject({
+      remotePlayers: [{ userId: 'remote-a', position: { x: -232, y: 3.2, z: 176 } }],
     });
     expect(overlay.element.textContent).toContain('p95');
     expect(overlay.element.textContent).toContain('75 meshes');
