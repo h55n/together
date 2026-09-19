@@ -13,11 +13,12 @@ The product is about the feeling of living a life with someone. It is not a comb
 ## Current Repository State
 
 - Project: Together V1 — Amaya Bay
-- Branch: `build/amaya-bay-v1`
-- Implementation HEAD: `9f355fd6607902c2dbe035102a014c5abc1e9466`
+- Active recovery branch: `fix/audit-recovery-2026-09-17`
+- Latest fully verified runtime HEAD: `2e0e9896cf6e64b902f2f2e19b626e11682625e2`
+- Verified GitHub Actions run: `35412228703` — **success**
+- Documentation-only commits may descend from that runtime baseline; use `git rev-parse HEAD` for the current documentation SHA.
 - Historical imported-prototype commit: `5c4730e`
 - Implementation-plan commit: `bc415e8`
-- Final handoff documentation is committed after the implementation HEAD and intentionally does not self-reference its own Git hash; run `git rev-parse HEAD` for the final documentation commit.
 - Language: TypeScript for active application code
 - Monorepo: pnpm workspaces
 - Client: React + Vite + Three.js + WebGPU-first renderer + Rapier + Socket.IO + Web Audio/WebRTC
@@ -47,7 +48,8 @@ The active legacy JavaScript/JSX prototype runtime was removed. Git history pres
 - 28 named subareas/colonies.
 - 45 distributed everyday venues; the city intentionally has multiple groceries, cafés/tea spots, food places, repairs and laundries rather than one of each.
 - 128m active/visual/horizon chunk streaming.
-- Deterministic district dressing, terrain/elevation, vegetation, landmark/activity anchors, day/night/weather and district mood foundations.
+- Shared world-space road/path/promenade network with terrain-following streamed surfaces and shared procedural-clearance rules.
+- Deterministic district dressing, terrain/elevation, statically batched vegetation, landmark/activity anchors, day/night/weather and district mood foundations.
 - Low/Medium/High/Capture quality cost profiles.
 
 ### Player and identity
@@ -97,7 +99,7 @@ The active legacy JavaScript/JSX prototype runtime was removed. Git history pres
 
 ### NPCs, story and Memory
 
-- Ambient city-life NPC pool/update tiers.
+- Ambient city-life NPC pool/update tiers rendered through two dynamic instanced body/head batches.
 - 12 named residents with schedules, discrete household memory flags and authored contextual dialogue.
 - Seven internal life stages based on active play rather than offline punishment.
 - 36 data-driven story definitions: 20 shared, 8 Couple, 8 Friends.
@@ -115,27 +117,27 @@ The active legacy JavaScript/JSX prototype runtime was removed. Git history pres
 
 ## Verified
 
-### PASS in the supplied sandbox
+The current authoritative connected baseline is GitHub Actions run `35412228703` on runtime HEAD `2e0e9896cf6e64b902f2f2e19b626e11682625e2`.
+
+It passes:
 
 ```bash
-node tools/verify-sandbox.mjs
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm validate
+pnpm validate:repo
+pnpm build
+pnpm --filter @together/client exec playwright install --with-deps chromium
+pnpm test:e2e
 ```
 
-This currently verifies:
+The Playwright test boots the real client and server, completes solo onboarding, waits for a playable world, rejects browser runtime errors and checks a rendered canvas frame. CI uses explicit WebGL2 compatibility mode because the GitHub headless GPU is not a reliable WebGPU target; normal product startup remains WebGPU-first and has regression coverage.
 
-- 161 tests pass / 0 fail;
-- client TypeScript passes;
-- shared TypeScript passes;
-- content TypeScript passes;
-- repository integrity passes;
-- nine ordered migrations found;
-- required project roots/docs found;
-- no obvious committed secrets;
-- legacy runtime entrypoints absent.
+The same baseline includes regressions for the recovery bugs: StrictMode engine ownership/Rapier lifetime, renderer selection, focus-loss input reset, camera/movement math, terrain collider ownership, property/world clearance, world-space surface connectivity, static vegetation/dressing batching, realtime home refresh, weather reactivity and ambient NPC instancing.
 
-Content validation also returned zero issues.
-
-See `docs/VERIFICATION.md` for exact evidence and blocked commands.
+See `docs/VERIFICATION.md` for exact evidence and remaining manual/device gaps.
 
 ## Partially Implemented
 
@@ -165,29 +167,17 @@ The following systems are architecturally/functionally present but do not meet t
 
 ## Known Bugs / Reproduction
 
-No deterministic domain bug is known in the 161-test sandbox-safe suite.
+No deterministic crash from the reproduced recovery set remains on the verified baseline.
 
-Known verification/runtime risks are environmental or untested rather than reproduced application crashes:
+A browser-only Rapier/WASM crash was reproduced during this recovery: React development StrictMode invoked two overlapping asynchronous `GameEngine.create()` calls, and a later `RigidBody.translation()` could hit an invalid WASM wrapper. A StrictMode regression was added, engine creation is now serialized/owned per effect, and the full browser E2E passes.
 
-1. **Clean install/build not run in this sandbox.** Reproduce here by `corepack pnpm --version`; it fails with registry DNS `EAI_AGAIN`.
-2. **Direct Vite build fails with copied dependencies.** It errors before application bundling because Linux Rollup native optional dependency is absent.
-3. **Full server `tsc` fails with copied dependencies.** The copied package tree lacks declared Express/Supertest types and current Drizzle package layout.
-
-Do not "fix" these by weakening TypeScript or downgrading architecture. Run a clean Node 24/pnpm install first.
+Do not interpret this as release-complete verification. Remaining risks are primarily unmeasured or manual: target-hardware performance, real WebGPU/browser/controller matrix, multiplayer/latency soak, production Supabase/TURN, and final art/audio acceptance.
 
 ## External Setup Required
 
-### First connected development machine
+### Connected development / CI
 
-```bash
-corepack enable
-corepack prepare pnpm@12.4.1 --activate
-pnpm install
-pnpm verify
-pnpm test:e2e
-```
-
-Commit the generated `pnpm-lock.yaml`, then use `pnpm install --frozen-lockfile` thereafter.
+The committed dependency graph is already exercised in CI with `pnpm install --frozen-lockfile`. Use Node 24 + Corepack locally and run `pnpm verify` plus `pnpm test:e2e` before promoting runtime changes.
 
 ### Supabase
 
@@ -207,16 +197,16 @@ The current world/characters are explicitly development/procedural art; never re
 
 Dependency order:
 
-1. On a connected Node 24 machine: clean pnpm install, generate lockfile, run full typecheck/lint/tests/content/build/Playwright.
-2. Fix any **verified** clean-install issues only; do not refactor already green domain systems speculatively.
-3. Run two-browser Couple onboarding and movement; then Friends 2–6 client soak/reconnect.
-4. Implement/import final humanoid rig + authored locomotion/domestic clips + IK while preserving current interaction/state contracts.
-5. Replace hero-route procedural world assets with final Amaya Bay building/road/vegetation/prop GLBs/KTX2 and profile LOD/compression.
-6. Implement production NPC navmesh/path batching and door links.
+1. Profile the verified browser build at 1080p Medium on PRD target hardware; record frame-time p95/p99, draw calls, triangles, hitches, scene resources and GPU memory before further performance tuning.
+2. Run the real WebGPU/browser/controller matrix; keep WebGL2 as the complete compatibility fallback rather than the default.
+3. Run two-browser Couple onboarding/movement/home sync, then Friends 2–6 client soak/reconnect/latency tests.
+4. Continue the PRD visual-world pass: make Mogra Court → Lantern Street → Bay Steps and all seven districts meet the no-placeholder/Quiet Walk bar while preserving the shared surface network and measured batching/instancing.
+5. Implement/import the final humanoid rig + authored locomotion/domestic clips + IK while preserving current interaction/state contracts.
+6. Implement production NPC navmesh/path batching, door links and animation presentation.
 7. Run shared-kitchen, furniture concurrency, moving and Memory acceptance tests with real people.
 8. Production-test Supabase persistence/private Memories and TURN voice.
-9. Profile 1080p Medium on PRD target hardware; tune chunk/LOD/shadow/texture budgets without changing gameplay collision.
-10. Finish art/audio/weather polish and execute PRD Quiet Walk, Rain, Money, Moving, Memory and No-HUD acceptance tests.
+9. Finish art/audio/weather/LOD/compression polish without changing gameplay collision across quality tiers.
+10. Execute PRD Quiet Walk, Rain, Money, Moving, Memory and No-HUD acceptance tests.
 
 ## Important Architectural Rules
 
