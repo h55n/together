@@ -51,10 +51,12 @@ export class VegetationSystem {
       asset.root.traverse((object) => {
         if (!(object instanceof THREE.Mesh) || Array.isArray(object.material)) return;
         const material = object.material as THREE.Material;
-        let entry = byMaterial.get(material.uuid);
+        const compatibilityKey = geometryCompatibilityKey(object.geometry);
+        const batchKey = `${material.uuid}:${compatibilityKey}`;
+        let entry = byMaterial.get(batchKey);
         if (!entry) {
           entry = { material, geometries: [] };
-          byMaterial.set(material.uuid, entry);
+          byMaterial.set(batchKey, entry);
         }
         localToCluster.copy(placementMatrix).multiply(object.matrixWorld);
         entry.geometries.push(object.geometry.clone().applyMatrix4(localToCluster));
@@ -167,10 +169,12 @@ export class VegetationSystem {
     authoring.traverse((object) => {
       if (!(object instanceof THREE.Mesh) || Array.isArray(object.material)) return;
       const material = object.material as THREE.Material;
-      let entry = byMaterial.get(material.uuid);
+      const compatibilityKey = geometryCompatibilityKey(object.geometry);
+      const batchKey = `${material.uuid}:${compatibilityKey}`;
+      let entry = byMaterial.get(batchKey);
       if (!entry) {
         entry = { material, geometries: [] };
-        byMaterial.set(material.uuid, entry);
+        byMaterial.set(batchKey, entry);
       }
       entry.geometries.push(object.geometry.clone().applyMatrix4(object.matrixWorld));
     });
@@ -178,6 +182,7 @@ export class VegetationSystem {
     runtime.name = authoring.name;
     for (const { material, geometries } of byMaterial.values()) {
       const geometry = mergeGeometries(geometries, false);
+      for (const source of geometries) source.dispose();
       if (!geometry) continue;
       geometry.computeBoundingBox();
       geometry.computeBoundingSphere();
@@ -205,4 +210,25 @@ export class VegetationSystem {
     }
     return this.compileRuntimeTree(group);
   }
+}
+
+
+function geometryCompatibilityKey(geometry: THREE.BufferGeometry): string {
+  const index = geometry.getIndex();
+  const indexKey = index ? `indexed:${attributeStorageKey(index)}` : 'non-indexed';
+  const attributes = Object.entries(geometry.attributes)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, attribute]) => `${name}:${attributeStorageKey(attribute)}`)
+    .join('|');
+  const morphAttributes = Object.entries(geometry.morphAttributes)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, morphs]) => `${name}[${(morphs ?? []).map(attributeStorageKey).join(',')}]`)
+    .join('|');
+  return `${indexKey};attrs=${attributes};morphRelative=${geometry.morphTargetsRelative ? 1 : 0};morph=${morphAttributes}`;
+}
+
+function attributeStorageKey(attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): string {
+  const array = attribute instanceof THREE.InterleavedBufferAttribute ? attribute.data.array : attribute.array;
+  const stride = attribute instanceof THREE.InterleavedBufferAttribute ? attribute.data.stride : attribute.itemSize;
+  return `${attribute.itemSize}:${attribute.normalized ? 1 : 0}:${array.constructor.name}:stride${stride}`;
 }
