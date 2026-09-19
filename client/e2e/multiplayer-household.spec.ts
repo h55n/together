@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 test('Couple household joins, chooses a home and replicates movement across two real browser contexts', async ({ browser }) => {
   test.setTimeout(120_000);
@@ -97,7 +97,7 @@ type NetworkSnapshot = {
   }>;
 };
 
-async function readNetworkSnapshot(locator: ReturnType<Page['getByTestId']>): Promise<NetworkSnapshot> {
+async function readNetworkSnapshot(locator: Locator): Promise<NetworkSnapshot> {
   return locator.evaluate((element) => {
     const raw = (element as HTMLElement).dataset.networkSnapshot;
     if (!raw) throw new Error('Network snapshot was not published');
