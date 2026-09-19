@@ -6,7 +6,10 @@ import { AssetRegistry, type AssetRegistryMetrics } from '../assets/runtime/Asse
 
 export type VegetationSpecies = 'rain_tree' | 'gulmohar' | 'ficus' | 'palm' | 'ornamental';
 
-type TreeOptions = { species: VegetationSpecies; seed: number; scale?: number };
+export type TreeOptions = { species: VegetationSpecies; seed: number; scale?: number };
+export type TreePlacement = TreeOptions & { position: { x: number; y: number; z: number } };
+
+const TREE_VARIANTS_PER_SPECIES = 4;
 
 /**
  * Three.js-native procedural vegetation. Authoring pieces are compiled into a
@@ -23,14 +26,63 @@ export class VegetationSystem {
   }
 
   createTree(options: TreeOptions): THREE.Group {
-    const variantSeed = Math.abs(options.seed % 8);
-    const asset = this.assets.acquire(`tree:${options.species}:${variantSeed}`);
+    const asset = this.acquireTreeAsset(options);
     const instance = asset.root.clone(true) as THREE.Group;
     instance.scale.setScalar(options.scale ?? 1);
     return instance;
   }
 
+  createTreeCluster(placements: readonly TreePlacement[], castShadow: boolean): THREE.Group {
+    const byMaterial = new Map<string, { material: THREE.Material; geometries: THREE.BufferGeometry[] }>();
+    const placementMatrix = new THREE.Matrix4();
+    const localToCluster = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const scale = new THREE.Vector3();
+    const rotation = new THREE.Quaternion();
+
+    for (const placement of placements) {
+      const asset = this.acquireTreeAsset(placement);
+      asset.root.updateMatrixWorld(true);
+      const scalar = placement.scale ?? 1;
+      position.set(placement.position.x, placement.position.y, placement.position.z);
+      scale.setScalar(scalar);
+      placementMatrix.compose(position, rotation.identity(), scale);
+
+      asset.root.traverse((object) => {
+        if (!(object instanceof THREE.Mesh) || Array.isArray(object.material)) return;
+        const material = object.material as THREE.Material;
+        let entry = byMaterial.get(material.uuid);
+        if (!entry) {
+          entry = { material, geometries: [] };
+          byMaterial.set(material.uuid, entry);
+        }
+        localToCluster.copy(placementMatrix).multiply(object.matrixWorld);
+        entry.geometries.push(object.geometry.clone().applyMatrix4(localToCluster));
+      });
+    }
+
+    const cluster = new THREE.Group();
+    cluster.name = 'vegetation:cluster';
+    for (const { material, geometries } of byMaterial.values()) {
+      const geometry = mergeGeometries(geometries, false);
+      for (const source of geometries) source.dispose();
+      if (!geometry) continue;
+      geometry.computeBoundingBox();
+      geometry.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = castShadow;
+      mesh.receiveShadow = true;
+      cluster.add(mesh);
+    }
+    return cluster;
+  }
+
   metrics(): AssetRegistryMetrics { return this.assets.metrics(); }
+
+  private acquireTreeAsset(options: TreeOptions) {
+    const variantSeed = Math.abs(options.seed % TREE_VARIANTS_PER_SPECIES);
+    return this.assets.acquire(`tree:${options.species}:${variantSeed}`);
+  }
 
   private compileTree(options: TreeOptions): THREE.Group {
     const random = createSeededRandom(options.seed);
