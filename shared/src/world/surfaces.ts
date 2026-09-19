@@ -77,6 +77,15 @@ export const AMAYA_BAY_SURFACE_ROUTES: readonly CitySurfaceRoute[] = [
     ],
   },
   {
+    id: 'bay-kayak-walk',
+    kind: 'path',
+    width: 3.4,
+    points: [
+      { x: 110, z: -270 }, { x: 121, z: -292 }, { x: 128, z: -309 },
+      { x: 135, z: -325 },
+    ],
+  },
+  {
     id: 'rain-tree-lane-walk',
     kind: 'path',
     width: 3.6,
