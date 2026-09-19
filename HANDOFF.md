@@ -14,8 +14,8 @@ The product is about the feeling of living a life with someone. It is not a comb
 
 - Project: Together V1 — Amaya Bay
 - Active recovery branch: `fix/audit-recovery-2026-09-17`
-- Latest fully verified runtime HEAD: `2e0e9896cf6e64b902f2f2e19b626e11682625e2`
-- Verified GitHub Actions run: `35412228703` — **success**
+- Latest fully verified runtime HEAD: `b9b549e99901b28fbfccea9c944be45b8ac0d5e5`
+- Verified GitHub Actions run: `35433112762` — **success**
 - Documentation-only commits may descend from that runtime baseline; use `git rev-parse HEAD` for the current documentation SHA.
 - Historical imported-prototype commit: `5c4730e`
 - Implementation-plan commit: `bc415e8`
@@ -117,7 +117,7 @@ The active legacy JavaScript/JSX prototype runtime was removed. Git history pres
 
 ## Verified
 
-The current authoritative connected baseline is GitHub Actions run `35412228703` on runtime HEAD `2e0e9896cf6e64b902f2f2e19b626e11682625e2`.
+The current authoritative connected baseline is GitHub Actions run `35433112762` on runtime HEAD `b9b549e99901b28fbfccea9c944be45b8ac0d5e5`.
 
 It passes:
 
@@ -133,9 +133,9 @@ pnpm --filter @together/client exec playwright install --with-deps chromium
 pnpm test:e2e
 ```
 
-The Playwright test boots the real client and server, completes solo onboarding, waits for a playable world, rejects browser runtime errors and checks a rendered canvas frame. CI uses explicit WebGL2 compatibility mode because the GitHub headless GPU is not a reliable WebGPU target; normal product startup remains WebGPU-first and has regression coverage.
+The Playwright test boots the real client and server, completes solo onboarding, waits for a playable world, rejects browser runtime errors, checks a rendered canvas frame, holds W and verifies live Rapier position changes, then presses V and verifies first-person → third-person switching. CI uses explicit WebGL2 compatibility mode because the GitHub headless GPU is not a reliable WebGPU target; normal product startup remains WebGPU-first and has regression coverage.
 
-The same baseline includes regressions for the recovery bugs: StrictMode engine ownership/Rapier lifetime, renderer selection, focus-loss input reset, camera/movement math, terrain collider ownership, property/world clearance, world-space surface connectivity, static vegetation/dressing batching, realtime home refresh, weather reactivity and ambient NPC instancing.
+The same baseline includes regressions for the recovery bugs: StrictMode engine ownership/Rapier lifetime, renderer selection, focus-loss input reset, real-browser movement/camera switching, camera/movement math, terrain collider ownership, property/world clearance, world-space surface connectivity, static vegetation/dressing batching, bounded first-playable warmup, realtime home refresh, weather reactivity and ambient NPC instancing.
 
 See `docs/VERIFICATION.md` for exact evidence and remaining manual/device gaps.
 
@@ -171,7 +171,7 @@ No deterministic crash from the reproduced recovery set remains on the verified 
 
 A browser-only Rapier/WASM crash was reproduced during this recovery: React development StrictMode invoked two overlapping asynchronous `GameEngine.create()` calls, and a later `RigidBody.translation()` could hit an invalid WASM wrapper. A StrictMode regression was added, engine creation is now serialized/owned per effect, and the full browser E2E passes.
 
-Do not interpret this as release-complete verification. Remaining risks are primarily unmeasured or manual: target-hardware performance, real WebGPU/browser/controller matrix, multiplayer/latency soak, production Supabase/TURN, and final art/audio acceptance.
+Do not interpret this as release-complete verification. On the GitHub headless WebGL2 compatibility runner, the verified first-playable sample reported ~88.7 FPS, 11.3 ms smoothed CPU frame time, p95 17.2 ms, p99 18.2 ms, 148 draw calls and 223,782 triangles with zero sampled frames over 33 ms. These are CI diagnostics, not target-hardware claims. Remaining risks are target-hardware Medium/WebGPU performance, real browser/controller matrix, multiplayer/latency soak, production Supabase/TURN, and final art/audio acceptance.
 
 ## External Setup Required
 
