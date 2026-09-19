@@ -63,6 +63,7 @@ export class VegetationSystem {
 
     const cluster = new THREE.Group();
     cluster.name = 'vegetation:cluster';
+    let batchIndex = 0;
     for (const { material, geometries } of byMaterial.values()) {
       const geometry = mergeGeometries(geometries, false);
       for (const source of geometries) source.dispose();
@@ -70,9 +71,11 @@ export class VegetationSystem {
       geometry.computeBoundingBox();
       geometry.computeBoundingSphere();
       const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = `static-batch:vegetation:${batchIndex}`;
       mesh.castShadow = castShadow;
       mesh.receiveShadow = true;
       cluster.add(mesh);
+      batchIndex += 1;
     }
     return cluster;
   }
