@@ -515,7 +515,12 @@ export class GameEngine {
       this.recordSceneMetrics();
     }
     this.applyVisualBudget(this.adaptiveQuality.sample(this.performance.read()));
-    this.debug.update(deltaSeconds, { weather: this.weather.state, gameTime: formatGameTime(this.gameMinutes) });
+    this.debug.update(deltaSeconds, {
+      weather: this.weather.state,
+      gameTime: formatGameTime(this.gameMinutes),
+      cameraMode: this.camera.mode,
+      playerPosition,
+    });
   }
 
   private measureSystem<T>(name: string, operation: () => T): T {
