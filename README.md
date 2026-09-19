@@ -10,7 +10,7 @@ This repository is a substantial V1 implementation and handoff build, not a clai
 
 - WebGPU-first Three.js renderer architecture with WebGL2 fallback;
 - Rapier kinematic player physics, first/third-person cameras, gamepad and remappable keyboard input;
-- a ~900m × 900m Amaya Bay world split into 128m chunks;
+- a ~900m × 900m Amaya Bay world split into 128m chunks, with a shared streamed world-space road/path/promenade network;
 - 7 major districts, 28 named subareas/colonies, 45 distributed everyday venues, terrain/elevation, streamed neighborhood dressing and vegetation;
 - five starter home shells and persistent furniture/surface customization;
 - 92 furniture/decor definitions, including 20 greenery options;
@@ -20,7 +20,7 @@ This repository is a substantial V1 implementation and handoff build, not a clai
 - server-authoritative personal/shared wallets, transaction idempotency and five job definitions;
 - bicycle, scooter, kayak and auto-rickshaw transport foundations;
 - 8 persistent leisure activities with shared sessions;
-- 12 named persistent NPCs with schedules, memory flags and authored contextual dialogue;
+- 12 named persistent NPCs with schedules, memory flags and authored contextual dialogue, plus an instanced ambient city population;
 - 36 data-driven household stories (20 shared, 8 Couple, 8 Friends) and seven life stages;
 - private manual/automatic Memory capture, captions and share-card export;
 - renovation and moving flows with voting, packing decisions and moving memories;
@@ -35,17 +35,14 @@ See `docs/IMPLEMENTATION_STATUS.md` and `docs/KNOWN_LIMITATIONS.md` for the stri
 - pnpm **12.4.1** through Corepack
 - a modern desktop browser with WebGPU or WebGL2
 
-The supplied sandbox had Node 22 and no registry/DNS access, so it could not generate `pnpm-lock.yaml` or perform a clean dependency install. On the first connected Node 24 machine, generate and commit the lockfile:
+The connected CI baseline uses Node 24, Corepack and the committed dependency graph with `pnpm install --frozen-lockfile`. For local development, use the same major runtime and package-manager versions rather than copying `node_modules` across platforms.
 
 ```bash
 corepack enable
-corepack prepare pnpm@12.4.1 --activate
-pnpm install
+pnpm install --frozen-lockfile
 pnpm verify
 pnpm test:e2e
 ```
-
-After that, use `pnpm install --frozen-lockfile` in CI and subsequent environments.
 
 ## Local development
 
@@ -64,24 +61,21 @@ Without Supabase credentials, development uses the in-memory repository and loca
 
 ## Verification
 
-Normal connected environment:
+Authoritative connected gate:
 
 ```bash
 pnpm typecheck
 pnpm lint
 pnpm test
 pnpm validate
+pnpm validate:repo
 pnpm build
 pnpm test:e2e
 ```
 
-Sandbox-safe verification (does not require pnpm, Vite/Rollup, or the missing server declaration packages):
+As of 2026-09-19, runtime HEAD `2e0e9896cf6e64b902f2f2e19b626e11682625e2` passes the complete GitHub Actions gate, including a real Chromium client+server solo-entry playable-frame E2E in explicit WebGL2 compatibility mode. Normal product startup remains WebGPU-first.
 
-```bash
-node tools/verify-sandbox.mjs
-```
-
-At handoff this passes 161 automated domain/integration tests plus client/shared/content TypeScript and repository integrity validation.
+`node tools/verify-sandbox.mjs` remains available as a reduced offline diagnostic, but it is no longer the authoritative verification record. See `docs/VERIFICATION.md`.
 
 ## Repository structure
 
