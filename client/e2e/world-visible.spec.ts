@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
 
-test('first playable frame contains world geometry', async ({ page }) => {
+test('first playable WebGL2 compatibility frame contains world geometry', async ({ page }) => {
   const runtimeErrors: string[] = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error') runtimeErrors.push(message.text()); });
 
-  await page.goto('/', { waitUntil: 'networkidle' });
+  await page.goto('/?renderer=webgl2', { waitUntil: 'networkidle' });
   await page.getByLabel('Display name').fill('Browser tester');
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Explore Amaya Bay solo' }).click();
@@ -13,6 +13,7 @@ test('first playable frame contains world geometry', async ({ page }) => {
   const canvas = page.getByLabel('Amaya Bay 3D world');
   await expect(canvas).toBeVisible();
   await expect(page.locator('.world-loading')).toBeHidden();
+  await expect(page.getByTestId('debug-overlay')).toContainText('WEBGL2');
   await page.waitForTimeout(1200);
 
   const screenshot = await canvas.screenshot();
