@@ -35,6 +35,15 @@ export class PlayerAvatar {
   private readonly rightLegPivot = new THREE.Group();
   private readonly leftKneePivot = new THREE.Group();
   private readonly rightKneePivot = new THREE.Group();
+  private readonly leftActionProps = new THREE.Group();
+  private readonly rightActionProps = new THREE.Group();
+  private readonly propMaterials = [
+    new THREE.MeshStandardMaterial({ color: 0xe7ddd0, roughness: 0.72 }),
+    new THREE.MeshStandardMaterial({ color: 0x7b8586, roughness: 0.48, metalness: 0.22 }),
+    new THREE.MeshStandardMaterial({ color: 0xb86f52, roughness: 0.86 }),
+    new THREE.MeshStandardMaterial({ color: 0x67886c, roughness: 0.9 }),
+  ] as const;
+  private lastPropAction: AvatarAction | null = null;
   private elapsed = 0;
   private readonly bicycle = new THREE.Group();
   private readonly scooter = new THREE.Group();
@@ -95,6 +104,11 @@ export class PlayerAvatar {
     const rightArm = this.createArm(this.rightArmPivot, this.rightElbowPivot, shoulderX, 'right');
     this.root.add(this.leftArmPivot, this.rightArmPivot);
     this.hands = { left: leftArm, right: rightArm };
+    this.leftActionProps.name = 'avatar:left-action-props';
+    this.rightActionProps.name = 'avatar:right-action-props';
+    this.hands.left.add(this.leftActionProps);
+    this.hands.right.add(this.rightActionProps);
+    this.buildActionProps();
 
     const hipX = 0.14 * bodyWidth;
     this.createLeg(this.leftLegPivot, this.leftKneePivot, -hipX, 'left');
@@ -149,6 +163,7 @@ export class PlayerAvatar {
     this.torso.rotation.set(pose.torsoPitch, pose.torsoYaw, 0);
     this.torso.position.y = pose.breath;
 
+    this.updateActionProps(action);
     const bends = jointBends(action, this.elapsed, pose.leftLegPitch, pose.rightLegPitch);
     this.leftElbowPivot.rotation.x = bends.leftElbow + Math.max(0, -pose.leftHandZ) * 0.22;
     this.rightElbowPivot.rotation.x = bends.rightElbow + Math.max(0, -pose.rightHandZ) * 0.22;
@@ -169,6 +184,7 @@ export class PlayerAvatar {
     this.shirt.dispose();
     this.trousers.dispose();
     this.hair.dispose();
+    for (const material of this.propMaterials) material.dispose();
   }
 
   private createArm(
@@ -223,6 +239,145 @@ export class PlayerAvatar {
     const shoe = this.part(new THREE.BoxGeometry(0.19, 0.11, 0.32), this.trousers, [0, -0.42, -0.075]);
     shoe.name = `avatar:${side}-shoe`;
     kneePivot.add(shoe);
+  }
+
+  private buildActionProps(): void {
+    const [ceramic, metal, warm, green] = this.propMaterials;
+
+    const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.018, 16), ceramic);
+    dish.name = 'avatar:prop:dish';
+    dish.rotation.x = Math.PI / 2;
+    dish.position.set(0, -0.02, -0.1);
+    this.leftActionProps.add(dish);
+
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.05, 0.1, 10), ceramic);
+    cup.name = 'avatar:prop:cup';
+    cup.position.set(0.02, -0.02, -0.09);
+    this.leftActionProps.add(cup);
+
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.075, 0.07, 12), ceramic);
+    bowl.name = 'avatar:prop:bowl';
+    bowl.position.set(0.02, -0.02, -0.1);
+    this.leftActionProps.add(bowl);
+
+    const produce = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), green);
+    produce.name = 'avatar:prop:produce';
+    produce.scale.set(1.25, 0.75, 1);
+    produce.position.set(0, -0.02, -0.1);
+    this.leftActionProps.add(produce);
+
+    const knife = new THREE.Group();
+    knife.name = 'avatar:prop:knife';
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.2, 0.09), metal);
+    blade.position.y = -0.1;
+    const knifeHandle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, 0.055), warm);
+    knifeHandle.position.y = 0.055;
+    knife.add(blade, knifeHandle);
+    knife.rotation.z = -0.1;
+    knife.position.set(0, -0.04, -0.08);
+    this.rightActionProps.add(knife);
+
+    const sponge = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.045, 0.08), warm);
+    sponge.name = 'avatar:prop:sponge';
+    sponge.position.set(0, -0.03, -0.08);
+    this.rightActionProps.add(sponge);
+
+    const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.025, 0.13), green);
+    cloth.name = 'avatar:prop:cloth';
+    cloth.position.set(0, -0.025, -0.08);
+    cloth.rotation.z = 0.18;
+    this.rightActionProps.add(cloth);
+
+    const spoon = new THREE.Group();
+    spoon.name = 'avatar:prop:spoon';
+    const spoonHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.24, 6), metal);
+    spoonHandle.position.y = -0.11;
+    const spoonHead = new THREE.Mesh(new THREE.SphereGeometry(0.035, 7, 5), metal);
+    spoonHead.scale.set(0.8, 1.25, 0.45);
+    spoonHead.position.y = -0.24;
+    spoon.add(spoonHandle, spoonHead);
+    spoon.position.set(0, -0.02, -0.08);
+    this.rightActionProps.add(spoon);
+
+    const jug = new THREE.Group();
+    jug.name = 'avatar:prop:jug';
+    const jugBody = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.14, 10), metal);
+    jugBody.position.y = -0.06;
+    const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.028, 0.12, 7), metal);
+    spout.rotation.z = Math.PI / 2.6;
+    spout.position.set(-0.075, -0.03, 0);
+    jug.add(jugBody, spout);
+    jug.position.set(0, -0.02, -0.08);
+    this.rightActionProps.add(jug);
+
+    const wateringCan = new THREE.Group();
+    wateringCan.name = 'avatar:prop:watering-can';
+    const canBody = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.075, 0.15, 10), green);
+    canBody.position.y = -0.07;
+    const canSpout = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.028, 0.19, 7), green);
+    canSpout.rotation.z = Math.PI / 2.35;
+    canSpout.position.set(-0.105, -0.05, 0);
+    wateringCan.add(canBody, canSpout);
+    wateringCan.position.set(0, -0.02, -0.08);
+    this.rightActionProps.add(wateringCan);
+
+    const parcel = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.18, 0.2), warm);
+    parcel.name = 'avatar:prop:parcel';
+    parcel.position.set(0, -0.05, -0.13);
+    this.rightActionProps.add(parcel);
+
+    for (const root of [this.leftActionProps, this.rightActionProps]) {
+      for (const child of root.children) child.visible = false;
+    }
+  }
+
+  private updateActionProps(action: AvatarAction): void {
+    if (this.lastPropAction === action) return;
+    this.lastPropAction = action;
+    for (const root of [this.leftActionProps, this.rightActionProps]) {
+      for (const child of root.children) child.visible = false;
+    }
+
+    const show = (name: string) => {
+      const prop = this.root.getObjectByName(name);
+      if (prop) prop.visible = true;
+    };
+
+    switch (action) {
+      case 'cut':
+        show('avatar:prop:knife');
+        show('avatar:prop:produce');
+        break;
+      case 'wash':
+      case 'scrub':
+        show('avatar:prop:dish');
+        show('avatar:prop:sponge');
+        break;
+      case 'wipe':
+      case 'fold':
+        show('avatar:prop:cloth');
+        break;
+      case 'stir':
+        show('avatar:prop:bowl');
+        show('avatar:prop:spoon');
+        break;
+      case 'pour':
+        show('avatar:prop:cup');
+        show('avatar:prop:jug');
+        break;
+      case 'water':
+        show('avatar:prop:watering-can');
+        break;
+      case 'pick_up':
+      case 'place':
+      case 'carry':
+      case 'hand_over':
+      case 'receive':
+        show('avatar:prop:parcel');
+        break;
+      default:
+        break;
+    }
   }
 
   private buildBicycleVisual(): void {
