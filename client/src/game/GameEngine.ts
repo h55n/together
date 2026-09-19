@@ -257,6 +257,24 @@ export class GameEngine {
     return engine;
   }
 
+  async prepareFirstPlayable(): Promise<void> {
+    const position = this.player.getPosition();
+    const playerPosition = new THREE.Vector3(position.x, position.y, position.z);
+    this.worldStreamer.prepareInitial(playerPosition, 5);
+
+    // Settle the newly-added static colliders before the player gains control.
+    this.measureSystem('physics-warmup', () => this.physics.step());
+    this.player.syncVisual(this.camera.yaw, 0);
+    this.camera.update(0, false, false);
+    this.lighting.update(this.gameMinutes, this.avatar.root.position);
+    this.weather.update(0, this.avatar.root.position);
+
+    await this.renderer.prewarm(this.scene, this.camera.camera);
+    const info = this.renderer.renderer.info.render;
+    this.performance.recordRenderer(info.calls, info.triangles);
+    this.recordSceneMetrics();
+  }
+
   start(): void {
     this.input.enable();
     this.canvas.addEventListener('pointerdown', this.onFirstGesture, { once: true });
