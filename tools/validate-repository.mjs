@@ -60,7 +60,7 @@ const secretPatterns = [
   [/xox[baprs]-[A-Za-z0-9-]{20,}/g, 'Slack token'],
   [/AKIA[0-9A-Z]{16}/g, 'AWS access key id'],
   [/service_role\s*[=:]\s*['"][A-Za-z0-9._-]{20,}/gi, 'Supabase service-role value'],
-  [/(?:SUPABASE_SERVICE_ROLE_KEY|VITE_TURN_CREDENTIAL)\s*=\s*[^\s#][^\r\n]{15,}/g, 'sensitive environment value'],
+  [/(?:SUPABASE_SERVICE_ROLE_KEY|TURN_SHARED_SECRET)\s*=\s*[^\s#][^\r\n]{15,}/g, 'sensitive environment value'],
   [/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g, 'private key'],
 ];
 
@@ -84,7 +84,7 @@ async function walk(directory) {
 await walk(root);
 
 const envExample = await readFile(path.join(root, '.env.example'), 'utf8');
-for (const variable of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'VITE_SERVER_URL', 'VITE_STUN_URL', 'VITE_TURN_URL']) {
+for (const variable of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_SERVER_URL', 'STUN_URL', 'TURN_URL', 'TURN_SHARED_SECRET']) {
   if (!envExample.includes(`${variable}=`)) errors.push(`.env.example missing ${variable}=`);
 }
 
