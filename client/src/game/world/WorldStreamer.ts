@@ -42,6 +42,21 @@ export class WorldStreamer {
     this.recordMetrics(generationMs, commitMs);
   }
 
+  prepareInitial(playerPosition: THREE.Vector3, maxJobs = 5): void {
+    const generationStarted = performance.now();
+    this.queueResidency(playerPosition);
+    const generationMs = performance.now() - generationStarted;
+    const commitStarted = performance.now();
+    this.scheduler.takeFrameBudget(Number.POSITIVE_INFINITY, (job) => this.commitJob(job), Math.max(1, Math.floor(maxJobs)));
+    const commitMs = performance.now() - commitStarted;
+    this.updateElapsed = 0;
+    this.recordMetrics(generationMs, commitMs);
+  }
+
+  pendingJobs(): number {
+    return this.scheduler.metrics().pendingJobs;
+  }
+
   refreshNow(playerPosition: THREE.Vector3): void {
     this.scheduler.clear();
     this.queued.clear();
