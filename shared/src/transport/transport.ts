@@ -53,3 +53,30 @@ export function advanceTransportHeading(
 function normalizeRadians(value: number): number {
   return Math.atan2(Math.sin(value), Math.cos(value));
 }
+
+
+export const KAYAK_WATER_BOUNDS = {
+  minX: -210,
+  maxX: 350,
+  minZ: -500,
+  maxZ: -344,
+} as const;
+
+export const KAYAK_LAUNCH_POSITION = { x: 135, z: -350 } as const;
+export const KAYAK_RETURN_POSITION = { x: 135, z: -325 } as const;
+
+export function constrainKayakMovement(
+  current: { x: number; z: number },
+  delta: { x: number; z: number },
+): { x: number; z: number } {
+  const targetX = Math.max(KAYAK_WATER_BOUNDS.minX, Math.min(KAYAK_WATER_BOUNDS.maxX, current.x + delta.x));
+  const targetZ = Math.max(KAYAK_WATER_BOUNDS.minZ, Math.min(KAYAK_WATER_BOUNDS.maxZ, current.z + delta.z));
+  return { x: targetX - current.x, z: targetZ - current.z };
+}
+
+export function isInsideKayakWater(position: { x: number; z: number }): boolean {
+  return position.x >= KAYAK_WATER_BOUNDS.minX
+    && position.x <= KAYAK_WATER_BOUNDS.maxX
+    && position.z >= KAYAK_WATER_BOUNDS.minZ
+    && position.z <= KAYAK_WATER_BOUNDS.maxZ;
+}

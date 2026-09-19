@@ -394,7 +394,7 @@ export class GameEngine {
 
   playActivityAction(action: AvatarAction): void {
     if (action === 'cycle') { this.player.setTransportMode('bicycle'); return; }
-    if (action === 'kayak') { this.player.setTransportMode('kayak'); return; }
+    if (action === 'kayak') { this.launchKayak(); return; }
     if (action === 'walk' || action === 'jog' || action === 'idle') return;
     this.player.beginMicroAction(action, action === 'sit' ? 2.2 : 1.25, true);
   }
@@ -425,6 +425,23 @@ export class GameEngine {
     this.renderer.dispose();
   }
 
+  private launchKayak(): void {
+    const x = KAYAK_LAUNCH_POSITION.x;
+    const z = KAYAK_LAUNCH_POSITION.z;
+    const position = new THREE.Vector3(x, cityHeightAt(x, z) + 1.1, z);
+    this.player.setWorldPosition(position);
+    this.worldStreamer.refreshNow(position);
+    this.player.setTransportMode('kayak');
+  }
+
+  private returnKayakToHut(): void {
+    const x = KAYAK_RETURN_POSITION.x;
+    const z = KAYAK_RETURN_POSITION.z;
+    const position = new THREE.Vector3(x, cityHeightAt(x, z) + 1.1, z);
+    this.player.setWorldPosition(position);
+    this.worldStreamer.refreshNow(position);
+  }
+
   private readonly onAnimationFrame = (timestamp: number): void => {
     if (this.disposed) return;
     this.loop.frame(timestamp);
@@ -442,7 +459,9 @@ export class GameEngine {
     this.measureSystem('camera', () => this.camera.update(deltaSeconds, this.player.isMoving(), this.player.isJogging()));
     const playerPosition = this.player.getPosition();
     if (input.transportDismountPressed && this.player.getTransportMode() !== 'on_foot') {
+      const previousMode = this.player.getTransportMode();
       this.player.setTransportMode('on_foot');
+      if (previousMode === 'kayak') this.returnKayakToHut();
       this.interactions.setEnabled(true);
       this.onInteractionPrompt?.(null);
     }
@@ -474,7 +493,8 @@ export class GameEngine {
           if (mode === 'kayak' && !weatherAllowsKayak(this.weather.state)) {
             this.onMoment?.('The kayak hut is closed in heavy weather. The bay will be here tomorrow.');
           } else {
-            this.player.setTransportMode(mode);
+            if (mode === 'kayak') this.launchKayak();
+            else this.player.setTransportMode(mode);
             this.interactions.setEnabled(false);
             this.onInteractionPrompt?.(`X · Dismount ${mode === 'bicycle' ? 'bicycle' : mode}`);
             if (interaction.activityId) this.onActivityInteraction?.(interaction.activityId);

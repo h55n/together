@@ -1,4 +1,4 @@
-import { advanceTransportHeading, advanceTransportSpeed, type AvatarAction, type TransportMode } from '@together/shared';
+import { advanceTransportHeading, advanceTransportSpeed, constrainKayakMovement, type AvatarAction, type TransportMode } from '@together/shared';
 import type { InputSnapshot } from '../core/InputManager';
 import type { PhysicsWorld, PlayerPhysicsHandle } from '../physics/PhysicsWorld';
 import type { PlayerAvatar } from './PlayerAvatar';
@@ -66,10 +66,14 @@ export class PlayerController {
     } else {
       movement = movementVector(input, cameraYaw);
     }
+    const intended = { x: movement.x * deltaSeconds, z: movement.z * deltaSeconds };
+    const horizontal = this.transportMode === 'kayak'
+      ? constrainKayakMovement(this.getPosition(), intended)
+      : intended;
     this.physics.moveCharacter(this.physicsHandle, {
-      x: movement.x * deltaSeconds,
+      x: horizontal.x,
       y: -4.5 * deltaSeconds,
-      z: movement.z * deltaSeconds,
+      z: horizontal.z,
     });
   }
 
