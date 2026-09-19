@@ -386,9 +386,10 @@ export class GameEngine {
     this.player.beginMicroAction(mapped, mapped === 'carry' || mapped === 'cycle' ? 1.8 : 1.25, true);
   }
 
-  playCookingAction(action: RecipeAction): void {
+  async playCookingAction(action: RecipeAction): Promise<void> {
     const mapped = cookingActionToAvatarAction(action);
     this.player.beginMicroAction(mapped, action === 'boil' || action === 'fry' ? 1.8 : 1.35, true);
+    await this.player.waitForMicroActionCompletion();
   }
 
   playActivityAction(action: AvatarAction): void {

@@ -562,8 +562,8 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       const claimed = await claim.json() as CookingSessionView & { error?: string };
       if (!claim.ok) throw new Error(claimed.error ?? `${step.station} is occupied`);
       setCookingSession(claimed);
-      engineRef.current?.playCookingAction(step.action);
-      await new Promise((resolve) => window.setTimeout(resolve, 650));
+      const engine = engineRef.current;
+      if (engine) await engine.playCookingAction(step.action);
       const complete = await fetch(`${base}/steps/${encodeURIComponent(step.id)}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ mistake }),
       });
@@ -574,7 +574,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       if (completed.state.status === 'completed') {
         const quality = completed.state.outcome?.quality ?? 'shared';
         setCookingMessage(quality === 'burnt' ? 'Dinner got a little burnt. It still counts as dinner—and a story.' : quality === 'imperfect' ? 'A little imperfect. Still warm, shared food.' : 'Meal ready. Serve it while it is warm.');
-        engineRef.current?.playCookingAction('serve');
+        void engineRef.current?.playCookingAction('serve');
         void captureAutomaticMemory('shared_meal');
       } else setCookingMessage('Step complete. Another station may have opened up.');
     } catch (cause) { setCookingMessage(cause instanceof Error ? cause.message : String(cause)); }

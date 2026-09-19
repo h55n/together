@@ -11,6 +11,7 @@ export class PlayerController {
   private jogging = false;
   private microAction: AvatarAction | null = null;
   private microActionRemaining = 0;
+  private microActionCompletion: { promise: Promise<void>; resolve: () => void } | null = null;
   private transportMode: TransportMode = 'on_foot';
   private transportSpeed = 0;
   private transportYaw = 0;
@@ -33,10 +34,18 @@ export class PlayerController {
 
   beginMicroAction(action: Exclude<AvatarAction, 'idle' | 'walk' | 'jog'>, durationSeconds = 1.25, allowWhileLocked = false): void {
     if (this.transportMode !== 'on_foot' || (this.interactionLocked && !allowWhileLocked)) return;
+    this.finishMicroAction();
+    let resolve!: () => void;
+    const promise = new Promise<void>((complete) => { resolve = complete; });
+    this.microActionCompletion = { promise, resolve };
     this.microAction = action;
     this.microActionRemaining = Math.max(0.25, durationSeconds);
     this.moving = false;
     this.jogging = false;
+  }
+
+  waitForMicroActionCompletion(): Promise<void> {
+    return this.microActionCompletion?.promise ?? Promise.resolve();
   }
 
   fixedUpdate(deltaSeconds: number, cameraYaw: number): void {
@@ -73,10 +82,7 @@ export class PlayerController {
     this.avatar.setTransform(position, this.presentationYaw(yaw));
     if (this.microAction) {
       this.microActionRemaining -= deltaSeconds;
-      if (this.microActionRemaining <= 0) {
-        this.microAction = null;
-        this.microActionRemaining = 0;
-      }
+      if (this.microActionRemaining <= 0) this.finishMicroAction();
     }
     this.avatar.updateMotion(deltaSeconds, this.animationTag());
   }
@@ -90,7 +96,7 @@ export class PlayerController {
     this.transportMode = mode;
     this.transportSpeed = 0;
     this.transportHeadingInitialized = mode === 'on_foot' || mode === 'auto_rickshaw' ? false : this.transportHeadingInitialized;
-    this.microAction = null;
+    this.finishMicroAction();
     this.avatar.setTransportMode(mode);
   }
 
@@ -133,6 +139,15 @@ export class PlayerController {
   }
 
   dispose(): void {
+    this.finishMicroAction();
     this.physics.disposePlayer(this.physicsHandle);
+  }
+
+  private finishMicroAction(): void {
+    this.microAction = null;
+    this.microActionRemaining = 0;
+    const completion = this.microActionCompletion;
+    this.microActionCompletion = null;
+    completion?.resolve();
   }
 }
