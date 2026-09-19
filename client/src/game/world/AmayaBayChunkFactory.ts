@@ -158,7 +158,10 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
     }
     monitor?.recordSystem('chunk-vegetation-build', performance.now() - vegetationStarted);
     const vegetationMergeStarted = performance.now();
-    vegetationRoot.add(vegetation.createTreeCluster(placements, ring === 'active'));
+    const vegetationCluster = vegetation.createTreeCluster(placements, ring === 'active');
+    while (vegetationCluster.children.length > 0) {
+      vegetationRoot.add(vegetationCluster.children[0]!);
+    }
     monitor?.recordSystem('chunk-vegetation-merge', performance.now() - vegetationMergeStarted);
     return root;
   };
