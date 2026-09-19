@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run src/game/core src/game/lighting src/game/weather src/game/world src/game/assets/runtime src/game/debug src/game/performance src/game/npc src/network src/ui/game && tsx --test src/game/camera/**/*.test.ts src/game/player/**/*.test.ts",
+    "test": "vitest run src/auth src/game/core src/game/lighting src/game/weather src/game/world src/game/assets/runtime src/game/debug src/game/performance src/game/npc src/network src/ui/game && tsx --test src/game/camera/**/*.test.ts src/game/player/**/*.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

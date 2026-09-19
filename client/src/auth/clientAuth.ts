@@ -29,6 +29,19 @@ export function resolveClientIdentity(): Promise<ClientIdentity> {
   return identityPromise;
 }
 
+export function subscribeClientIdentity(listener: (identity: ClientIdentity) => void): () => void {
+  if (!supabase) return () => undefined;
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (!session) return;
+    listener({
+      userId: session.user.id,
+      accessToken: session.access_token,
+      mode: 'supabase',
+    });
+  });
+  return () => data.subscription.unsubscribe();
+}
+
 export function authHeadersForIdentity(
   identity: Pick<ClientIdentity, 'userId' | 'accessToken'>,
   json = false,

@@ -61,7 +61,7 @@ export function MemoryBook(props: {
       created.forEach((url) => URL.revokeObjectURL(url));
       setUrls({});
     };
-  }, [networkSession.householdId, networkSession.userId, open, sorted]);
+  }, [networkSession.accessToken, networkSession.householdId, networkSession.userId, open, sorted]);
 
   if (!open) return null;
   return <div className="memory-backdrop" role="dialog" aria-modal="true" aria-label="Household Memory Book">

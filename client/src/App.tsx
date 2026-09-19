@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import type { AvatarConfig, HouseholdType, StarterPropertyDefinition, VoteChoice } from '@together/shared';
 import { GameCanvas } from './ui/game/GameCanvas';
-import { authHeadersForIdentity, resolveClientIdentity, type ClientIdentity } from './auth/clientAuth';
+import { authHeadersForIdentity, resolveClientIdentity, subscribeClientIdentity, type ClientIdentity } from './auth/clientAuth';
 
 export type HouseholdMemberSummary = {
   userId: string;
@@ -50,10 +50,15 @@ export default function App(): ReactElement {
 
   useEffect(() => {
     let cancelled = false;
+    let unsubscribe = () => undefined;
     void resolveClientIdentity()
-      .then((resolved) => { if (!cancelled) setIdentity(resolved); })
+      .then((resolved) => {
+        if (cancelled) return;
+        setIdentity(resolved);
+        unsubscribe = subscribeClientIdentity((updated) => { if (!cancelled) setIdentity(updated); });
+      })
       .catch((error: unknown) => { if (!cancelled) setAuthError(errorMessage(error)); });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; unsubscribe(); };
   }, []);
 
   const authHeaders = identity ? authHeadersForIdentity(identity, true) : { 'Content-Type': 'application/json' };
