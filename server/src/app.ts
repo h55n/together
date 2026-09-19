@@ -69,6 +69,13 @@ function withRealtimeHomePublishing(homeService: HomeService, publish: PublishHo
           return home;
         };
       }
+      if (property === 'applyDomesticStep') {
+        return async (...args: Parameters<HomeService['applyDomesticStep']>) => {
+          const home = await target.applyDomesticStep(...args);
+          notify(args[0], socketEvents.homeObjectState, home.version);
+          return home;
+        };
+      }
 
       const value = Reflect.get(target, property, target);
       return typeof value === 'function' ? value.bind(target) : value;

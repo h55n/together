@@ -100,3 +100,54 @@ test('household cannot place furniture it has not purchased', async () => {
     idempotencyKey: 'home-free-sofa-0001', transform: { position: { x: 2, y: 0, z: 2 }, rotationY: 0, scale: 1 },
   }), /purchased|inventory/i);
 });
+
+test('canonical physical domestic step progress is versioned, ordered and idempotent', async () => {
+  const { household, home } = await setup();
+  const first = await home.applyDomesticStep(
+    household.id,
+    'user-a',
+    'couple_studio:dishes',
+    'take_plate',
+    0,
+    'domestic-step-take-0001',
+  );
+  const firstProgress = (first.roomStates.domesticInteractions as Record<string, { completedStepIds: string[] }>)[
+    'couple_studio:dishes'
+  ];
+  assert.deepEqual(firstProgress?.completedStepIds, ['take_plate']);
+
+  const second = await home.applyDomesticStep(
+    household.id,
+    'user-a',
+    'couple_studio:dishes',
+    'tap_on',
+    first.version,
+    'domestic-step-tap-0001',
+  );
+  const secondProgress = (second.roomStates.domesticInteractions as Record<string, { objectState?: string }>)[
+    'couple_studio:dishes'
+  ];
+  assert.equal(secondProgress?.objectState, 'tap_on');
+
+  await assert.rejects(
+    () => home.applyDomesticStep(
+      household.id,
+      'user-a',
+      'couple_studio:dishes',
+      'scrub_plate',
+      second.version,
+      'domestic-step-skip-0001',
+    ),
+    /Expected domestic step wet_plate/,
+  );
+
+  const retried = await home.applyDomesticStep(
+    household.id,
+    'user-a',
+    'couple_studio:dishes',
+    'tap_on',
+    first.version,
+    'domestic-step-tap-0001',
+  );
+  assert.equal(retried.version, second.version);
+});

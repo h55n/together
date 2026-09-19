@@ -480,6 +480,25 @@ export function createApp(dependencies: AppDependencies) {
     } catch (error) { next(error); }
   });
 
+  app.post('/api/households/:id/home/domestic-steps', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const input = z.object({
+        interactionId: z.string().min(1).max(120),
+        stepId: z.string().min(1).max(120),
+        expectedVersion: z.number().int().nonnegative(),
+        idempotencyKey: z.string().min(8).max(128),
+      }).parse(request.body);
+      response.json(await dependencies.homeService.applyDomesticStep(
+        routeParam(request, 'id'),
+        request.identity!.userId,
+        input.interactionId,
+        input.stepId,
+        input.expectedVersion,
+        input.idempotencyKey,
+      ));
+    } catch (error) { next(error); }
+  });
+
   app.put('/api/households/:id/home/surfaces/:surfaceId', authenticate, async (request: AuthenticatedRequest, response, next) => {
     try {
       const input = z.object({ finishId: z.string().min(1).max(120), expectedVersion: z.number().int().nonnegative(), idempotencyKey: z.string().min(8).max(128) }).parse(request.body);

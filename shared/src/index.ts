@@ -58,3 +58,5 @@ export * from "./cooking/presentation.js";
 export * from './leisure/activity.js';
 
 export * from './settings/gamepad.js';
+
+export * from './home/domesticInteraction.js';
