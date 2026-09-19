@@ -17,7 +17,12 @@ export class DebugOverlay {
     parent.appendChild(this.element);
   }
 
-  update(deltaSeconds: number, extras: { weather: string; gameTime: string }): void {
+  update(deltaSeconds: number, extras: {
+    weather: string;
+    gameTime: string;
+    cameraMode: 'first_person' | 'third_person';
+    playerPosition: { x: number; y: number; z: number };
+  }): void {
     this.elapsed += deltaSeconds;
     if (this.elapsed < 0.25) return;
     this.elapsed = 0;
@@ -25,6 +30,10 @@ export class DebugOverlay {
     this.element.dataset.performanceSnapshot = JSON.stringify({
       renderer: this.rendererInfo.backend,
       ...p,
+    });
+    this.element.dataset.controlSnapshot = JSON.stringify({
+      cameraMode: extras.cameraMode,
+      playerPosition: extras.playerPosition,
     });
     this.element.textContent = [
       `${this.rendererInfo.backend.toUpperCase()} · ${p.fps.toFixed(0)} fps · ${p.cpuFrameMs.toFixed(1)} ms CPU`,
