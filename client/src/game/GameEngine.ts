@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueGameplayRole, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type Placement2D, type VenueGameplayRole, type RecipeAction } from '@together/shared';
+import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueGameplayRole, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type Placement2D, type PlayerSnapshot, type VenueGameplayRole, type RecipeAction } from '@together/shared';
 import { Renderer } from './core/Renderer';
 import { GameLoop } from './core/GameLoop';
 import { InputManager } from './core/InputManager';
@@ -21,7 +21,7 @@ import { AdaptiveQualityController, type AdaptiveVisualBudget } from './performa
 import { DebugOverlay } from './debug/DebugOverlay';
 import { AudioZoneManager } from './audio/AudioZoneManager';
 import { RemotePlayerSystem } from './network/RemotePlayerSystem';
-import { GameSocketClient, type NetworkSession } from '../network/GameSocketClient';
+import { GameSocketClient, type NetworkSession, type RemoteProfile } from '../network/GameSocketClient';
 import { VoiceManager } from '../network/voice/VoiceManager';
 import type { VoiceMode } from '@together/shared';
 import { weatherAllowsKayak, type WeatherState } from './weather/weatherModel';
@@ -127,8 +127,8 @@ export class GameEngine {
     this.scene.add(this.remotePlayers.root);
     if (networkSession) {
       const callbacks = {
-        onPlayerSnapshot: (userId: string, snapshot: import('@together/shared').PlayerSnapshot) => this.remotePlayers.applySnapshot(userId, snapshot),
-        onPlayerProfile: (userId: string, profile: import('../network/GameSocketClient').RemoteProfile) => this.remotePlayers.setProfile(userId, profile.avatarConfig),
+        onPlayerSnapshot: (userId: string, snapshot: PlayerSnapshot) => this.remotePlayers.applySnapshot(userId, snapshot),
+        onPlayerProfile: (userId: string, profile: RemoteProfile) => this.remotePlayers.setProfile(userId, profile.avatarConfig),
         onPlayerLeave: (userId: string) => { this.remotePlayers.remove(userId); this.voice?.handleLeave(userId); },
         onVoiceJoin: (payload: Parameters<VoiceManager['handleJoin']>[0]) => { void this.voice?.handleJoin(payload).catch(reportVoiceError); },
         onVoiceOffer: (payload: Parameters<VoiceManager['handleOffer']>[0]) => { void this.voice?.handleOffer(payload).catch(reportVoiceError); },
@@ -599,8 +599,8 @@ function venueInteractionLabel(category: (typeof AMAYA_BAY_VENUES)[number]['cate
 }
 
 
-function jobActionToAvatarAction(action: string): Exclude<import('@together/shared').AvatarAction, 'idle' | 'walk' | 'jog'> {
-  const actions: Record<string, Exclude<import('@together/shared').AvatarAction, 'idle' | 'walk' | 'jog'>> = {
+function jobActionToAvatarAction(action: string): Exclude<AvatarAction, 'idle' | 'walk' | 'jog'> {
+  const actions: Record<string, Exclude<AvatarAction, 'idle' | 'walk' | 'jog'>> = {
     take_order: 'point', grind: 'stir', brew: 'pour', heat_milk: 'stir', serve: 'hand_over', wipe: 'wipe',
     carry_crate: 'carry', restock: 'place', bag: 'carry', clean_spill: 'wipe',
     collect: 'pick_up', load_carrier: 'place', ride: 'cycle', handover: 'hand_over',
@@ -610,8 +610,8 @@ function jobActionToAvatarAction(action: string): Exclude<import('@together/shar
   return actions[action] ?? 'point';
 }
 
-function cookingActionToAvatarAction(action: RecipeAction): Exclude<import('@together/shared').AvatarAction, 'idle' | 'walk' | 'jog'> {
-  const actions: Record<RecipeAction, Exclude<import('@together/shared').AvatarAction, 'idle' | 'walk' | 'jog'>> = {
+function cookingActionToAvatarAction(action: RecipeAction): Exclude<AvatarAction, 'idle' | 'walk' | 'jog'> {
+  const actions: Record<RecipeAction, Exclude<AvatarAction, 'idle' | 'walk' | 'jog'>> = {
     wash: 'wash', cut: 'cut', measure: 'place', boil: 'stir', fry: 'stir', stir: 'stir', pour: 'pour', plate: 'place', serve: 'hand_over',
   };
   return actions[action];
