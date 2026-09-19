@@ -2,23 +2,21 @@
 
 This file is intentionally explicit. The current build is a large coherent implementation/handoff, but it is not honest to call it finished release-quality V1.
 
-## Environment verification blockers
+## Verification coverage that is still missing
 
-The supplied execution environment has:
+Connected GitHub Actions now performs the authoritative Node 24 + frozen pnpm install, full typecheck/lint/test/content/repository/build gate, Chromium installation, and a real client+server playable-frame Playwright test. The verified baseline is recorded in `docs/VERIFICATION.md`.
 
-- Node 22.16.0, while the project requires Node 24 LTS;
-- no installed pnpm executable;
-- Corepack but no npm-registry DNS access, so it cannot fetch pnpm 12.4.1;
-- a copied Windows-era `node_modules` tree missing Linux Rollup native optional dependencies;
-- an older dependency set missing the declared ESLint TypeScript plugins, Express/Supertest declarations and current Drizzle package shape.
+Current verification limitations are therefore no longer dependency-install blockers. What remains unverified is primarily real-device/release acceptance:
 
-Consequences:
+- real WebGPU E2E across the supported desktop browser/GPU matrix;
+- Medium 1080p performance on target hardware;
+- full controller/UI matrix;
+- two-browser Couple and 2–6 player Friends soak/reconnect/latency testing;
+- production Supabase/RLS/private Memory storage;
+- production TURN voice traversal;
+- final production-art/audio/LOD/compression behavior.
 
-- `pnpm install`, `pnpm verify`, full Vite production build, full server TypeScript and Playwright cannot be honestly completed here;
-- no trustworthy `pnpm-lock.yaml` can be generated offline;
-- the first connected Node 24 machine must run `pnpm install`, commit the generated lockfile, then run the complete quality gate.
-
-The independent sandbox-safe suite is green; see `docs/VERIFICATION.md`.
+The CI browser gate intentionally uses explicit WebGL2 compatibility mode because GitHub's headless virtual GPU is not a trustworthy WebGPU target. Normal application startup remains WebGPU-first and has automated renderer-selection coverage.
 
 ## Visual/asset quality
 
@@ -31,8 +29,8 @@ The independent sandbox-safe suite is green; see `docs/VERIFICATION.md`.
 
 ## World/NPC simulation
 
-- Amaya Bay has the full semantic 900m-class layout, seven districts, 28 subareas and streamed chunk architecture, but final hand-authored road/terrain meshes are still development-level.
-- Ambient NPCs use deterministic local movement/update tiers; a fully baked per-chunk navmesh, batched path service and authored door/interior traversal network are not finished.
+- Amaya Bay has the full semantic 900m-class layout, seven districts, 28 subareas, streamed chunk architecture and a shared world-space road/path/promenade network, but final production-grade road/terrain art is still development-level.
+- Ambient NPCs use deterministic local movement/update tiers and two dynamic instanced render batches; a fully baked per-chunk navmesh, batched path service and authored door/interior traversal network are not finished.
 - Named NPC schedule/memory/dialogue state is implemented; animation/facial/gaze production polish is not.
 - Public other-household street presence is intentionally not V1-critical and is not implemented.
 
@@ -64,7 +62,7 @@ The independent sandbox-safe suite is green; see `docs/VERIFICATION.md`.
 
 ## Performance
 
-- Frame/draw-call/triangle/chunk metrics exist, streaming is implemented and quality tiers now change pixel ratio/shadows/far residency without changing gameplay collision.
+- Frame/draw-call/triangle/chunk metrics exist, streaming is implemented, structural dressing/vegetation are statically batched, ambient walkers are instanced, and quality tiers change pixel ratio/shadows/far residency without changing gameplay collision.
 - The PRD's 60fps Medium target on Iris Xe-class hardware has **not** been measured in this environment.
 - No authoritative GPU-memory benchmark has been run.
 - Final asset compression/LOD tuning cannot be completed until production assets exist.
@@ -73,7 +71,7 @@ The independent sandbox-safe suite is green; see `docs/VERIFICATION.md`.
 
 - FOV, head bob, reduced motion, UI scale, high-contrast prompts, subtitles, master volume, keyboard remapping and controller foundations exist.
 - Full controller usability across every UI panel needs real-device testing.
-- Browser/WebGPU/WebGL2 matrix testing remains outstanding.
+- The WebGL2 Chromium playable-frame CI gate is green, but the real WebGPU/WebGL2/browser matrix remains outstanding.
 
 ## Authentication/security/production infrastructure
 
