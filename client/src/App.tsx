@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import type { AvatarConfig, HouseholdType, StarterPropertyDefinition, VoteChoice } from '@together/shared';
 import { GameCanvas } from './ui/game/GameCanvas';
+import { authHeadersForIdentity, resolveClientIdentity, type ClientIdentity } from './auth/clientAuth';
 
 export type HouseholdMemberSummary = {
   userId: string;
@@ -35,7 +36,9 @@ const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
 };
 
 export default function App(): ReactElement {
-  const [userId] = useState(() => getOrCreateDevUserId());
+  const [identity, setIdentity] = useState<ClientIdentity | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const userId = identity?.userId ?? '';
   const [displayName, setDisplayName] = useState(() => localStorage.getItem('together:display-name') ?? '');
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(() => loadAvatarConfig());
   const [step, setStep] = useState<EntryStep>(() => displayName ? 'household' : 'identity');
@@ -45,18 +48,26 @@ export default function App(): ReactElement {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const authHeaders = useMemo(() => ({ 'Content-Type': 'application/json', 'x-dev-user-id': userId }), [userId]);
+  useEffect(() => {
+    let cancelled = false;
+    void resolveClientIdentity()
+      .then((resolved) => { if (!cancelled) setIdentity(resolved); })
+      .catch((error: unknown) => { if (!cancelled) setAuthError(errorMessage(error)); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const authHeaders = identity ? authHeadersForIdentity(identity, true) : { 'Content-Type': 'application/json' };
 
   const refreshHousehold = useCallback(async (id = household?.id) => {
-    if (!id) return;
+    if (!id || !identity) return;
     setBusy(true);
     try {
-      const response = await fetch(`/api/households/${id}`, { headers: { 'x-dev-user-id': userId } });
+      const response = await fetch(`/api/households/${id}`, { headers: authHeadersForIdentity(identity) });
       const data = await readJson<HouseholdSummary>(response);
       setHousehold(data);
       localStorage.setItem('together:household-id', data.id);
       if (data.propertyId) setStep('home');
-      const propertyResponse = await fetch(`/api/households/${id}/properties`, { headers: { 'x-dev-user-id': userId } });
+      const propertyResponse = await fetch(`/api/households/${id}/properties`, { headers: authHeadersForIdentity(identity) });
       const propertyData = await readJson<PropertyPayload>(propertyResponse);
       setProperties(propertyData.properties);
       setPropertyVote(propertyData.vote);
@@ -68,7 +79,7 @@ export default function App(): ReactElement {
     } finally {
       setBusy(false);
     }
-  }, [household?.id, userId]);
+  }, [household?.id, identity]);
 
   useEffect(() => {
     if (!displayName || household) return;
@@ -82,6 +93,9 @@ export default function App(): ReactElement {
       });
   }, [displayName, household, refreshHousehold]);
 
+  if (authError) return <EntryShell eyebrow="Together · Amaya Bay" title="Sign-in unavailable" copy={authError}><p className="status-copy error-copy">Check the client authentication configuration and reload.</p></EntryShell>;
+  if (!identity) return <EntryShell eyebrow="Together · Amaya Bay" title="Arriving in Amaya Bay" copy="Starting your private session…"><p className="status-copy">Connecting securely…</p></EntryShell>;
+
   const startSoloExplorer = async () => {
     setBusy(true); setMessage(null);
     try {
@@ -94,7 +108,7 @@ export default function App(): ReactElement {
   const isSoloExplorer = household?.hiddenState?.soloExplorer === true;
 
   if (step === 'game' && household) {
-    return <GameCanvas networkSession={{ userId, householdId: household.id }} avatarConfig={avatarConfig} {...(household.propertyId ? { propertyId: household.propertyId } : {})} onPropertyChanged={(propertyId) => setHousehold((current) => current ? { ...current, propertyId } : current)} />;
+    return <GameCanvas networkSession={{ userId, householdId: household.id, ...(identity.accessToken ? { accessToken: identity.accessToken } : {}) }} avatarConfig={avatarConfig} {...(household.propertyId ? { propertyId: household.propertyId } : {})} onPropertyChanged={(propertyId) => setHousehold((current) => current ? { ...current, propertyId } : current)} />;
   }
 
   if (step === 'identity') {
@@ -278,10 +292,3 @@ async function readJson<T>(response: Response): Promise<T> {
 }
 
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'Something went wrong'; }
-function getOrCreateDevUserId(): string {
-  const existing = localStorage.getItem('together:dev-user-id');
-  if (existing) return existing;
-  const id = crypto.randomUUID();
-  localStorage.setItem('together:dev-user-id', id);
-  return id;
-}

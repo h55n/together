@@ -3,6 +3,7 @@ import { DEFAULT_GAME_SETTINGS, normalizeGameSettings, resolveStartupGameSetting
 import { GameEngine } from '../../game/GameEngine';
 import type { WeatherState } from '../../game/weather/weatherModel';
 import type { NetworkSession } from '../../network/GameSocketClient';
+import { authHeadersForIdentity } from '../../auth/clientAuth';
 import { MemoryBook, type MemoryView } from './MemoryBook';
 import { LifePanel, type LifePanelData } from './LifePanel';
 import { CityMap } from './CityMap';
@@ -79,7 +80,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const [weather, setWeatherState] = useState<WeatherState>('clear');
   const settingsRef = useRef(settings);
 
-  const authHeaders = useCallback((): Record<string, string> => networkSession ? { 'x-dev-user-id': networkSession.userId } : {}, [networkSession]);
+  const authHeaders = useCallback((): Record<string, string> => networkSession ? authHeadersForIdentity(networkSession) : {}, [networkSession]);
 
   const refreshHomeState = useCallback(async (): Promise<HomeStateView | null> => {
     if (!networkSession) return null;
