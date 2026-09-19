@@ -16,7 +16,7 @@ export class MemoryService {
   constructor(private readonly repository: GameRepository) {}
 
   async create(householdId: string, userId: string, input: CreateMemoryInput): Promise<MemoryRecord> {
-    await this.authorize(householdId, userId);
+    const household = await this.authorize(householdId, userId);
     if (!input.idempotencyKey || input.idempotencyKey.length < 8) throw new Error('Invalid idempotency key');
     const existing = await this.repository.getMemoryByIdempotencyKey(input.idempotencyKey);
     if (existing) {
@@ -27,6 +27,13 @@ export class MemoryService {
     if (!input.caption.trim() || input.caption.length > 240) throw new Error('Invalid memory caption');
     if (!input.locationId || input.locationId.length > 120) throw new Error('Invalid memory location');
     if (input.participants.length > 6) throw new Error('Too many memory participants');
+    const participants = [...new Set(input.participants)];
+    if (!participants.length) throw new Error('Memory must include at least one participant');
+    if (!participants.includes(userId)) throw new Error('Memory must include the capturing household member');
+    const activeMemberIds = new Set(household.members.filter((member) => member.membershipState === 'active').map((member) => member.userId));
+    if (participants.some((participantId) => !activeMemberIds.has(participantId))) {
+      throw new Error('Memory participants must be active household members');
+    }
 
     const memory: MemoryRecord = {
       id: crypto.randomUUID(),
@@ -37,7 +44,7 @@ export class MemoryService {
       caption: input.caption.trim(),
       locationId: input.locationId,
       weather: input.weather,
-      participants: [...new Set(input.participants)],
+      participants,
       ...(input.eventId ? { eventId: input.eventId } : {}),
       metadata: structuredClone(input.metadata ?? {}),
       createdAt: new Date().toISOString(),

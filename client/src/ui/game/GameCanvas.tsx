@@ -225,13 +225,18 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     const engine = engineRef.current;
     if (!engine || !networkSession || captureBusyRef.current) return;
     const context = engine.getMemoryContext();
+    const participantFrame = engine.getMemoryParticipantContext();
+    const participants = [networkSession.userId, ...participantFrame.visibleUserIds];
+    const participantsExpected = participantFrame.onlineUserIds.length > 0 ? 2 : 1;
+    const participantsVisible = Math.min(participantsExpected, participants.length);
+    const occlusionRatio = participantFrame.onlineUserIds.length > 0 && participantFrame.visibleUserIds.length === 0 ? 0.28 : 0.02;
     const secondsSinceAutomaticCapture = Math.max(0, (performance.now() - lastAutomaticCaptureRef.current) / 1000);
     const scenic = /Bay|Park|Hill|Garden|Cove|Sunset/i.test(context.locationId) ? 0.95 : 0.62;
     const minute = context.gameMinutes % 1440;
     const lighting = (minute >= 16.5 * 60 && minute <= 19.5 * 60) || (minute >= 5.5 * 60 && minute <= 7.5 * 60) ? 0.95 : 0.72;
     const score = scoreMemoryCapture({
-      participantsVisible: 1, participantsExpected: 1, occlusionRatio: 0.02,
-      composition: 0.82, storyRelevance: 0.86, scenicValue: scenic, lightingQuality: lighting,
+      participantsVisible, participantsExpected, occlusionRatio,
+      composition: participantFrame.composition, storyRelevance: 0.86, scenicValue: scenic, lightingQuality: lighting,
       secondsSinceAutomaticCapture,
     });
     if (!shouldAutoCapture(score, secondsSinceAutomaticCapture)) return;
@@ -251,8 +256,15 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
         body: JSON.stringify({
           idempotencyKey: `automatic:${tag}:${Math.floor(context.gameMinutes)}:${crypto.randomUUID()}`,
           type: 'automatic', screenshotPath: image.screenshotPath, caption,
-          locationId: context.locationId, weather: context.weather, participants: [networkSession.userId],
-          metadata: { gameMinutes: context.gameMinutes, source: 'smart-capture', tag, score },
+          locationId: context.locationId, weather: context.weather, participants,
+          metadata: {
+            gameMinutes: context.gameMinutes,
+            source: 'smart-capture',
+            tag,
+            score,
+            onlineHouseholdMembers: 1 + participantFrame.onlineUserIds.length,
+            framedHouseholdMembers: participants.length,
+          },
         }),
       });
       if (!memoryResponse.ok) throw new Error(`Automatic Memory creation failed (${memoryResponse.status})`);

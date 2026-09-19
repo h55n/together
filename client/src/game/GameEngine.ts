@@ -30,6 +30,7 @@ import { buildPropertyInterior } from './world/PropertyInterior';
 import { MicroActionRuntime } from './interaction/MicroActionRuntime';
 import { HomeDecorationRenderer, type HomeObjectView } from './world/HomeDecorationRenderer';
 import { namedNpcs as namedNpcDefinitions } from '@together/content';
+import { assessMemoryParticipantFraming } from './memory/captureFraming';
 
 export type GameEngineOptions = {
   canvas: HTMLCanvasElement;
@@ -332,6 +333,16 @@ export class GameEngine {
       weather: this.weather.state,
       gameMinutes: this.gameMinutes,
     };
+  }
+
+  getMemoryParticipantContext(): { onlineUserIds: string[]; visibleUserIds: string[]; composition: number } {
+    const onlineUserIds = this.remotePlayers.userIds();
+    const participants = onlineUserIds.flatMap((userId) => {
+      const position = this.remotePlayers.getPosition(userId);
+      return position ? [{ userId, position: { x: position.x, y: position.y, z: position.z } }] : [];
+    });
+    const framing = assessMemoryParticipantFraming(this.camera.camera, participants);
+    return { onlineUserIds, visibleUserIds: framing.visibleUserIds, composition: framing.composition };
   }
 
   async captureFrame(quality = 0.86): Promise<Blob> {
