@@ -21,6 +21,7 @@ function engineStub() {
     clearHomeDecorationPreview: vi.fn(),
     getPlayerPosition: vi.fn(() => ({ x: 0, y: 1.2, z: 0 })),
     getMemoryContext: vi.fn(() => ({ locationId: 'Bay Steps', weather: 'clear', gameMinutes: 18 * 60 })),
+    getMemoryParticipantContext: vi.fn(() => ({ onlineUserIds: [], visibleUserIds: [], composition: 0.82 })),
     captureFrame: vi.fn(async () => new Blob(['frame'], { type: 'image/jpeg' })),
   } as unknown as GameEngine;
 }
