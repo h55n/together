@@ -9,6 +9,8 @@ import type { CookingSessionRecord, GameRepository, HouseholdRecord } from '../d
 import type { InventoryService } from './InventoryService.js';
 
 export class CookingService {
+  private readonly sessionMutationTails = new Map<string, Promise<void>>();
+
   constructor(
     private readonly repository: GameRepository,
     private readonly inventory: InventoryService,
@@ -47,21 +49,43 @@ export class CookingService {
   }
 
   async claimStation(householdId: string, userId: string, sessionId: string, station: string): Promise<CookingSessionRecord> {
-    const session = await this.sessionForMember(householdId, userId, sessionId);
-    session.state = claimCookingStation(session.state, userId, station);
-    return this.save(session);
+    return this.withSessionMutation(sessionId, async () => {
+      const session = await this.sessionForMember(householdId, userId, sessionId);
+      session.state = claimCookingStation(session.state, userId, station);
+      return this.save(session);
+    });
   }
 
   async releaseStation(householdId: string, userId: string, sessionId: string, station: string): Promise<CookingSessionRecord> {
-    const session = await this.sessionForMember(householdId, userId, sessionId);
-    session.state = releaseCookingStation(session.state, userId, station);
-    return this.save(session);
+    return this.withSessionMutation(sessionId, async () => {
+      const session = await this.sessionForMember(householdId, userId, sessionId);
+      session.state = releaseCookingStation(session.state, userId, station);
+      return this.save(session);
+    });
   }
 
   async completeStep(householdId: string, userId: string, sessionId: string, stepId: string, mistake: boolean): Promise<CookingSessionRecord> {
-    const session = await this.sessionForMember(householdId, userId, sessionId);
-    session.state = completeCookingStep(this.recipe(session.recipeId), session.state, userId, stepId, mistake);
-    return this.save(session);
+    return this.withSessionMutation(sessionId, async () => {
+      const session = await this.sessionForMember(householdId, userId, sessionId);
+      session.state = completeCookingStep(this.recipe(session.recipeId), session.state, userId, stepId, mistake);
+      return this.save(session);
+    });
+  }
+
+  private async withSessionMutation<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.sessionMutationTails.get(sessionId) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const tail = previous.catch(() => undefined).then(() => gate);
+    this.sessionMutationTails.set(sessionId, tail);
+
+    await previous.catch(() => undefined);
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.sessionMutationTails.get(sessionId) === tail) this.sessionMutationTails.delete(sessionId);
+    }
   }
 
   private async save(session: CookingSessionRecord): Promise<CookingSessionRecord> {
