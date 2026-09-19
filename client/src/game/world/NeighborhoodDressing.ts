@@ -65,66 +65,130 @@ export function addChunkDressing(
 function createLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, detailed: boolean): THREE.Group {
   const group = new THREE.Group();
   group.name = `building:${lot.id}:${lot.style}`;
-  const body = box(lot.width, lot.height, lot.depth, materials.get(STYLE_MATERIALS[lot.style]));
+
+  const wallMaterial = materials.get(STYLE_MATERIALS[lot.style]);
+  const body = box(lot.width, lot.height, lot.depth, wallMaterial);
   body.position.y = lot.height / 2;
   body.castShadow = detailed;
   body.receiveShadow = true;
   group.add(body);
 
-  const plinth = box(lot.width + 0.4, 0.35, lot.depth + 0.45, materials.get('stone'));
-  plinth.position.y = 0.18;
+  const plinth = box(lot.width + 0.5, 0.38, lot.depth + 0.5, materials.get('stone'));
+  plinth.position.y = 0.19;
   group.add(plinth);
-  const parapet = box(lot.width + 0.25, 0.32, lot.depth + 0.25, materials.get('stone'));
-  parapet.position.y = lot.height + 0.16;
+
+  const parapetHeight = lot.style === 'waterfront_hut' || lot.style === 'park_pavilion' ? 0.18 : 0.42;
+  const parapet = box(lot.width + 0.28, parapetHeight, lot.depth + 0.28, materials.get('stone'));
+  parapet.position.y = lot.height + parapetHeight / 2;
   group.add(parapet);
 
   if (!detailed) return group;
 
+  const frontZ = -lot.depth / 2 - 0.02;
+  const rearZ = lot.depth / 2 + 0.02;
   const floors = Math.max(1, Math.floor(lot.height / 3.05));
-  const faceX = lot.width / 2 + 0.015;
-  const columns = Math.max(2, Math.floor(lot.depth / 4.5));
+  const frontColumns = Math.max(2, Math.floor(lot.width / 3.8));
+
+  // Recessed entry gives every procedural building a readable public-facing front.
+  const entranceWidth = Math.min(1.5, Math.max(1.05, lot.width * 0.14));
+  const entrance = box(entranceWidth, 2.25, 0.14, materials.get('wood'));
+  entrance.position.set(lot.width * 0.28, 1.13, frontZ - 0.03);
+  group.add(entrance);
+  const entranceCanopy = box(Math.min(3.2, lot.width * 0.34), 0.14, 1.0, materials.get('stone'));
+  entranceCanopy.position.set(lot.width * 0.28, 2.42, frontZ - 0.45);
+  group.add(entranceCanopy);
+
   for (let floor = 0; floor < floors; floor += 1) {
     const y = 1.55 + floor * 3.0;
-    for (let col = 0; col < columns; col += 1) {
-      const z = -lot.depth / 2 + ((col + 0.5) / columns) * lot.depth;
-      const window = box(0.08, 1.25, Math.min(2.2, lot.depth / columns - 0.45), materials.get('glass'));
-      window.position.set(faceX, y, z);
+    for (let col = 0; col < frontColumns; col += 1) {
+      const x = -lot.width / 2 + ((col + 0.5) / frontColumns) * lot.width;
+      if (floor === 0 && Math.abs(x - lot.width * 0.28) < entranceWidth) continue;
+      const windowWidth = Math.min(1.75, lot.width / frontColumns - 0.42);
+      const window = box(windowWidth, 1.25, 0.09, materials.get('glass'));
+      window.position.set(x, y, frontZ);
       window.castShadow = false;
       group.add(window);
-      const sill = box(0.42, 0.12, Math.min(2.55, lot.depth / columns - 0.2), materials.get('concrete'));
-      sill.position.set(faceX + 0.12, y - 0.7, z);
+      const sill = box(windowWidth + 0.28, 0.12, 0.35, materials.get('concrete'));
+      sill.position.set(x, y - 0.72, frontZ - 0.12);
       group.add(sill);
+
+      if (floor > 0 && col % 2 === 0) {
+        const rearWindow = box(windowWidth * 0.86, 1.12, 0.08, materials.get('glass'));
+        rearWindow.position.set(x, y, rearZ);
+        group.add(rearWindow);
+      }
     }
   }
 
-  for (let i = 0; i < lot.balconyCount; i += 1) {
-    const y = 3.0 + i * 2.9;
-    if (y > lot.height - 0.7) break;
-    const balcony = box(1.0, 0.18, Math.min(4.8, lot.depth * 0.5), materials.get('concrete'));
-    balcony.position.set(faceX + 0.42, y, 0);
-    group.add(balcony);
-    const rail = box(0.08, 0.72, Math.min(4.8, lot.depth * 0.5), materials.get('metalDark'));
-    rail.position.set(faceX + 0.9, y + 0.38, 0);
-    group.add(rail);
+  const sideRows = Math.max(1, Math.floor(lot.depth / 5.4));
+  for (const side of [-1, 1] as const) {
+    for (let row = 0; row < sideRows; row += 1) {
+      const z = -lot.depth * 0.28 + row * Math.min(4.6, lot.depth / Math.max(1, sideRows));
+      const sideWindow = box(0.08, 1.05, 1.45, materials.get('glass'));
+      sideWindow.position.set(side * (lot.width / 2 + 0.02), Math.min(lot.height - 1.2, 2.2), z);
+      group.add(sideWindow);
+    }
+  }
+
+  const residentialBalconies = lot.style === 'mogra_balcony' || lot.style === 'pg_veranda' || lot.style === 'rain_tree_old_home';
+  if (residentialBalconies) {
+    for (let i = 0; i < Math.max(1, lot.balconyCount); i += 1) {
+      const y = 3.0 + i * 2.9;
+      if (y > lot.height - 0.7) break;
+      const balconyWidth = Math.min(lot.width * 0.64, 6.8);
+      const balcony = box(balconyWidth, 0.18, 1.25, materials.get('concrete'));
+      balcony.position.set(-lot.width * 0.08, y, frontZ - 0.6);
+      group.add(balcony);
+      const rail = box(balconyWidth, 0.72, 0.08, materials.get('metalDark'));
+      rail.position.set(-lot.width * 0.08, y + 0.38, frontZ - 1.18);
+      group.add(rail);
+      for (const x of [-balconyWidth / 2 + 0.18, balconyWidth / 2 - 0.18]) {
+        const sideRail = box(0.08, 0.72, 1.12, materials.get('metalDark'));
+        sideRail.position.set(x - lot.width * 0.08, y + 0.38, frontZ - 0.6);
+        group.add(sideRail);
+      }
+    }
   }
 
   if (lot.style === 'lantern_shopfront' || lot.style === 'lantern_mixed_use') {
-    const shopWindow = box(0.09, 2.25, Math.min(4.8, lot.depth * 0.55), materials.get('glass'));
-    shopWindow.position.set(faceX + 0.03, 1.25, 0);
+    const shopWindow = box(lot.width * 0.62, 2.3, 0.1, materials.get('glass'));
+    shopWindow.position.set(-lot.width * 0.1, 1.28, frontZ - 0.03);
     group.add(shopWindow);
-    const awning = box(1.35, 0.14, Math.min(5.2, lot.depth * 0.6), materials.get(lot.style === 'lantern_shopfront' ? 'sagePlaster' : 'terracottaPlaster'));
-    awning.position.set(faceX + 0.63, 2.65, 0);
-    awning.rotation.z = -0.08;
+    const awning = box(lot.width * 0.74, 0.14, 1.45, materials.get(lot.style === 'lantern_shopfront' ? 'sagePlaster' : 'terracottaPlaster'));
+    awning.position.set(-lot.width * 0.08, 2.72, frontZ - 0.68);
+    awning.rotation.x = -0.08;
     group.add(awning);
+    const sign = box(Math.min(5.8, lot.width * 0.58), 0.55, 0.12, materials.get('curtainWarm'));
+    sign.position.set(-lot.width * 0.06, 3.35, frontZ - 0.12);
+    group.add(sign);
   }
 
-  // Roof/service silhouette: intentionally small but breaks rectangular massing.
-  const service = box(Math.min(2.5, lot.width * 0.3), 1.1, Math.min(2.4, lot.depth * 0.25), materials.get('concrete'));
-  service.position.set(-lot.width * 0.18, lot.height + 0.55, lot.depth * 0.16);
+  if (lot.style === 'civic_modern') {
+    for (const x of [-lot.width * 0.3, 0, lot.width * 0.3]) {
+      const fin = box(0.18, Math.min(3.8, lot.height * 0.55), 0.55, materials.get('stone'));
+      fin.position.set(x, Math.min(lot.height * 0.52, 3.2), frontZ - 0.24);
+      group.add(fin);
+    }
+  }
+
+  if (lot.style === 'hill_terrace' || lot.style === 'park_pavilion') {
+    const roof = box(lot.width + 1.1, 0.22, lot.depth + 1.1, materials.get('wood'));
+    roof.position.y = lot.height + 0.28;
+    group.add(roof);
+  }
+
+  // Rooftop/service clutter breaks the generated-box silhouette without adding gameplay collision.
+  const service = box(Math.min(2.8, lot.width * 0.28), 1.15, Math.min(2.6, lot.depth * 0.26), materials.get('concrete'));
+  service.position.set(-lot.width * 0.18, lot.height + 0.58, lot.depth * 0.14);
   group.add(service);
+  if (lot.style !== 'waterfront_hut' && lot.style !== 'park_pavilion') {
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 1.0, 10), materials.get('metalDark'));
+    tank.position.set(lot.width * 0.22, lot.height + 0.62, -lot.depth * 0.14);
+    group.add(tank);
+  }
+
   return group;
 }
-
 function createHorizonVolume(lot: BuildingLot, materials: MaterialLibrary): THREE.Group {
   const group = new THREE.Group();
   const body = box(lot.width, lot.height * 0.9, lot.depth, materials.get(STYLE_MATERIALS[lot.style]));
