@@ -22,6 +22,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
+  const engineCreateChainRef = useRef<Promise<void>>(Promise.resolve());
   const homeVersionRef = useRef(0);
   const lastAutomaticCaptureRef = useRef(-300_000);
   const captureBusyRef = useRef(false);
@@ -700,6 +701,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
   useEffect(() => {
     let cancelled = false;
+    let ownedEngine: GameEngine | null = null;
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
@@ -710,40 +712,65 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     const requestedRenderer = new URLSearchParams(window.location.search).get('renderer');
     const forceRendererBackend = requestedRenderer === 'webgl2' ? 'webgl2' as const : undefined;
 
-    void GameEngine.create({
-      canvas,
-      container,
-      initialWeather: 'clear',
-      initialGameMinutes: 17 * 60 + 20,
-      ...(networkSession ? { networkSession } : {}),
-      onConnectionState: setConnection,
-      onNetworkError: setError,
-      onHomeStateChanged: () => void refreshHomeState().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))),
-      onInteractionPrompt: setInteractionPrompt,
-      onLocationChange: setLocation,
-      onDomesticAction: (action, interactionId) => void persistDomesticAction(action, interactionId),
-      onVoiceState: setVoiceState,
-      onMoment: (message) => { setToast(message); window.setTimeout(() => setToast(null), 2600); },
-      onVenueInteraction: (venue) => setVenueSession(venue),
-      onKitchenInteraction: openKitchen,
-      onAutoStand: () => { const position = engineRef.current?.getPlayerPosition(); if (position) setAutoFrom({ x: position.x, z: position.z }); setAutoOpen(true); setAutoMessage(null); },
-      onMemoryOpportunity: (tag) => void captureAutomaticMemory(tag),
-      onActivityInteraction: (activityId) => void openActivity(activityId),
-      onNpcInteraction: (nextNpcId) => void openNpc(nextNpcId),
-      onHomeGrowthInteraction: openHomeGrowth,
-      ...(avatarConfig ? { avatarConfig } : {}),
-      ...(propertyId ? { propertyId } : {}),
-      ...(forceRendererBackend ? { forceRendererBackend } : {}),
-    }).then((engine) => {
-      if (cancelled) { engine.dispose(); return; }
-      engineRef.current = engine;
-      void refreshHomeState().catch(() => undefined);
-      engine.applySettings(settingsRef.current);
-      engine.start();
-      setReady(true);
-    }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
+    const createTask = engineCreateChainRef.current.then(async () => {
+      // React StrictMode replays effects in development. Deferring creation onto this
+      // serialized chain lets the replay cleanup cancel the stale effect before it
+      // initializes a second Rapier/WASM world.
+      await Promise.resolve();
+      if (cancelled) return;
 
-    return () => { cancelled = true; engineRef.current?.dispose(); engineRef.current = null; };
+      try {
+        const engine = await GameEngine.create({
+          canvas,
+          container,
+          initialWeather: 'clear',
+          initialGameMinutes: 17 * 60 + 20,
+          ...(networkSession ? { networkSession } : {}),
+          onConnectionState: setConnection,
+          onNetworkError: setError,
+          onHomeStateChanged: () => void refreshHomeState().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))),
+          onInteractionPrompt: setInteractionPrompt,
+          onLocationChange: setLocation,
+          onDomesticAction: (action, interactionId) => void persistDomesticAction(action, interactionId),
+          onVoiceState: setVoiceState,
+          onMoment: (message) => { setToast(message); window.setTimeout(() => setToast(null), 2600); },
+          onVenueInteraction: (venue) => setVenueSession(venue),
+          onKitchenInteraction: openKitchen,
+          onAutoStand: () => { const position = engineRef.current?.getPlayerPosition(); if (position) setAutoFrom({ x: position.x, z: position.z }); setAutoOpen(true); setAutoMessage(null); },
+          onMemoryOpportunity: (tag) => void captureAutomaticMemory(tag),
+          onActivityInteraction: (activityId) => void openActivity(activityId),
+          onNpcInteraction: (nextNpcId) => void openNpc(nextNpcId),
+          onHomeGrowthInteraction: openHomeGrowth,
+          ...(avatarConfig ? { avatarConfig } : {}),
+          ...(propertyId ? { propertyId } : {}),
+          ...(forceRendererBackend ? { forceRendererBackend } : {}),
+        });
+
+        if (cancelled) {
+          engine.dispose();
+          return;
+        }
+
+        ownedEngine = engine;
+        engineRef.current = engine;
+        void refreshHomeState().catch(() => undefined);
+        engine.applySettings(settingsRef.current);
+        engine.start();
+        setReady(true);
+      } catch (cause) {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    });
+
+    engineCreateChainRef.current = createTask.catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+      if (!ownedEngine) return;
+      ownedEngine.dispose();
+      if (engineRef.current === ownedEngine) engineRef.current = null;
+      ownedEngine = null;
+    };
   }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, propertyId, refreshHomeState, refreshMemories]);
 
   useEffect(() => {
