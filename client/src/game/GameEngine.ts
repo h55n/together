@@ -520,6 +520,10 @@ export class GameEngine {
       gameTime: formatGameTime(this.gameMinutes),
       cameraMode: this.camera.mode,
       playerPosition,
+      remotePlayers: this.remotePlayers.userIds().flatMap((userId) => {
+        const position = this.remotePlayers.getPosition(userId);
+        return position ? [{ userId, position: { x: position.x, y: position.y, z: position.z } }] : [];
+      }),
     });
   }
 
