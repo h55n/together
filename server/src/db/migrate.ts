@@ -53,7 +53,8 @@ export async function runMigrations(): Promise<void> {
       process.stdout.write('done\n');
     }
   } finally {
-    try { await client.query(`SELECT pg_advisory_unlock(hashtext('together_schema_migrations'))`); } catch {}
+    try { await client.query(`SELECT pg_advisory_unlock(hashtext('together_schema_migrations'))`); }
+    catch { /* Connection teardown still closes the session-scoped advisory lock. */ }
     await client.end();
   }
 }
