@@ -60,7 +60,7 @@ const secretPatterns = [
   [/xox[baprs]-[A-Za-z0-9-]{20,}/g, 'Slack token'],
   [/AKIA[0-9A-Z]{16}/g, 'AWS access key id'],
   [/service_role\s*[=:]\s*['"][A-Za-z0-9._-]{20,}/gi, 'Supabase service-role value'],
-  [/(?:SUPABASE_SERVICE_ROLE_KEY|TURN_SHARED_SECRET)\s*=\s*[^\s#][^\r\n]{15,}/g, 'sensitive environment value'],
+  [/(?:SUPABASE_SERVICE_ROLE_KEY|TURN_SHARED_SECRET)[ \t]*=[ \t]*[^\s#][^\r\n]{15,}/g, 'sensitive environment value'],
   [/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g, 'private key'],
 ];
 
