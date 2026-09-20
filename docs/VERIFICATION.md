@@ -5,8 +5,8 @@
 As of **2026-09-20**, the recovery branch has a fully green connected CI baseline after the production-readiness/auth/network hardening pass:
 
 - Branch: `fix/audit-recovery-2026-09-17`
-- Verified HEAD: `4399928372709b5dfbd7c97ea4e32973c44876b1`
-- GitHub Actions run: `35489863220`
+- Verified HEAD: `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073`
+- GitHub Actions run: `35490206098`
 - Result: **SUCCESS**
 
 CI runs on Node 24 and installs the committed dependency graph with:
@@ -35,7 +35,7 @@ All steps above passed on the verified HEAD.
 
 The Playwright gate boots the real client and server with documented local-development auth and runs three Chromium acceptance tests. It enters solo Amaya Bay through the player-facing onboarding flow, waits for a playable engine, rejects browser runtime errors, samples the rendered canvas to reject an empty/flat frame, verifies W changes the live Rapier player position, and verifies V switches first-person → third-person.
 
-It also runs a real two-browser Couple flow through identity, household creation/join, shared property selection, world entry and replicated movement; and a six-browser Friends flow through six-member joining, majority property selection, five remote avatars visible to the host, replicated movement and one client reload/reconnect. The complete browser suite passed 3/3 tests in 3.3 minutes on run `35489863220`.
+It also runs a real two-browser Couple flow through identity, household creation/join, shared property selection, world entry and replicated movement; and a six-browser Friends flow through six-member joining, majority property selection, five remote avatars visible to the host, replicated movement and one client reload/reconnect. The complete browser suite passed 3/3 tests in 4.6 minutes on run `35490206098`.
 
 GitHub's headless runner uses the explicit `?renderer=webgl2` compatibility mode for this E2E because its virtual GPU is not a reliable WebGPU target. Normal application startup remains WebGPU-first and is protected by the `GameCanvas` lifecycle regression suite.
 
@@ -115,7 +115,7 @@ The green current head additionally verifies:
 - production HTTP fixed-window throttling and graceful shutdown wiring;
 - 12 ordered SQL migrations, private Memory Storage bucket bootstrap and migration-contract coverage;
 - server migration runner build output with advisory locking/checksums;
-- 10/10 server test files / 23 tests;
+- 11/11 server test files / 25 tests;
 - 28/28 client test files / 80 tests;
 - 195 pure verification tests;
 - repository integrity reporting 12 ordered migrations and no committed-secret heuristic hit.

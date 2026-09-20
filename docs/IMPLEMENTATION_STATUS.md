@@ -4,7 +4,7 @@ Status is evaluated against the strict exit criteria in `docs/PRD.md` / `docs/BU
 
 ## Current verification baseline
 
-Verified on branch `fix/audit-recovery-2026-09-17` at `4399928372709b5dfbd7c97ea4e32973c44876b1` by GitHub Actions run `35489863220`:
+Verified on branch `fix/audit-recovery-2026-09-17` at `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073` by GitHub Actions run `35490206098`:
 
 - frozen pnpm install on Node 24;
 - full workspace TypeScript;

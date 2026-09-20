@@ -4,7 +4,7 @@ Continue `h55n/together` from the exact remote state after the 2026-09-20 produc
 
 Repository: `https://github.com/h55n/together`
 Canonical working branch: `fix/audit-recovery-2026-09-17`
-Latest fully verified runtime floor: `4399928372709b5dfbd7c97ea4e32973c44876b1` (GitHub Actions run `35489863220`)
+Latest fully verified runtime floor: `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073` (GitHub Actions run `35490206098`)
 
 Run:
 
@@ -17,7 +17,7 @@ git rev-parse HEAD
 git log --oneline --decorate -15
 ```
 
-The branch you pull must contain commit `4399928372709b5dfbd7c97ea4e32973c44876b1` or a descendant. If your local branch has unrelated uncommitted work, preserve it safely before switching; do not overwrite it. Do not reset the remote branch backwards.
+The branch you pull must contain commit `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073` or a descendant. If your local branch has unrelated uncommitted work, preserve it safely before switching; do not overwrite it. Do not reset the remote branch backwards.
 
 ## 2. Read the authoritative context in this order
 
@@ -121,7 +121,7 @@ Relevant files:
 
 The historical recovery implementation commit `f27efcab7a491d4c23e58b48be131e83d9916400` established the world/camera recovery floor.
 
-The current connected baseline is much newer: runtime HEAD `4399928372709b5dfbd7c97ea4e32973c44876b1`, GitHub Actions run `35489863220`, passes frozen install, typecheck, lint, all tests, content/repository validation, production build and 3/3 Playwright tests. Browser acceptance includes solo movement/camera, a two-context Couple household flow, and a six-context Friends flow with movement replication and reconnect.
+The current connected baseline is much newer: runtime HEAD `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073`, GitHub Actions run `35490206098`, passes frozen install, typecheck, lint, all tests, content/repository validation, production build and 3/3 Playwright tests. Browser acceptance includes solo movement/camera, a two-context Couple household flow, and a six-context Friends flow with movement replication and reconnect.
 
 Production hardening already present and not to be redone blindly: Supabase anonymous client sessions/Bearer auth, token refresh, split-origin REST routing, production CORS/fail-fast readiness, health/readiness probes, request IDs/structured logs, HTTP throttling, graceful shutdown, 12 migrations + deterministic migration runner/private Memory bucket bootstrap, and authenticated short-lived TURN credentials with the long-lived secret kept server-side.
 

@@ -73,7 +73,7 @@ pnpm build
 pnpm test:e2e
 ```
 
-As of 2026-09-20, runtime HEAD `4399928372709b5dfbd7c97ea4e32973c44876b1` passes the complete GitHub Actions gate in run `35489863220`, including solo playable-frame/movement/camera acceptance, two-browser Couple household movement replication, and a six-browser Friends movement + reconnect acceptance in explicit WebGL2 compatibility mode. Normal product startup remains WebGPU-first.
+As of 2026-09-20, runtime HEAD `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073` passes the complete GitHub Actions gate in run `35490206098`, including solo playable-frame/movement/camera acceptance, two-browser Couple household movement replication, and a six-browser Friends movement + reconnect acceptance in explicit WebGL2 compatibility mode. Normal product startup remains WebGPU-first.
 
 `node tools/verify-sandbox.mjs` remains available as a reduced offline diagnostic, but it is no longer the authoritative verification record. See `docs/VERIFICATION.md`.
 

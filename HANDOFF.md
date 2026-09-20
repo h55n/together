@@ -14,8 +14,8 @@ The product is about the feeling of living a life with someone. It is not a comb
 
 - Project: Together V1 — Amaya Bay
 - Active recovery branch: `fix/audit-recovery-2026-09-17`
-- Latest fully verified runtime HEAD: `4399928372709b5dfbd7c97ea4e32973c44876b1`
-- Verified GitHub Actions run: `35489863220` — **success**
+- Latest fully verified runtime HEAD: `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073`
+- Verified GitHub Actions run: `35490206098` — **success**
 - Documentation-only commits may descend from that runtime baseline; use `git rev-parse HEAD` for the current documentation SHA.
 - Historical imported-prototype commit: `5c4730e`
 - Implementation-plan commit: `bc415e8`
@@ -117,7 +117,7 @@ The active legacy JavaScript/JSX prototype runtime was removed. Git history pres
 
 ## Verified
 
-The current authoritative connected baseline is GitHub Actions run `35489863220` on runtime HEAD `4399928372709b5dfbd7c97ea4e32973c44876b1`.
+The current authoritative connected baseline is GitHub Actions run `35490206098` on runtime HEAD `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073`.
 
 It passes:
 
