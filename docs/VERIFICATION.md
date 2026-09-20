@@ -2,11 +2,11 @@
 
 ## Current connected baseline
 
-As of **2026-09-19**, the recovery branch has a fully green connected CI baseline:
+As of **2026-09-20**, the recovery branch has a fully green connected CI baseline after the production-readiness/auth/network hardening pass:
 
 - Branch: `fix/audit-recovery-2026-09-17`
-- Verified HEAD: `b9b549e99901b28fbfccea9c944be45b8ac0d5e5`
-- GitHub Actions run: `35433112762`
+- Verified HEAD: `4399928372709b5dfbd7c97ea4e32973c44876b1`
+- GitHub Actions run: `35489863220`
 - Result: **SUCCESS**
 
 CI runs on Node 24 and installs the committed dependency graph with:
@@ -33,7 +33,9 @@ All steps above passed on the verified HEAD.
 
 ## Browser/runtime evidence
 
-The Playwright gate boots the real client and server, uses documented local development auth, enters solo Amaya Bay through the player-facing onboarding flow, waits for the game engine to become playable, checks for browser runtime errors, confirms the renderer/debug frame is alive, samples the rendered canvas to reject an empty/flat frame, verifies W changes the live Rapier player position, and verifies V switches the camera from first-person to third-person.
+The Playwright gate boots the real client and server with documented local-development auth and runs three Chromium acceptance tests. It enters solo Amaya Bay through the player-facing onboarding flow, waits for a playable engine, rejects browser runtime errors, samples the rendered canvas to reject an empty/flat frame, verifies W changes the live Rapier player position, and verifies V switches first-person → third-person.
+
+It also runs a real two-browser Couple flow through identity, household creation/join, shared property selection, world entry and replicated movement; and a six-browser Friends flow through six-member joining, majority property selection, five remote avatars visible to the host, replicated movement and one client reload/reconnect. The complete browser suite passed 3/3 tests in 3.3 minutes on run `35489863220`.
 
 GitHub's headless runner uses the explicit `?renderer=webgl2` compatibility mode for this E2E because its virtual GPU is not a reliable WebGPU target. Normal application startup remains WebGPU-first and is protected by the `GameCanvas` lifecycle regression suite.
 
@@ -65,7 +67,7 @@ That historical limitation is **not** a current repository blocker. Connected Gi
 
 ## Connected WebGL2 diagnostic snapshot
 
-GitHub Actions run `35433112762` published this first-playable WebGL2 compatibility sample after the bounded warmup:
+The earlier connected baseline run `35433112762` published this first-playable WebGL2 compatibility sample after the bounded warmup. It remains useful diagnostic evidence, but it is not a fresh target-hardware benchmark for the current head:
 
 - FPS: **88.7**
 - smoothed CPU frame: **11.3 ms**
@@ -90,12 +92,30 @@ The green CI baseline does **not** establish release-complete V1. The following 
 - Medium 1080p frame-time, p95/p99, draw-call, triangle and GPU-memory measurements on Iris Xe-class hardware or the final supported-hardware definition;
 - real WebGPU browser acceptance across supported desktop browsers/GPUs;
 - full WebGPU/WebGL2/browser/controller matrix;
-- two-browser Couple create/join/property/movement acceptance;
-- Friends 2–6 client soak, reconnect, latency/loss and simultaneous-edit testing;
+- real-device Couple/Friends latency/loss/long-duration soak beyond the automated two-context Couple and six-context Friends browser acceptance;
+- simultaneous-edit/shared-kitchen multiplayer acceptance with real people/devices;
 - shared kitchen concurrency with real players;
-- production Supabase persistence/RLS/private Memory storage verification;
-- STUN/TURN voice tests across different networks;
+- production Supabase anonymous auth, persistence/RLS/migrations/private Memory Storage verification against a real hosted project;
+- server-issued TURN/STUN voice tests across different networks;
 - Quiet Walk, Shared Kitchen, Money, Rain, Moving, Memory and No-HUD PRD acceptance tests;
 - final production-art/audio/LOD/compression review.
 
 Do not convert CI success into an FPS or release-quality claim until those measurements and acceptance runs exist.
+
+
+## 2026-09-20 production-readiness hardening verified on current head
+
+The green current head additionally verifies:
+
+- production Supabase client identity strategy and Bearer-header selection;
+- split-origin REST routing through `VITE_SERVER_URL`;
+- production-only CORS allow-listing and fail-closed local auth;
+- authenticated short-lived TURN credential generation with no browser-bundled shared secret;
+- `/healthz`, `/readyz`, request IDs and structured HTTP completion logging;
+- production HTTP fixed-window throttling and graceful shutdown wiring;
+- 12 ordered SQL migrations, private Memory Storage bucket bootstrap and migration-contract coverage;
+- server migration runner build output with advisory locking/checksums;
+- 10/10 server test files / 23 tests;
+- 28/28 client test files / 80 tests;
+- 195 pure verification tests;
+- repository integrity reporting 12 ordered migrations and no committed-secret heuristic hit.

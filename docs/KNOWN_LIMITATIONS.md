@@ -11,9 +11,9 @@ Current verification limitations are therefore no longer dependency-install bloc
 - real WebGPU E2E across the supported desktop browser/GPU matrix;
 - Medium 1080p performance on target hardware;
 - full controller/UI matrix;
-- two-browser Couple and 2–6 player Friends soak/reconnect/latency testing;
-- production Supabase/RLS/private Memory storage;
-- production TURN voice traversal;
+- real-device Couple/Friends latency/loss/long-duration soak beyond the automated two-context Couple and six-context Friends Chromium acceptance;
+- production Supabase/RLS/private Memory storage against a real hosted project;
+- production TURN voice traversal across different networks;
 - final production-art/audio/LOD/compression behavior.
 
 The CI browser gate intentionally uses explicit WebGL2 compatibility mode because GitHub's headless virtual GPU is not a trustworthy WebGPU target. Normal application startup remains WebGPU-first and has automated renderer-selection coverage.
@@ -57,8 +57,9 @@ The CI browser gate intentionally uses explicit WebGL2 compatibility mode becaus
 ## Voice
 
 - WebRTC peer signaling, modes, mute/PTT and proximity-distance hooks are implemented.
-- No TURN credentials were available, so production NAT traversal has not been verified.
-- 2–6 person peer mesh needs real-device soak testing before release.
+- Production credentials are now server-issued: the browser never receives the long-lived TURN shared secret.
+- Real TURN/NAT traversal has still not been verified across different networks.
+- The six-browser Friends acceptance proves core household peer presence/reconnect, not real-device voice quality or long-duration peer-mesh stability.
 
 ## Performance
 
@@ -75,10 +76,12 @@ The CI browser gate intentionally uses explicit WebGL2 compatibility mode becaus
 
 ## Authentication/security/production infrastructure
 
-- Supabase-oriented adapters and server-authoritative permission boundaries exist.
-- Production Supabase RLS/storage configuration must be verified against a real project.
-- No production Redis adapter is required for single-instance V1 and none is wired; horizontal scaling would require Socket.IO coordination.
-- Rate-limiting/production observability coverage is not yet at the full PRD release target.
+- Production client auth now uses Supabase anonymous sessions with Bearer tokens across REST, Socket.IO and voice ICE configuration; local header auth fails closed in production.
+- Production startup validates required Supabase/origin/TURN configuration, exposes health/readiness probes, emits request IDs and structured completion logs, restricts production CORS, uses a fixed-window HTTP abuse guard and performs graceful shutdown.
+- Twelve ordered migrations are validated; a deterministic advisory-locked/checksummed migration runner and private Memory Storage bucket bootstrap are present.
+- Production Supabase credentials, RLS behavior, migration execution and private Storage must still be verified against a real hosted project.
+- No Redis adapter is required for the intentional single-instance V1 deployment; horizontal scaling would require shared Socket.IO/rate-limit coordination.
+- Real production monitoring/alerting and socket-level abuse/latency testing remain release-operations work.
 
 ## Debug tooling
 

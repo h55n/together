@@ -24,7 +24,7 @@ This repository is a substantial V1 implementation and handoff build, not a clai
 - 36 data-driven household stories (20 shared, 8 Couple, 8 Friends) and seven life stages;
 - private manual/automatic Memory capture, captions and share-card export;
 - renovation and moving flows with voting, packing decisions and moving memories;
-- WebRTC household/proximity voice architecture with Socket.IO signaling and optional TURN;
+- WebRTC household/proximity voice architecture with Socket.IO signaling and authenticated server-issued TURN credentials;
 - sticky notes, accessibility controls, quality tiers, performance diagnostics and debug tooling foundations.
 
 See `docs/IMPLEMENTATION_STATUS.md` and `docs/KNOWN_LIMITATIONS.md` for the strict acceptance status.
@@ -73,7 +73,7 @@ pnpm build
 pnpm test:e2e
 ```
 
-As of 2026-09-19, runtime HEAD `2e0e9896cf6e64b902f2f2e19b626e11682625e2` passes the complete GitHub Actions gate, including a real Chromium client+server solo-entry playable-frame E2E in explicit WebGL2 compatibility mode. Normal product startup remains WebGPU-first.
+As of 2026-09-20, runtime HEAD `4399928372709b5dfbd7c97ea4e32973c44876b1` passes the complete GitHub Actions gate in run `35489863220`, including solo playable-frame/movement/camera acceptance, two-browser Couple household movement replication, and a six-browser Friends movement + reconnect acceptance in explicit WebGL2 compatibility mode. Normal product startup remains WebGPU-first.
 
 `node tools/verify-sandbox.mjs` remains available as a reduced offline diagnostic, but it is no longer the authoritative verification record. See `docs/VERIFICATION.md`.
 
@@ -112,20 +112,22 @@ DATABASE_URL=
 SUPABASE_MEMORY_BUCKET=together-memories
 ```
 
-Apply `server/src/db/migrations/001_*.sql` through `009_*.sql` in order.
+Enable Supabase anonymous sign-in for the V1 client identity flow. Client builds also require `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+
+Build the server and run `DATABASE_URL=... pnpm --filter @together/server migrate` to apply migrations `001` through `012` with advisory locking/checksum protection.
 
 ### Voice
 
-STUN works without application credentials. Production-grade NAT traversal requires TURN:
+STUN works without application credentials. Production-grade NAT traversal requires server-side TURN configuration:
 
 ```text
-VITE_STUN_URL=stun:stun.l.google.com:19302
-VITE_TURN_URL=
-VITE_TURN_USERNAME=
-VITE_TURN_CREDENTIAL=
+STUN_URL=stun:stun.l.google.com:19302
+TURN_URL=
+TURN_SHARED_SECRET=
+TURN_TTL_SECONDS=3600
 ```
 
-Voice audio is never stored by the application.
+The browser authenticates to `/api/voice/ice-config` and receives short-lived credentials. Never expose `TURN_SHARED_SECRET` through a `VITE_*` variable. Voice audio is never stored by the application.
 
 ## Documentation
 

@@ -14,8 +14,8 @@ The product is about the feeling of living a life with someone. It is not a comb
 
 - Project: Together V1 — Amaya Bay
 - Active recovery branch: `fix/audit-recovery-2026-09-17`
-- Latest fully verified runtime HEAD: `b9b549e99901b28fbfccea9c944be45b8ac0d5e5`
-- Verified GitHub Actions run: `35433112762` — **success**
+- Latest fully verified runtime HEAD: `4399928372709b5dfbd7c97ea4e32973c44876b1`
+- Verified GitHub Actions run: `35489863220` — **success**
 - Documentation-only commits may descend from that runtime baseline; use `git rev-parse HEAD` for the current documentation SHA.
 - Historical imported-prototype commit: `5c4730e`
 - Implementation-plan commit: `bc415e8`
@@ -39,7 +39,7 @@ The active legacy JavaScript/JSX prototype runtime was removed. Git history pres
 - Asset loader foundation and performance/debug counters.
 - Socket.IO household/presence/movement and remote interpolation.
 - Local + Supabase persistence adapter architecture.
-- Nine ordered SQL migrations.
+- Twelve ordered SQL migrations plus an advisory-locked/checksummed migration runner.
 
 ### Amaya Bay
 
@@ -117,7 +117,7 @@ The active legacy JavaScript/JSX prototype runtime was removed. Git history pres
 
 ## Verified
 
-The current authoritative connected baseline is GitHub Actions run `35433112762` on runtime HEAD `b9b549e99901b28fbfccea9c944be45b8ac0d5e5`.
+The current authoritative connected baseline is GitHub Actions run `35489863220` on runtime HEAD `4399928372709b5dfbd7c97ea4e32973c44876b1`.
 
 It passes:
 
@@ -133,7 +133,7 @@ pnpm --filter @together/client exec playwright install --with-deps chromium
 pnpm test:e2e
 ```
 
-The Playwright test boots the real client and server, completes solo onboarding, waits for a playable world, rejects browser runtime errors, checks a rendered canvas frame, holds W and verifies live Rapier position changes, then presses V and verifies first-person → third-person switching. CI uses explicit WebGL2 compatibility mode because the GitHub headless GPU is not a reliable WebGPU target; normal product startup remains WebGPU-first and has regression coverage.
+The Playwright suite boots the real client and server, completes solo onboarding/playable-frame/movement/camera acceptance, then verifies a real two-context Couple create/join/property/movement flow and a six-context Friends create/join/property/movement/reload-reconnect flow. CI uses explicit WebGL2 compatibility mode because the GitHub headless GPU is not a reliable WebGPU target; normal product startup remains WebGPU-first and has regression coverage.
 
 The same baseline includes regressions for the recovery bugs: StrictMode engine ownership/Rapier lifetime, renderer selection, focus-loss input reset, real-browser movement/camera switching, camera/movement math, terrain collider ownership, property/world clearance, world-space surface connectivity, static vegetation/dressing batching, bounded first-playable warmup, realtime home refresh, weather reactivity and ambient NPC instancing.
 
@@ -152,7 +152,7 @@ The following systems are architecturally/functionally present but do not meet t
 - production furniture/food/prop models for all stable content IDs;
 - full browser/device/controller matrix;
 - final automatic Memory framing playtest;
-- production observability/rate-limit hardening;
+- production monitoring/alerting and socket-level abuse/latency soak;
 - full PRD debug-editor suite.
 
 ## Not Implemented / Not Production-Verified
@@ -181,11 +181,11 @@ The committed dependency graph is already exercised in CI with `pnpm install --f
 
 ### Supabase
 
-Provide `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, client-safe anon variables, database and a private Memory bucket. Apply migrations `001`–`009` in order. Verify RLS/storage policy in the actual project.
+Provide `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and enable Supabase anonymous sign-in. Build the server and run its migration command to apply `001`–`012`; migration 012 creates the private `together-memories` bucket. Verify RLS/storage behavior in the actual project.
 
 ### TURN
 
-Provide real TURN URL/username/credential and run 2–6 member voice tests across different networks. No voice data should be recorded.
+Provide `TURN_URL` and server-only `TURN_SHARED_SECRET` (plus optional `STUN_URL`/`TURN_TTL_SECONDS`). The server mints short-lived authenticated credentials; no long-lived TURN secret belongs in the browser bundle. Run 2–6 member voice tests across different networks. No voice data should be recorded.
 
 ## Asset Gaps
 

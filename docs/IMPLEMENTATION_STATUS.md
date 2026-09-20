@@ -4,7 +4,7 @@ Status is evaluated against the strict exit criteria in `docs/PRD.md` / `docs/BU
 
 ## Current verification baseline
 
-Verified on branch `fix/audit-recovery-2026-09-17` at `b9b549e99901b28fbfccea9c944be45b8ac0d5e5` by GitHub Actions run `35433112762`:
+Verified on branch `fix/audit-recovery-2026-09-17` at `4399928372709b5dfbd7c97ea4e32973c44876b1` by GitHub Actions run `35489863220`:
 
 - frozen pnpm install on Node 24;
 - full workspace TypeScript;
@@ -16,6 +16,8 @@ Verified on branch `fix/audit-recovery-2026-09-17` at `b9b549e99901b28fbfccea9c9
 - Chromium installation;
 - real client+server Playwright solo-entry E2E through a rendered playable frame in explicit WebGL2 compatibility mode;
 - live browser W movement through Rapier and V first-person/third-person camera switching;
+- two-context Couple create/join/property/world/movement replication acceptance;
+- six-context Friends membership/property/movement/reload-reconnect acceptance;
 - bounded first-playable preload/physics/renderer warmup before control is released.
 
 Normal product startup remains WebGPU-first; real-device WebGPU/browser-matrix and target-hardware performance measurements remain outstanding. The connected headless WebGL2 diagnostic sample at this baseline measured 88.7 FPS, p95 17.2 ms, p99 18.2 ms, 148 draw calls and 223,782 triangles with no sampled frames over 33 ms; treat these as CI diagnostics only.
@@ -38,11 +40,13 @@ Implemented:
 - structured server logging;
 - Socket.IO connection/presence/movement contract;
 - Supabase/local persistence adapters;
-- Supabase-oriented auth adapter;
-- migrations and verification utilities;
+- production Supabase anonymous client sessions with Bearer auth and token refresh;
+- split-origin REST + Socket.IO server routing;
+- production CORS/fail-fast readiness/request IDs/structured HTTP logs/fixed-window API throttling/graceful shutdown;
+- 12 migrations, private Memory bucket bootstrap and deterministic migration runner;
 - performance/debug overlay foundations.
 
-Remaining acceptance gap: two-browser/device multiplayer boot/connect and real WebGPU target-browser acceptance have not yet been completed.
+Remaining acceptance gap: real-device WebGPU/browser/controller acceptance and production hosted Supabase/TURN validation.
 
 ## Phase 1 — World feel vertical slice
 
@@ -112,7 +116,7 @@ Missing: production rig, authored clips, IK, facial system and release-quality b
 
 Implemented:
 
-- fast/local identity path with Supabase adapter architecture;
+- local development identity plus production Supabase anonymous session/Bearer identity;
 - create/join household;
 - Couple/Friends limits;
 - six-character invite code;
@@ -123,7 +127,7 @@ Implemented:
 - synchronized movement/profile state;
 - reconnect to authoritative household snapshot.
 
-Strict blocker: two real browser/device acceptance run not performed here.
+Automated acceptance now covers a two-browser Couple flow and a six-browser Friends flow with movement replication and reconnect. Remaining blocker is real-device/network latency/loss/long-duration soak plus hosted production Supabase validation.
 
 ## Phase 5 — Home system
 
@@ -296,7 +300,7 @@ Implemented:
 
 - WebRTC peer architecture;
 - Socket.IO offer/answer/ICE signaling;
-- STUN/TURN configuration builder;
+- authenticated server-issued short-lived STUN/TURN ICE configuration;
 - off/household/proximity modes;
 - mute and push-to-talk;
 - distance attenuation hooks;
@@ -334,6 +338,8 @@ Implemented:
 - controller movement/look/action mappings;
 - frame/draw-call/triangle/chunk debug metrics;
 - repository/secret/migration validation;
+- request tracing, health/readiness probes, production CORS, HTTP abuse guard and graceful shutdown;
+- two-browser Couple and six-browser Friends Chromium acceptance;
 - sandbox-safe verification command.
 
 Outstanding:
