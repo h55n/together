@@ -338,7 +338,7 @@ Implemented:
 - controller movement/look/action mappings;
 - frame/draw-call/triangle/chunk debug metrics;
 - repository/secret/migration validation;
-- request tracing, health/readiness probes, production CORS, HTTP abuse guard and graceful shutdown;
+- request tracing, health/readiness probes, production CORS, HTTP abuse guard, per-socket event flood budgets and graceful shutdown;
 - two-browser Couple and six-browser Friends Chromium acceptance;
 - sandbox-safe verification command.
 

@@ -17,6 +17,7 @@ import type { TimeService } from '../game/TimeService.js';
 import type { ProfileService } from '../game/ProfileService.js';
 import type { UserProfileRecord } from '../db/GameRepository.js';
 import { logger } from '../logging/logger.js';
+import { SocketEventLimiter } from './SocketEventLimiter.js';
 
 export type RemoteProfile = Pick<UserProfileRecord, 'displayName' | 'avatarConfig'>;
 
@@ -68,10 +69,14 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
 
   io.on('connection', (socket: Socket) => {
     const userId = String(socket.data.userId);
+    const joinLimiter = new SocketEventLimiter(10, 10_000);
+    const snapshotLimiter = new SocketEventLimiter(45, 1_000);
+    const voiceSignalLimiter = new SocketEventLimiter(180, 10_000);
     socket.join(rooms.user(userId));
     socket.emit(socketEvents.timeSync, dependencies.timeService.snapshot());
 
     socket.on(socketEvents.playerJoin, async (raw) => {
+      if (!joinLimiter.allow()) return;
       try {
         const join = playerJoinSchema.parse(raw);
         const household = await dependencies.householdService.getHouseholdForMember(join.householdId, userId);
@@ -138,6 +143,7 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
     });
 
     socket.on(socketEvents.voiceOffer, (raw) => {
+      if (!voiceSignalLimiter.allow()) return;
       const parsed = voiceOfferSchema.safeParse(raw);
       if (!parsed.success) return;
       const source = online.get(socket.id);
@@ -147,6 +153,7 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
     });
 
     socket.on(socketEvents.voiceAnswer, (raw) => {
+      if (!voiceSignalLimiter.allow()) return;
       const parsed = voiceAnswerSchema.safeParse(raw);
       if (!parsed.success) return;
       const source = online.get(socket.id);
@@ -156,6 +163,7 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
     });
 
     socket.on(socketEvents.voiceIce, (raw) => {
+      if (!voiceSignalLimiter.allow()) return;
       const parsed = voiceIceSchema.safeParse(raw);
       if (!parsed.success) return;
       const source = online.get(socket.id);
@@ -184,6 +192,7 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
     });
 
     socket.on(socketEvents.playerSnapshot, (raw) => {
+      if (!snapshotLimiter.allow()) return;
       const parsed = playerSnapshotSchema.safeParse(raw);
       const householdId = typeof socket.data.householdId === 'string' ? socket.data.householdId : undefined;
       if (!parsed.success || !householdId || !snapshotInsideAmayaBay(parsed.data)) return;

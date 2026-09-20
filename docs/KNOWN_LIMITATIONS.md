@@ -81,7 +81,7 @@ The CI browser gate intentionally uses explicit WebGL2 compatibility mode becaus
 - Twelve ordered migrations are validated; a deterministic advisory-locked/checksummed migration runner and private Memory Storage bucket bootstrap are present.
 - Production Supabase credentials, RLS behavior, migration execution and private Storage must still be verified against a real hosted project.
 - No Redis adapter is required for the intentional single-instance V1 deployment; horizontal scaling would require shared Socket.IO/rate-limit coordination.
-- Real production monitoring/alerting and socket-level abuse/latency testing remain release-operations work.
+- Per-socket join/movement/WebRTC signaling flood budgets are implemented. Real production monitoring/alerting, distributed abuse controls and latency/loss soak remain release-operations work.
 
 ## Debug tooling
 
