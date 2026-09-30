@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { dressHome } from './HomeDetails';
 import {
   bathroomCleaningSequence,
   cityHeightAt,
@@ -71,7 +72,18 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
   const halfD = size.depth / 2;
   addWall(group, physics, [0.18, 3, size.depth], [center.x - halfW, 1.5, center.z], materials);
   addWall(group, physics, [0.18, 3, size.depth], [center.x + halfW, 1.5, center.z], materials);
-  addWall(group, physics, [size.width, 3, 0.18], [center.x, 1.5, center.z + halfD], materials);
+  const windowLeft = center.x - 4.05;
+  const windowRight = center.x - 0.35;
+  const westEdge = center.x - halfW;
+  const eastEdge = center.x + halfW;
+  addWall(group, physics, [windowLeft - westEdge, 3, 0.18], [(westEdge + windowLeft) / 2, 1.5, center.z + halfD], materials);
+  addWall(group, physics, [eastEdge - windowRight, 3, 0.18], [(windowRight + eastEdge) / 2, 1.5, center.z + halfD], materials);
+  addWall(group, physics, [3.7, 1.0, 0.18], [center.x - 2.2, 0.5, center.z + halfD], materials);
+  addWall(group, physics, [3.7, 0.55, 0.18], [center.x - 2.2, 2.725, center.z + halfD], materials);
+  addBox(group, [3.62, 1.44, 0.06], [center.x - 2.2, 1.73, center.z + halfD], materials.get('glass'));
+  addBox(group, [3.95, 0.13, 0.38], [center.x - 2.2, 0.99, center.z + halfD - 0.13], materials.get('wood'));
+  addBox(group, [3.95, 0.1, 0.25], [center.x - 2.2, 2.5, center.z + halfD - 0.06], materials.get('wood'));
+  for (const edge of [-1, 1]) addBox(group, [0.12, 1.5, 0.23], [center.x - 2.2 + edge * 1.85, 1.74, center.z + halfD - 0.05], materials.get('wood'));
   // South wall doorway is intentionally open in the middle.
   addWall(group, physics, [halfW - 1.3, 3, 0.18], [center.x - (halfW + 1.3) / 2, 1.5, center.z - halfD], materials);
   addWall(group, physics, [halfW - 1.3, 3, 0.18], [center.x + (halfW + 1.3) / 2, 1.5, center.z - halfD], materials);
@@ -84,6 +96,8 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
   addWall(group, physics, [0.12, 2.7, size.depth * 0.55], [partitionX, 1.35, center.z + size.depth * 0.18], materials);
   if (size.beds >= 2) addWall(group, physics, [size.width * 0.42, 2.7, 0.12], [center.x + size.width * 0.2, 1.35, center.z + 0.8], materials);
   if (size.beds >= 4) addWall(group, physics, [size.width * 0.45, 2.7, 0.12], [center.x - size.width * 0.2, 1.35, center.z + 2.9], materials);
+
+  dressHome(group, materials, center.x, 0, center.z, size.width, size.depth);
 
   // Shared kitchen.
   addFurniture(group, physics, [4.2, 0.9, 0.72], [center.x - halfW + 2.5, 0.45, center.z + halfD - 0.72], materials.get('concrete'));

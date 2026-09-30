@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { detectRendererCapabilities, resolveRendererForceBackend, selectRendererBackend, type RendererBackend } from './rendererBackend';
+import { detectRendererCapabilities, hasWebGpuAdapter, resolveRendererForceBackend, selectRendererBackend, type RendererBackend } from './rendererBackend';
 
 export type RendererRuntimeInfo = {
   requestedBackend: RendererBackend;
@@ -59,16 +59,25 @@ export class Renderer {
     let universalRendererLoaded = false;
     let fallbackReason: string | undefined;
     let webgl2Detected = capabilities.webgl2;
+    // Some browsers expose navigator.gpu but cannot provide an adapter. Three's
+    // universal renderer then silently enters its WebGL backend, which has lost
+    // its device in headless Chromium. Choose our proven native WebGL2 path first.
+    const adapterAvailable = preferredBackend === 'webgpu'
+      ? await hasWebGpuAdapter((navigator as Navigator & { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu)
+      : false;
 
     // The native WebGL renderer is deliberately used for explicit compatibility
-    // mode. Normal startup remains WebGPU-first.
-    if (preferredBackend === 'webgl2') {
+    // mode and for browsers with no usable WebGPU adapter.
+    if (preferredBackend === 'webgl2' || !adapterAvailable) {
       renderer = new THREE.WebGLRenderer({
         canvas,
         antialias: true,
         powerPreference: 'high-performance',
       }) as unknown as RuntimeRenderer;
-      fallbackReason = 'Native WebGL2 compatibility profile';
+      backend = 'webgl2';
+      fallbackReason = preferredBackend === 'webgl2'
+        ? 'Native WebGL2 compatibility profile'
+        : 'No usable WebGPU adapter; native WebGL2 fallback';
       webgl2Detected = true;
     } else {
       try {

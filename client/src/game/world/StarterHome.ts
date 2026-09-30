@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { dressHome } from './HomeDetails';
 import {
   bathroomCleaningSequence, cityHeightAt, dishwashingSequence, floorCleaningSequence, groceryRestockSequence,
   laundryFoldSequence, plantWateringSequence, repairSequence, trashSequence,
@@ -28,7 +29,11 @@ export function buildStarterHome(materials: MaterialLibrary, physics: PhysicsWor
   physics.createFixedCuboid({ x, y: y + 0.09, z }, { x: 5.5, y: 0.09, z: 4.5 });
   addWall(group, physics, [0.18, 3, 9], [x - 5.5, y + 1.5, z], materials);
   addWall(group, physics, [0.18, 3, 9], [x + 5.5, y + 1.5, z], materials);
-  addWall(group, physics, [11, 3, 0.18], [x, y + 1.5, z + 4.5], materials);
+  // The window is an opening in the shell, not a pane drawn over plaster.
+  addWall(group, physics, [1.45, 3, 0.18], [x - 4.775, y + 1.5, z + 4.5], materials);
+  addWall(group, physics, [5.85, 3, 0.18], [x + 2.575, y + 1.5, z + 4.5], materials);
+  addWall(group, physics, [3.7, 1.0, 0.18], [x - 2.2, y + 0.5, z + 4.5], materials);
+  addWall(group, physics, [3.7, 0.55, 0.18], [x - 2.2, y + 2.725, z + 4.5], materials);
   addWall(group, physics, [4.35, 3, 0.18], [x - 3.325, y + 1.5, z - 4.5], materials);
   addWall(group, physics, [4.35, 3, 0.18], [x + 3.325, y + 1.5, z - 4.5], materials);
 
@@ -39,7 +44,7 @@ export function buildStarterHome(materials: MaterialLibrary, physics: PhysicsWor
   const kettle = addBox(group, [0.22, 0.28, 0.22], [x - 0.9, y + 1.08, z + 3.55], materials.get('metalDark'));
   kettle.name = 'prop:kettle';
   const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.035, 20), materials.get('warmPlaster'));
-  plate.rotation.x = Math.PI / 2;
+  plate.rotation.x = 0;
   plate.position.set(x - 3.3, y + 1.0, z + 3.55);
   group.add(plate);
 
@@ -61,7 +66,12 @@ export function buildStarterHome(materials: MaterialLibrary, physics: PhysicsWor
   const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.44, 0.3, 12, 1, true), materials.get('curtainWarm'));
   shade.position.set(x, y + 2.55, z + 0.5);
   group.add(shade);
-  addBox(group, [3.6, 1.5, 0.08], [x - 2.2, y + 1.75, z + 4.39], materials.get('glass')).name = 'window:balcony';
+  addBox(group, [3.62, 1.44, 0.06], [x - 2.2, y + 1.73, z + 4.5], materials.get('glass')).name = 'window:balcony';
+  addBox(group, [3.95, 0.13, 0.38], [x - 2.2, y + 0.99, z + 4.37], materials.get('wood'));
+  addBox(group, [3.95, 0.1, 0.25], [x - 2.2, y + 2.5, z + 4.44], materials.get('wood'));
+  for (const edge of [-1, 1]) {
+    addBox(group, [0.12, 1.5, 0.23], [x - 2.2 + edge * 1.85, y + 1.74, z + 4.45], materials.get('wood'));
+  }
 
   // Additional lived-in chore props: bin, broom, bathroom sink, grocery bag and a loose tap panel.
   addBox(group, [0.55, 0.8, 0.55], [x - 4.55, y + 0.4, z + 2.4], materials.get('metalDark')).name = 'prop:kitchen-bin';
@@ -69,6 +79,8 @@ export function buildStarterHome(materials: MaterialLibrary, physics: PhysicsWor
   addFurniture(group, physics, [1.3, 0.82, 0.55], [x + 4.5, y + 0.41, z + 2.25], materials.get('concrete')).name = 'prop:bathroom-sink';
   addBox(group, [0.72, 0.8, 0.58], [x - 4.2, y + 0.4, z - 2.25], materials.get('terracottaPlaster')).name = 'prop:grocery-bag';
   addBox(group, [0.32, 0.24, 0.08], [x + 4.9, y + 1.0, z + 2.25], materials.get('metalDark')).name = 'prop:repair-panel';
+
+  dressHome(group, materials, x, y, z, 11, 9);
 
   const interactions: WorldInteraction[] = [
     interaction('home_dishes', 'Wash plate', 'wash', x - 3.3, z + 3.0, 2.0, 6, 1.0, dishwashingSequence, { type: 'wash_dish', amount: 1 }),

@@ -23,3 +23,9 @@ export function detectRendererCapabilities(canvas: HTMLCanvasElement, probeWebgl
     : false;
   return { webgpu, webgl2 };
 }
+
+/** A navigator.gpu property alone does not guarantee an adapter. */
+export async function hasWebGpuAdapter(gpu: { requestAdapter: () => Promise<unknown> } | undefined): Promise<boolean> {
+  if (!gpu?.requestAdapter) return false;
+  try { return Boolean(await gpu.requestAdapter()); } catch { return false; }
+}

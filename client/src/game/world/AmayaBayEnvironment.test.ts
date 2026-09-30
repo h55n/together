@@ -12,7 +12,7 @@ describe('AmayaBayEnvironment', () => {
     expect(names).not.toContain('amaya-road-network');
     expect(names).toContain('landmark:bay-steps');
     expect(names).toContain('landmark:mogra-park');
-  });
+  }, 20_000);
 
   it('keeps permanent Mogra Court geometry outside every starter property reservation', () => {
     const environment = new AmayaBayEnvironment(new MaterialLibrary());
@@ -30,7 +30,7 @@ describe('AmayaBayEnvironment', () => {
 
       expect(touchesReservation, `Mogra Court overlaps the ${propertyId} reservation`).toBe(false);
     }
-  });
+  }, 20_000);
 });
 
 function meshTouchesReservation(

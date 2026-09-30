@@ -89,3 +89,14 @@ The build includes performance/debug foundations but not every PRD-requested edi
 ## V3.1 technical-direction supersession
 
 As of 2026-09-15, `docs/PRD.md` V3.1 is the authoritative product and technical direction. Together V1 remains a browser-only TypeScript/Three.js product: WebGPU-first via `three/webgpu`, with WebGL2 compatibility fallback, Rapier, React for application UI only, Socket.IO, and the existing server/shared/content architecture. Core Amaya Bay art is code-authored, compiled once into shared immutable runtime assets, then rendered through measured merging, instancing, LOD, and streaming. Blender/Maya/hand-authored GLB/KTX2 exports are optional future inputs only and are not a V1 production dependency. Medium is the normal supported-desktop baseline; Low is a complete fallback. Hardware FPS claims remain unverified until a real browser profile is recorded.
+
+
+## Current world-building pass — 2026-09-22
+
+See [World build status](WORLD_BUILD_2026_09.md) for implemented visuals, actual verification, and outstanding work. This pass is **in progress**; finished-reference quality, full route validation and optimization are not claimed. Headless default WebGPU lost its graphics device, while explicit WebGL2 rendered and passed the home-exit E2E. Earlier status entries below/above are historical.
+
+
+
+## World route checkpoint — 2026-09-23
+
+The accelerated browser player/Rapier route audit now passes from the 1BHK through Lantern Street to Bay Steps after removal of a conflicting flat road collider. This does not certify human-paced camera/composition review or final reference-quality art. The old Linux dependency blockers above describe a historical environment; the current Windows workspace passes `pnpm verify`.

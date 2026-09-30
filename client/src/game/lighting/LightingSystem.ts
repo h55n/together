@@ -1,18 +1,25 @@
 import * as THREE from 'three';
+import { CoastalSky } from './CoastalSky';
 import { lightingProfileAt } from './lightingProfile';
 
 export class LightingSystem {
   readonly sun = new THREE.DirectionalLight(0xffe0b2, 1.8);
   readonly sky = new THREE.HemisphereLight(0x9eb9c9, 0x655d50, 0.8);
-  readonly ambient = new THREE.AmbientLight(0xffffff, 0.08);
+  readonly ambient = new THREE.AmbientLight(0xffffff, 0.24);
+  private readonly coastalSky: CoastalSky;
   private readonly sunTarget = new THREE.Object3D();
+  private readonly streetLights: THREE.PointLight[] = [];
   private readonly warm = new THREE.Color(0xffc27a);
   private readonly neutral = new THREE.Color(0xfff4dc);
   private readonly skyDay = new THREE.Color(0x9fb8c8);
   private readonly skyNight = new THREE.Color(0x172334);
 
   constructor(private readonly scene: THREE.Scene) {
+    this.coastalSky = new CoastalSky(scene);
+    scene.traverse((object) => { if (object instanceof THREE.PointLight && object.userData.amayaStreetLamp) this.streetLights.push(object); });
     this.sun.castShadow = true;
+    this.sun.shadow.normalBias = 0.035;
+    this.sun.shadow.bias = -0.00015;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.camera.left = -42;
     this.sun.shadow.camera.right = 42;
@@ -25,7 +32,10 @@ export class LightingSystem {
     scene.fog = new THREE.FogExp2(0xaeb7b4, 0.004);
   }
 
-  update(gameMinutes: number, focus: THREE.Vector3): void {
+  dispose(): void { this.coastalSky.dispose(); }
+
+  update(gameMinutes: number, focus: THREE.Vector3, rain = 0): void {
+    this.coastalSky.update(gameMinutes, focus, rain);
     const profile = lightingProfileAt(gameMinutes);
     const angle = ((gameMinutes / 1440) * Math.PI * 2) - Math.PI / 2;
     const radius = 65;
@@ -36,10 +46,13 @@ export class LightingSystem {
       focus.z + Math.sin(angle) * Math.cos(elevation) * radius,
     );
     this.sunTarget.position.copy(focus);
-    this.sun.intensity = profile.sunIntensity;
+    this.sun.intensity = profile.sunIntensity * (1 - rain * 0.7);
     this.sun.color.copy(this.neutral).lerp(this.warm, profile.warmth);
+    const lampStrength = Math.max(0, Math.min(1, (0.58 - profile.skyIntensity) / 0.42), rain * 0.24);
+    for (const light of this.streetLights) light.intensity = lampStrength * 70;
     this.sky.intensity = profile.skyIntensity;
+    this.ambient.intensity = 0.23 + profile.skyIntensity * 0.38;
     this.sky.color.copy(this.skyNight).lerp(this.skyDay, Math.min(1, profile.skyIntensity));
-    if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = profile.fogDensity;
+    if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = profile.fogDensity + rain * 0.003;
   }
 }

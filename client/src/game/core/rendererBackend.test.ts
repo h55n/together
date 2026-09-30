@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { detectRendererCapabilities, resolveRendererForceBackend, selectRendererBackend } from './rendererBackend';
+import { detectRendererCapabilities, hasWebGpuAdapter, resolveRendererForceBackend, selectRendererBackend } from './rendererBackend';
 
 describe('selectRendererBackend', () => {
   it('prefers WebGPU when both modern backends are available', () => {
@@ -41,5 +41,16 @@ describe('detectRendererCapabilities', () => {
 
     expect(capabilities.webgpu).toBe(true);
     expect(getContext).not.toHaveBeenCalled();
+  });
+});
+
+describe('WebGPU adapter preflight', () => {
+  it('uses WebGL2 when the browser advertises WebGPU but has no adapter', async () => {
+    expect(await hasWebGpuAdapter({ requestAdapter: async () => null })).toBe(false);
+    expect(await hasWebGpuAdapter({ requestAdapter: async () => ({}) })).toBe(true);
+  });
+
+  it('treats adapter request failure as unavailable', async () => {
+    expect(await hasWebGpuAdapter({ requestAdapter: async () => { throw new Error('adapter failed'); } })).toBe(false);
   });
 });

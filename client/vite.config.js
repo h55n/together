@@ -36,6 +36,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    maxWorkers: 2,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

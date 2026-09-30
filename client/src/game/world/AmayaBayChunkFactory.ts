@@ -1,4 +1,6 @@
+import { coastalTerrainLowering } from './CoastalShoreline';
 import * as THREE from 'three';
+import { buildStreetChunk, streetClearanceAt, streetPlantingForChunk, streetFrontageLotsForChunk } from './StreetNetwork';
 import {
   AMAYA_BAY_CITY,
   AMAYA_BAY_VENUES,
@@ -11,6 +13,7 @@ import {
 } from '@together/shared';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
 import { compileStaticMeshesByMaterial } from '../assets/runtime/StaticBatchCompiler';
+import { instanceSharedMeshes } from '../assets/runtime/SharedMeshInstancer';
 import type { MaterialLibrary } from './MaterialLibrary';
 import { addChunkDressing } from './NeighborhoodDressing';
 import { VegetationSystem, type VegetationSpecies } from './VegetationSystem';
@@ -38,7 +41,7 @@ export function amayaBayBoundaryCuboids(): readonly AmayaBayBoundaryCuboid[] {
 
 export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?: PhysicsWorld) {
   const vegetation = new VegetationSystem(materials);
-  return (chunkX: number, chunkZ: number, ring: Exclude<ResidencyRing, 'unloaded'>): THREE.Group => {
+  return (chunkX: number, chunkZ: number, ring: Exclude<ResidencyRing, 'unloaded'>, vegetationDetail: 'near' | 'far' = ring === 'active' ? 'near' : 'far'): THREE.Group => {
     const root = new THREE.Group();
     const chunkOriginX = chunkX * CHUNK_SIZE_METRES;
     const chunkOriginZ = chunkZ * CHUNK_SIZE_METRES;
@@ -53,18 +56,29 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
     for (let i = 0; i < position.count; i += 1) {
       const wx = centerX + position.getX(i);
       const wz = centerZ + position.getZ(i);
-      position.setY(i, cityHeightAt(wx, wz) - 0.16);
+      position.setY(i, cityHeightAt(wx, wz) - 0.16 - coastalTerrainLowering(wx, wz));
     }
     position.needsUpdate = true;
     geometry.computeVertexNormals();
     const district = districtAtPosition(centerX, centerZ);
-    const terrainMaterial = district?.id === 'mogra_park' || district?.id === 'hill_garden' || district?.id === 'rain_tree_lane'
-      ? materials.get('soil')
-      : materials.get('concrete');
+    // Roads and sidewalks own their paved strips. Unbuilt residential land
+    // remains planted ground instead of extending pavement to the horizon.
+    const terrainMaterial = district?.id === 'the_common' ? materials.get('concrete')
+      : district?.id === 'bay_steps' ? materials.get('sandstone') : materials.get('grass');
+    if (terrainMaterial === materials.get('grass')) {
+      const colors = new Float32Array(position.count * 3);
+      for (let i = 0; i < position.count; i += 1) {
+        const wx = centerX + position.getX(i), wz = centerZ + position.getZ(i);
+        const patch = (Math.sin(wx * 0.041) * Math.cos(wz * 0.037) + 1) * 0.5;
+        colors.set([0.78 + patch * 0.22, 0.84 + patch * 0.16, 0.72 + patch * 0.24], i * 3);
+      }
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    }
     const terrain = new THREE.Mesh(geometry, terrainMaterial);
     terrain.position.set(centerX, 0, centerZ);
     terrain.receiveShadow = ring === 'active';
     root.add(terrain);
+    root.add(buildStreetChunk(chunkX, chunkZ, ring, materials));
 
     if (district) {
       const staticDressing = new THREE.Group();
@@ -72,6 +86,9 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
       root.add(staticDressing);
 
       const dressing = generateChunkDressing(chunkX, chunkZ, district.id);
+      const frontages = streetFrontageLotsForChunk(chunkX, chunkZ);
+      dressing.buildings = [...frontages, ...dressing.buildings.filter(lot => frontages.every(front =>
+        Math.hypot(lot.x - front.x, lot.z - front.z) > Math.hypot(lot.width, lot.depth) / 2 + Math.hypot(front.width, front.depth) / 2 + 2))];
       addChunkDressing(staticDressing, dressing, chunkOriginX, chunkOriginZ, ring, materials, ring === 'active' ? physics : undefined);
       const venues = AMAYA_BAY_VENUES.filter((venue) =>
         venue.position.x >= chunkOriginX && venue.position.x < chunkOriginX + CHUNK_SIZE_METRES &&
@@ -111,6 +128,22 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
     }
 
     if (ring === 'horizon') return root;
+    const roadside = new THREE.Group(); roadside.name = 'street-planting';
+    for(const point of streetPlantingForChunk(chunkX, chunkZ)) {
+      if(Math.abs(point.x+30)<29 && point.z>0 && point.z<150) continue;
+      if(point.x>25 && point.x<110 && point.z<-282 && point.z>-318)continue;
+      if(PROPERTY_WORLD_RESERVATIONS.some(({center,reserveRadius})=>Math.hypot(point.x-center.x,point.z-center.z)<reserveRadius+2))continue;
+      if(AMAYA_BAY_VENUES.some(venue=>Math.hypot(point.x-venue.position.x,point.z-venue.position.z)<venue.frontageMetres+3))continue;
+      if(streetClearanceAt(point.x,point.z)<0.5)continue;
+      const tree=vegetation.createTree({species:point.z < -220 ? 'palm' : point.seed%4===0 ? 'gulmohar' : 'rain_tree',seed:point.seed,lod:vegetationDetail,scale:1.06});
+      if (ring === 'visual') tree.traverse(object => { if (object instanceof THREE.Mesh) object.castShadow = false; });
+      tree.position.set(point.x,cityHeightAt(point.x,point.z),point.z);roadside.add(tree);
+      if(ring==='active')for(const offset of [-2,2]){
+        const shrub=vegetation.createShrub(point.seed+offset,0.8);
+        shrub.position.set(point.x+offset,cityHeightAt(point.x+offset,point.z),point.z);roadside.add(shrub);
+      }
+    }
+    root.add(roadside);
     const random = createSeededRandom((chunkX * 73856093) ^ (chunkZ * 19349663));
     const count = ring === 'active' ? (district?.id === 'mogra_park' || district?.id === 'rain_tree_lane' ? 14 : 9) : 4;
     for (let i = 0; i < count; i += 1) {
@@ -120,12 +153,15 @@ export function createAmayaBayChunkFactory(materials: MaterialLibrary, physics?:
       const wz = centerZ + localZ;
       if (Math.abs(wx + 30) < 28 && Math.abs(wz - 75) < 75) continue;
       if (PROPERTY_WORLD_RESERVATIONS.some(({ center, reserveRadius }) => Math.hypot(wx - center.x, wz - center.z) < reserveRadius)) continue;
+      if (wz < -332 || streetClearanceAt(wx, wz) < 1.5) continue;
+      if (wx > 25 && wx < 110 && wz < -282 && wz > -318) continue;
       const species = chooseSpecies(district?.id, random());
-      const tree = vegetation.createTree({ species, seed: Math.floor(random() * 1_000_000), scale: ring === 'visual' ? 0.72 : 0.85 + random() * 0.32 });
+      const tree = vegetation.createTree({ species, seed: Math.floor(random() * 1_000_000), lod: vegetationDetail, scale: ring === 'visual' ? 0.72 : 0.85 + random() * 0.32 });
       tree.position.set(wx, cityHeightAt(wx, wz), wz);
       if (ring === 'visual') tree.traverse((object) => { if (object instanceof THREE.Mesh) object.castShadow = false; });
-      root.add(tree);
+      roadside.add(tree);
     }
+    instanceSharedMeshes(roadside);
     return root;
   };
 }

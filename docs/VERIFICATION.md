@@ -113,3 +113,16 @@ Also perform manually:
 - voice peer test with STUN then TURN;
 - Quiet Walk, Shared Kitchen, Money, Rain, Moving, Memory and No-HUD PRD acceptance tests;
 - Medium 1080p frame-time/draw-call/triangle measurements on an Iris Xe-class machine or equivalent.
+
+
+## Current world-building pass — 2026-09-22
+
+See [World build status](WORLD_BUILD_2026_09.md) for implemented visuals, actual verification, and outstanding work. This pass is **in progress**; `pnpm verify` and explicit-WebGL2 browser home-exit E2E pass, while finished-reference quality, full route validation, WebGPU hardware stability and optimization are not claimed. Earlier status entries below/above are historical.
+
+
+
+For an isolated Windows browser review, start the server with `PORT=3101` and `ALLOW_DEV_AUTH=true`, then start the client with `VITE_SERVER_URL=http://127.0.0.1:3101` and `pnpm --filter @together/client exec vite --config vite.review.config.js`. Run Playwright with `TOGETHER_E2E_URL=http://127.0.0.1:5188/?renderer=webgl2&worldReview=1` against `e2e/world-visible.spec.ts` and `e2e/world-districts.spec.ts`. The `worldReview` hook exists only in a development build; district travel is for visual inspection, not evidence of a traversable route.
+
+## World route checkpoint — 2026-09-23
+
+Full `pnpm verify` passed after the shoreline and route changes (15 lint warnings, no errors). Explicit-WebGL2 Playwright passed `e2e/world-route.spec.ts`: the browser player with Rapier and streamed chunks traversed from the 1BHK via Lantern Street to Bay Steps in accelerated development review mode. The streamed Rapier unit test and Bay stair descent test also pass. Human-paced play and reference-quality art are still outstanding; see [World build status](WORLD_BUILD_2026_09.md).

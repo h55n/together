@@ -5,6 +5,7 @@ export type StreamingJob = {
   x: number;
   z: number;
   ring: Exclude<ResidencyRing, 'unloaded'>;
+  vegetationDetail?: 'near' | 'far';
   priority: number;
 };
 

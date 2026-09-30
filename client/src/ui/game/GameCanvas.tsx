@@ -25,6 +25,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const homeVersionRef = useRef(0);
   const lastAutomaticCaptureRef = useRef(-300_000);
   const captureBusyRef = useRef(false);
+  const [weatherState, setWeatherState] = useState<WeatherState>('clear');
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [interactionPrompt, setInteractionPrompt] = useState<string | null>(null);
@@ -738,10 +739,26 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       void refreshHomeState().catch(() => undefined);
       engine.applySettings(settings);
       engine.start();
+      if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('worldReview') === '1') {
+        (window as Window & { __amayaReviewTravel?: (destinationId: string) => void }).__amayaReviewTravel =
+          (destinationId) => engine.startAutoRide(destinationId, true);
+        (window as Window & { __amayaReviewPlace?: (x: number, z: number) => void }).__amayaReviewPlace =
+          (x, z) => engine.placeForWorldReview(x, z);
+        (window as Window & { __amayaReviewFace?: (yaw: number) => void }).__amayaReviewFace =
+          (yaw) => engine.faceForWorldReview(yaw);
+        (window as Window & { __amayaReviewWeather?: (weather: WeatherState) => void }).__amayaReviewWeather =
+          (weather) => { engine.setWeather(weather); setWeatherState(weather); };
+        (window as Window & { __amayaReviewTime?: (minutes: number) => void }).__amayaReviewTime =
+          (minutes) => engine.setGameTime(minutes);
+        (window as Window & { __amayaReviewWalkRoute?: () => unknown }).__amayaReviewWalkRoute =
+          () => engine.reviewWalkHeroRoute();
+        (window as Window & { __amayaReviewMetrics?: (reset?: boolean) => unknown }).__amayaReviewMetrics =
+          (reset) => { if (reset) engine.performance.resetFrameSamples(); return structuredClone(engine.performance.read()); };
+      }
       setReady(true);
     }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
 
-    return () => { cancelled = true; engineRef.current?.dispose(); engineRef.current = null; };
+    return () => { cancelled = true; delete (window as Window & { __amayaReviewTravel?: (destinationId: string) => void }).__amayaReviewTravel; delete (window as Window & { __amayaReviewPlace?: (x: number, z: number) => void }).__amayaReviewPlace; delete (window as Window & { __amayaReviewFace?: (yaw: number) => void }).__amayaReviewFace; delete (window as Window & { __amayaReviewWeather?: (weather: WeatherState) => void }).__amayaReviewWeather; delete (window as Window & { __amayaReviewTime?: (minutes: number) => void }).__amayaReviewTime; delete (window as Window & { __amayaReviewWalkRoute?: () => unknown }).__amayaReviewWalkRoute; delete (window as Window & { __amayaReviewMetrics?: (reset?: boolean) => unknown }).__amayaReviewMetrics; engineRef.current?.dispose(); engineRef.current = null; };
   }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, propertyId, refreshHomeState, refreshMemories]);
 
   useEffect(() => {
@@ -778,7 +795,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     engineRef.current?.applySettings(normalized);
   }, [settings]);
 
-  const setWeather = (weather: WeatherState) => engineRef.current?.setWeather(weather);
+  const setWeather = (weather: WeatherState) => { engineRef.current?.setWeather(weather); setWeatherState(weather); };
   return <div ref={containerRef} className="game-shell">
     <canvas ref={canvasRef} className="game-canvas" aria-label="Amaya Bay 3D world" />
     {!ready && !error && <div className="world-loading">Preparing Amaya Bay…</div>}
@@ -813,7 +830,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       onClose={() => { setDecorateOpen(false); engineRef.current?.clearHomeDecorationPreview(); }} />}
     <StoryPanel open={storyOpen} active={storyActive} eligible={storyEligible} definitions={storyEvents} busy={storyBusy} message={storyMessage} onStart={startStory} onTask={updateStoryTask} onResolve={resolveStory} onClose={() => setStoryOpen(false)} />
     <CookingPanel open={cookingOpen} recipes={recipes} inventory={kitchenInventory} session={cookingSession} busy={cookingBusy} message={cookingMessage} onStart={startCooking} onStep={performCookingStep} onClose={() => setCookingOpen(false)} />
-    <NpcPanel npcId={npcId} relationship={npcRelationship} weather={engineRef.current?.getMemoryContext().weather ?? 'clear'} busy={npcBusy} onTalk={talkToNpc} onClose={() => setNpcId(null)} />
+    <NpcPanel npcId={npcId} relationship={npcRelationship} weather={weatherState} busy={npcBusy} onTalk={talkToNpc} onClose={() => setNpcId(null)} />
     {propertyId && <HomeGrowthPanel open={homeGrowthOpen} currentPropertyId={propertyId} household={homeGrowthHousehold} homeObjects={homeState?.objects ?? []} moving={movingState} renovation={renovationState} userId={networkSession?.userId} busy={homeGrowthBusy} message={homeGrowthMessage} onProposeMove={proposeMove} onCastMove={castMove} onPack={packMovingObject} onCommitMove={commitMove} onProposeRenovation={proposeRenovation} onCastRenovation={castRenovation} onCommitRenovation={commitRenovation} onClose={() => setHomeGrowthOpen(false)} />}
     <ActivityPanel session={activitySession} {...(networkSession ? { userId: networkSession.userId } : {})} busy={activityBusy} message={activityMessage} onStep={advanceActivity} onClose={() => setActivitySession(null)} />
     <VenuePanel venue={venueSession} {...(networkSession ? { networkSession } : {})} onClose={() => setVenueSession(null)} onStartJob={(jobId) => void startJob(jobId)} onMoment={(message) => { setToast(message); window.setTimeout(() => setToast(null), 2600); }} />

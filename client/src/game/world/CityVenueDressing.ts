@@ -1,5 +1,6 @@
+import { dressSimpleFacades } from './FacadeDetails';
 import * as THREE from 'three';
-import { cityHeightAt, venueVisualProfile, type CityVenueDefinition, type ResidencyRing } from '@together/shared';
+import { cityHeightAt, venueDepth, venueVisualProfile, venueYaw, type CityVenueDefinition, type ResidencyRing } from '@together/shared';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
 import type { MaterialLibrary, WorldMaterialKey } from './MaterialLibrary';
 
@@ -28,16 +29,17 @@ export function addVenueDressing(
   const previousDispose = root.userData.disposeChunk as (() => void) | undefined;
 
   for (const venue of venues) {
+    if (venue.id === 'cafe_roshan' || venue.id === 'dev_cycle_hut' || venue.id === 'kayak_cove' || venue.id === 'hill_tea_hut') continue;
     const profile = venueVisualProfile(venue.category, Boolean(venue.hero));
     const width = Math.max(4.2, venue.frontageMetres);
-    const depth = venue.hero ? 8.5 : profile.family === 'market' ? 7.2 : 6.4;
+    const depth = venueDepth(venue);
     const height = venue.hero ? 6.4 : profile.family === 'civic' ? 5.6 : 4.5;
     const y = cityHeightAt(venue.position.x, venue.position.z);
     const group = new THREE.Group();
     group.name = `venue:${venue.id}:${venue.category}`;
     group.position.set(venue.position.x, y, venue.position.z);
     // Keep fronts loosely oriented toward the city centre so they address streets rather than look random.
-    group.rotation.y = Math.atan2(-venue.position.x, -venue.position.z);
+    group.rotation.y = venueYaw(venue);
 
     const bodyMaterial = profile.family === 'service'
       ? materials.get('concrete')
@@ -58,9 +60,21 @@ export function addVenueDressing(
     group.add(plinth);
 
     // Glazed shop opening and strong inset threshold create believable facade depth.
-    const frontage = box(width * 0.72, 2.15, 0.09, materials.get('glass'));
+    const reveal = box(width * 0.76, 2.27, 0.08, materials.get('windowRecess'));
+    reveal.position.set(0, 1.3, -depth / 2 - 0.045); group.add(reveal);
+    const frontage = box(width * 0.72, 2.15, 0.09, materials.get('windowGlaze'));
     frontage.position.set(0, 1.3, -depth / 2 - 0.055);
     group.add(frontage);
+    for (const side of [-1, 1]) {
+      const pier = box(0.22, height, 0.24, materials.get('sandstone'));
+      pier.position.set(side * (width / 2 - 0.18), height / 2, -depth / 2 - 0.07); group.add(pier);
+      const frame = box(0.09, 2.23, 0.16, materials.get('wood'));
+      frame.position.set(side * width * 0.36, 1.3, -depth / 2 - 0.14); group.add(frame);
+    }
+    const mullion = box(0.065, 2.15, 0.13, materials.get('wood'));
+    mullion.position.set(0, 1.3, -depth / 2 - 0.15); group.add(mullion);
+    const cornice = box(width + 0.42, 0.22, depth + 0.4, materials.get('sandstone'));
+    cornice.position.y = height + 0.11; group.add(cornice);
     const threshold = box(width * 0.78, 0.12, 0.72, materials.get('stone'));
     threshold.position.set(0, 0.08, -depth / 2 - 0.34);
     group.add(threshold);
@@ -68,6 +82,9 @@ export function addVenueDressing(
     const sign = box(width * Math.min(0.82, 0.6 * profile.signScale), 0.62 * profile.signScale, 0.14, materials.get(ACCENTS[profile.accent]));
     sign.position.set(0, Math.min(height - 0.72, 3.45), -depth / 2 - 0.13);
     group.add(sign);
+    const lettering = materials.createSign(venue.displayName, width * Math.min(0.8, 0.58 * profile.signScale), 0.58 * profile.signScale);
+    lettering.position.copy(sign.position); lettering.position.z -= 0.081; lettering.rotation.y = Math.PI;
+    group.add(lettering);
 
     if (profile.canopy) {
       const canopy = box(width * 0.86, 0.12, 1.25, materials.get(ACCENTS[profile.accent]));
@@ -76,6 +93,7 @@ export function addVenueDressing(
       group.add(canopy);
     }
 
+    dressSimpleFacades(group, materials, width, depth, height, 'z-');
     if (ring === 'active') {
       addActiveDetail(group, venue, profile, width, depth, height, materials);
     }
@@ -86,6 +104,7 @@ export function addVenueDressing(
       colliders.push(physics.createFixedCuboid(
         { x: venue.position.x, y: y + height / 2, z: venue.position.z },
         { x: width / 2, y: height / 2, z: Math.max(1.7, depth / 2 - 0.72) },
+        group.rotation.y,
       ));
     }
   }
@@ -109,7 +128,7 @@ function addActiveDetail(
 ): void {
   const frontZ = -depth / 2 - 0.12;
   for (let i = 0; i < profile.windowBands; i += 1) {
-    const band = box(Math.max(0.7, width * 0.13), 0.95, 0.08, materials.get(profile.windowGlow ? 'curtainWarm' : 'glass'));
+    const band = box(Math.max(0.7, width * 0.13), 0.95, 0.08, materials.get(profile.windowGlow ? 'curtainWarm' : 'windowGlaze'));
     band.position.set(-width * 0.28 + i * Math.min(width * 0.28, 1.45), Math.min(height - 1.25, 3.25), frontZ);
     group.add(band);
   }

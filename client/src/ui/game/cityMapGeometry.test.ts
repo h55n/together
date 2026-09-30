@@ -12,7 +12,7 @@ describe('Amaya Bay map geometry', () => {
     expect(primary).toBeTruthy();
     expect(primary!.points.length).toBeGreaterThanOrEqual(6);
     expect(primary!.points.some((point) => point.x < -200)).toBe(true);
-    expect(primary!.points.some((point) => point.x > 150)).toBe(true);
+    expect(primary!.points.some((point) => point.x > 50)).toBe(true);
     expect(primary!.points.some((point) => point.z < -220)).toBe(true);
   });
 

@@ -32,6 +32,7 @@ describe('physics lifecycle', () => {
       debug: disposable(),
       audio: disposable(),
       weather: disposable(),
+      lighting: disposable(),
       npcs: disposable(),
       namedNpcs: disposable(),
       voice: null,

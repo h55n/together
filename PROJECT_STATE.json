@@ -2,24 +2,32 @@
   "project": "Together",
   "city": "Amaya Bay",
   "prd": "docs/PRD.md",
-  "branch": "build/amaya-bay-v1",
+  "branch": "fix/audit-recovery-2026-09-17",
   "head": "9f355fd6607902c2dbe035102a014c5abc1e9466",
   "head_note": "This is the implementation commit. Final handoff documentation is committed after it; use git rev-parse HEAD for the documentation-only final HEAD.",
   "last_completed_phase": "Phase 13 — Home Growth + Moving (complete with known limitations)",
-  "active_phase": "Phase 16 — Performance + Accessibility + Release Quality",
+  "active_phase": "World visual production — build first, optimize after completion",
+  "visual_pass_2026_09_30": {
+    "status": "IN PROGRESS; reference art and release performance targets not met",
+    "changes": "Shared and instanced vegetation, nearby/distant crown detail, street-facing facade prototypes and rotated collisions, planted residential terrain, continuous painted sky/light, analytic water normals and distant cadence, bounded retirement and stale queue cancellation, real animation-frame timing",
+    "verification": "Full pnpm verify passed after foliage/cloud changes; subsequent planted-ground change passed 12 targeted world tests and client typecheck",
+    "evidence": ".art-review/current-world/ and docs/superpowers/plans/2026-09-29-amaya-bay-art-and-smoothness-progress.md",
+    "remaining": "Cold chunk construction hitches, excessive scene submissions, foreground/architecture composition, full continuous route and venue matrix, production art/animation/audio, WebGPU and physical 1080p performance, multiplayer/voice/persistence acceptance"
+  },
   "verification": {
-    "sandbox_safe": "PASS",
-    "automated_tests": { "passed": 161, "failed": 0 },
+    "local_environment": "Node 24 and pnpm 12.4.1 in current Windows workspace",
+    "full_pnpm_verify": "PASS (2026-09-23)",
+    "automated_tests": "PASS (shared, content, server, client, and 175 pure-verification checks)",
     "client_typecheck": "PASS",
     "shared_typecheck": "PASS",
     "content_typecheck": "PASS",
+    "server_typecheck": "PASS",
+    "lint": "PASS with existing warnings",
     "content_validation": "PASS",
     "repository_integrity": "PASS",
-    "clean_pnpm_install": "BLOCKED: registry DNS unavailable and pnpm absent",
-    "server_clean_typecheck": "BLOCKED: copied dependency tree missing declared types/current Drizzle",
-    "lint": "BLOCKED: copied dependency tree missing declared TypeScript ESLint plugin",
-    "production_build": "BLOCKED: copied dependency tree missing Linux Rollup optional package",
-    "playwright": "BLOCKED: clean dependency/browser environment unavailable",
+    "production_build": "PASS",
+    "playwright": "PASS in explicit WebGL2 mode for home exit, three district viewpoints, and accelerated browser player/Rapier traversal from home through Lantern Street to Bay Steps; human-paced acceptance remains",
+    "native_webgpu": "UNVERIFIED; headless default renderer lost graphics device",
     "target_hardware_performance": "NOT RUN"
   },
   "completed_systems": [
@@ -34,7 +42,7 @@
     "quality profile gameplay-invariance rules"
   ],
   "partial_systems": [
-    "WebGPU-first runtime pending clean browser build verification",
+    "WebGPU-first runtime exists but headless device loss and physical-hardware validation remain unresolved",
     "Amaya Bay procedural/development art pending production asset replacement",
     "procedural avatar/micro-motion pending production rig, clips and IK",
     "five home shells pending final interior art",
@@ -51,31 +59,32 @@
     "production district/interaction audio library",
     "baked per-chunk NPC navmesh/path batching/door-link system",
     "production observability/rate-limit hardening",
-    "complete PRD developer-debug editor suite",
-    "clean generated pnpm-lock.yaml from connected Node 24 install"
+    "complete PRD developer-debug editor suite"
   ],
   "known_issues": [
-    "sandbox Node is v22.16.0 while project requires Node 24",
-    "sandbox cannot resolve registry.npmjs.org so Corepack cannot fetch pnpm",
-    "uploaded node_modules is platform-stale and must not be reused",
-    "production Vite/server/Playwright verification remains outstanding",
-    "development procedural art does not satisfy final shipping art bar"
+    "The accelerated browser route passes; normal-speed camera/composition and human acceptance remain unverified.",
+    "The visual art pass remains below the attached reference quality bar.",
+    "Headless default WebGPU lost its graphics device; explicit WebGL2 mode renders.",
+    "Lantern Street headless snapshot reached about 790 draws and 2.1M triangles, above Medium budgets; optimization is deferred until the world pass is complete.",
+    "Production Supabase, TURN, multiplayer soak, and target-hardware performance remain unverified."
   ],
   "external_setup": [
-    "Node 24 LTS + pnpm 12.4.1 clean install",
     "Supabase project, database migrations 001-009, Auth and private Storage bucket",
     "production TURN service for WebRTC",
     "final licensed/original GLB/KTX2/audio asset pipeline"
   ],
   "next_tasks": [
-    "run first connected Node 24 pnpm install, generate and commit pnpm-lock.yaml",
-    "run full pnpm typecheck/lint/test/validate/build and Playwright",
-    "run two-browser Couple and multi-client Friends acceptance/soak tests",
-    "replace procedural avatar with final rig/animations/IK",
-    "replace hero-route procedural art with final Amaya Bay assets and tune LOD/compression",
-    "implement production NPC navmesh/path batching",
-    "production-test Supabase private Memories and TURN voice",
-    "profile Medium/Low on PRD target hardware and tune performance",
-    "execute PRD Quiet Walk, Shared Kitchen, Money, Rain, Moving, Memory and No-HUD acceptance tests"
-  ]
+    "Visually inspect normal-speed Mogra Court to Lantern Street to Bay Steps play, including camera and transitions.",
+    "Polish district architecture, props, vegetation, water and street life to the attached reference quality bar.",
+    "Verify embodied job, leisure, interior, NPC, weather and night presentation in-world.",
+    "Then profile and optimize draw calls, streaming, memory, shadows and water on target hardware.",
+    "Run production Supabase, TURN, multiplayer and device-matrix validation."
+  ],
+  "world_build": {
+    "details": "docs/WORLD_BUILD_2026_09.md",
+    "status": "in_progress",
+    "reference_quality_achieved": false,
+    "native_webgpu_validated": false,
+    "optimization_complete": false
+  }
 }

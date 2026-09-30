@@ -7,8 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(root, '.verify-dist');
 await rm(outDir, { recursive: true, force: true });
 
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-const tsc = spawnSync(pnpm, ['exec', 'tsc', '-p', path.join(root, 'tools/tsconfig.verify.json')], {
+const tsc = spawnSync(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '-p', path.join(root, 'tools/tsconfig.verify.json')], {
   cwd: root,
   stdio: 'inherit',
 });

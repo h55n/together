@@ -38,3 +38,8 @@ temp/
 *.tsbuildinfo
 
 .verify-dist/
+
+# Local visual review artifacts
+.art-review/
+client/test-results/
+server/.runtime/

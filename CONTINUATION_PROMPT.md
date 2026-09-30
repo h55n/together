@@ -286,3 +286,8 @@ Do not weaken tests, TypeScript, renderer architecture or browser support to mak
 Only after the world/camera/performance gate is healthy should you resume deeper release work such as production avatar polish, NPC navmesh/door links, shared-kitchen acceptance, Supabase production validation, TURN/voice soak, final weather/audio pass, browser/controller matrix, and the remaining PRD acceptance tests.
 
 The immediate objective is not “more systems.” It is to make the existing game finally look, move and render like the Together V1 described by the PRD.
+
+
+## Current world-building pass — 2026-09-22
+
+See [World build status](docs/WORLD_BUILD_2026_09.md) for implemented visuals, actual verification, and outstanding work. This pass is **in progress**; finished-reference quality, full route validation and optimization are not claimed. Earlier status entries below/above are historical.

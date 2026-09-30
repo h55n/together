@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueGameplayRole, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type Placement2D, type VenueGameplayRole, type RecipeAction } from '@together/shared';
+import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueFrontApproach, venueGameplayRole, worldToChunk, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type Placement2D, type VenueGameplayRole, type RecipeAction } from '@together/shared';
 import { Renderer } from './core/Renderer';
 import { GameLoop } from './core/GameLoop';
 import { InputManager } from './core/InputManager';
 import { PhysicsWorld } from './physics/PhysicsWorld';
 import { MaterialLibrary } from './world/MaterialLibrary';
 import { buildLanternStreetHero } from './world/HeroStreet';
+import { streetCenterline } from './world/StreetNetwork';
 import { AmayaBayEnvironment } from './world/AmayaBayEnvironment';
 import { WorldStreamer } from './world/WorldStreamer';
 import { amayaBayBoundaryCuboids, createAmayaBayChunkFactory } from './world/AmayaBayChunkFactory';
@@ -61,6 +62,7 @@ export class GameEngine {
   readonly performance: PerformanceMonitor;
 
   private animationFrame = 0;
+  private previousFrameTimestamp: number | null = null;
   private gameMinutes: number;
   private disposed = false;
   private readonly loop: GameLoop;
@@ -157,7 +159,7 @@ export class GameEngine {
     const lanternOrigin = { x: -30, y: cityHeightAt(-30, 75), z: 75 };
     const street = buildLanternStreetHero(materials, physics, lanternOrigin);
     scene.add(street.group);
-    const environment = new AmayaBayEnvironment(materials);
+    const environment = new AmayaBayEnvironment(materials, physics);
     scene.add(environment.root);
     const home = buildPropertyInterior(materials, physics, options.propertyId);
     scene.add(home.group);
@@ -189,22 +191,33 @@ export class GameEngine {
       anchorInteraction(street.interactionAnchors, 'street_bench_west', 'Sit on bench', 'sit', 2.4, 2, 2.4),
       { ...anchorInteraction(street.interactionAnchors, 'bicycle_rack', 'Take a bicycle', 'pick_up', 2.5, 2, 1.1), activityId: 'cycling' },
       anchorInteraction(street.interactionAnchors, 'street_planter', 'Water planter', 'water', 2.6, 3, 2.0),
-      locationInteraction('bay_cycle_hut', 'Rent scooter', 'scooter', 3.4, 5, { transportMode: 'scooter' }),
-      locationInteraction('bay_kayak_hut', 'Launch kayak', 'kayak', 4.0, 6, { transportMode: 'kayak', activityId: 'kayak' }),
+      { id: 'sunset_lookout', label: 'Watch the bay from the bench', action: 'sit', x: 69.5, z: -278, radius: 3.2, priority: 4, durationSeconds: 4 },
+      { id: 'bay_cycle_hut', label: 'Rent scooter', action: 'scooter', x: 55, z: -257.5, radius: 3.5, priority: 5, durationSeconds: 0.7, transportMode: 'scooter' },
+      { id: 'bay_kayak_hut', label: 'Launch kayak', action: 'kayak', x: 135, z: -330, radius: 4.0, priority: 6, durationSeconds: 0.7, transportMode: 'kayak', activityId: 'kayak' },
+      { id: 'library_reading', label: 'Read on the library bench', action: 'sit', x: 225.5, z: -63.2, radius: 3.2, priority: 4, durationSeconds: 4 },
       locationInteraction('park_picnic_lawn', 'Lay out a picnic', 'sit', 5.5, 3, { activityId: 'picnic' }),
       locationInteraction('park_badminton', 'Play badminton', 'high_five', 4.8, 4, { activityId: 'badminton' }),
       locationInteraction('hill_minigolf', 'Play a mini-golf hole', 'point', 4.8, 4, { activityId: 'mini_golf' }),
       locationInteraction('lantern_cafe_roshan', 'Sit for coffee', 'sit', 3.5, 3, { activityId: 'cafe_hangout' }),
-      ...namedNpcDefinitions.flatMap((npc): WorldInteraction[] => {
+      ...namedNpcDefinitions.flatMap((npc, index): WorldInteraction[] => {
         const anchor = locationAnchor(npc.homeOrWork);
-        return anchor ? [{ id: `npc-talk:${npc.id}`, label: `Talk to ${npc.displayName}`, action: 'nod', x: anchor.position.x, z: anchor.position.z, radius: 4.0, priority: 7, durationSeconds: 0.7, npcId: npc.id }] : [];
+        const phase = index * 0.83;
+        return anchor ? [{ id: `npc-talk:${npc.id}`, label: `Talk to ${npc.displayName}`, action: 'nod', x: anchor.position.x + Math.sin(phase * 2.2) * 2.4, z: anchor.position.z + Math.cos(phase * 1.7) * 2.4, radius: 3.0, priority: 7, durationSeconds: 0.7, npcId: npc.id }] : [];
       }),
       ...AUTO_DESTINATIONS.map((destination): WorldInteraction => ({ id: `auto-stand:${destination.id}`, label: 'Call auto-rickshaw', action: 'point', x: destination.position.x, z: destination.position.z, radius: 4.6, priority: 4, durationSeconds: 0.6 })),
       ...home.interactions,
-      ...AMAYA_BAY_VENUES.map((venue): WorldInteraction => ({
-        id: `venue:${venue.id}`, label: venueInteractionLabel(venue.category, venue.displayName), action: 'point',
-        x: venue.position.x, z: venue.position.z, radius: Math.max(3.2, venue.frontageMetres * 0.55), priority: venue.hero ? 5 : 3, durationSeconds: 0.7,
-      })),
+      ...AMAYA_BAY_VENUES.map((venue): WorldInteraction => {
+        const approach = venue.id === 'cafe_roshan' ? { x: -39, z: 60 }
+          : venue.id === 'dev_cycle_hut' ? { x: 55, z: -257.5 }
+          : venue.id === 'kayak_cove' ? { x: 135, z: -330 }
+            : venue.id === 'hill_tea_hut' ? { x: 283, z: 265.5 }
+              : venueFrontApproach(venue);
+        return {
+          id: `venue:${venue.id}`, label: venueInteractionLabel(venue.category, venue.displayName), action: 'point',
+          x: approach.x, z: approach.z,
+          radius: Math.max(3.2, venue.frontageMetres * 0.45), priority: venue.hero ? 5 : 3, durationSeconds: 0.7,
+        };
+      }),
     ];
     const interactions = new InteractionSystem(interactionDefinitions, options.onInteractionPrompt);
     const microActions = new MicroActionRuntime(
@@ -262,6 +275,7 @@ export class GameEngine {
     this.canvas.addEventListener('pointerdown', this.onFirstGesture, { once: true });
     window.addEventListener('resize', this.onResize);
     this.network?.connect();
+    this.previousFrameTimestamp = null;
     this.loop.reset();
     this.animationFrame = requestAnimationFrame(this.onAnimationFrame);
   }
@@ -342,6 +356,86 @@ export class GameEngine {
     this.onMoment?.(`Auto ride · ${destination.displayName}`);
   }
 
+  /** Development visual review only; placement never enters production gameplay. */
+  placeForWorldReview(x: number, z: number): void {
+    if (!import.meta.env.DEV || !Number.isFinite(x) || !Number.isFinite(z) || Math.abs(x) > 450 || Math.abs(z) > 450) {
+      throw new Error('World review placement is unavailable');
+    }
+    const position = { x, y: cityHeightAt(x, z) + 1.1, z };
+    this.player.setWorldPosition(position);
+    this.worldStreamer.refreshNow(new THREE.Vector3(position.x, position.y, position.z));
+  }
+  /** Face a review camera toward an authored frontage without changing player movement. */
+  faceForWorldReview(yaw: number): void {
+    if (!import.meta.env.DEV || !Number.isFinite(yaw)) throw new Error('World review facing is unavailable');
+    this.camera.yaw = yaw;
+    this.camera.pitch = 0;
+    this.camera.update(0, false, false);
+  }
+  /** Accelerated, collider-backed route audit available only to the local development review page. */
+  reviewWalkHeroRoute(): { reachedBay: boolean; checkpoints: string[]; blockedAt?: { x: number; y: number; z: number; targetX: number; targetZ: number; distance: number } } {
+    if (!import.meta.env.DEV || new URLSearchParams(window.location.search).get('worldReview') !== '1') {
+      throw new Error('World route review is unavailable');
+    }
+    cancelAnimationFrame(this.animationFrame);
+    this.input.disable();
+    const checkpoints: string[] = [];
+    let currentChunk = '';
+    const ensureGround = (x: number, z: number): void => {
+      const chunk = worldToChunk({ x, z });
+      const key = `${chunk.x},${chunk.z}`;
+      if (key === currentChunk) return;
+      currentChunk = key;
+      this.worldStreamer.refreshNow(new THREE.Vector3(x, cityHeightAt(x, z) + 1.1, z));
+    };
+    const walkTo = (target: { x: number; z: number }): { x: number; y: number; z: number; targetX: number; targetZ: number; distance: number } | undefined => {
+      const initial = this.player.getPosition();
+      const limit = Math.ceil(Math.hypot(target.x - initial.x, target.z - initial.z) / 0.25) + 20;
+      for (let step = 0; step < limit; step += 1) {
+        const position = this.player.getPosition();
+        const dx = target.x - position.x;
+        const dz = target.z - position.z;
+        const distance = Math.hypot(dx, dz);
+        if (distance < 0.13) break;
+        const length = Math.min(distance, 0.25);
+        ensureGround(position.x + dx / distance * length, position.z + dz / distance * length);
+        this.physics.moveCharacter(this.player.physicsHandle, {
+          x: dx / distance * length, y: -0.075, z: dz / distance * length,
+        });
+        this.physics.step();
+      }
+      const actual = this.player.getPosition();
+      const distance = Math.hypot(target.x - actual.x, target.z - actual.z);
+      return distance > 0.55 ? { x: actual.x, y: actual.y, z: actual.z, targetX: target.x, targetZ: target.z, distance } : undefined;
+    };
+    try {
+      const route = streetCenterline('primary-spine');
+      const start = this.player.getPosition();
+      ensureGround(start.x, start.z);
+      let blocked = walkTo({ x: start.x, z: 193.5 }) ?? walkTo({ x: start.x, z: 190 });
+      const entryIndex = route.reduce((best, point, index) => {
+        const distance = Math.hypot(point.x - start.x, point.z - 189);
+        const bestDistance = Math.hypot(route[best]!.x - start.x, route[best]!.z - 189);
+        return distance < bestDistance ? index : best;
+      }, 0);
+      if (!blocked) blocked = walkTo(route[entryIndex]!);
+      for (const target of route.slice(entryIndex + 1)) {
+        if (blocked) break;
+        blocked = walkTo(target);
+        if (!blocked && target.z < 80 && !checkpoints.includes('lantern_street')) checkpoints.push('lantern_street');
+      }
+      const last = this.player.getPosition();
+      this.player.syncVisual(this.camera.yaw, 0);
+      this.worldStreamer.refreshNow(new THREE.Vector3(last.x, last.y, last.z));
+      if (!blocked && last.z < -260) checkpoints.push('bay_steps');
+      return { reachedBay: !blocked && last.x > 90 && last.z < -260, checkpoints, ...(blocked ? { blockedAt: blocked } : {}) };
+    } finally {
+      this.previousFrameTimestamp = null;
+      this.loop.reset();
+      this.input.enable();
+      this.animationFrame = requestAnimationFrame(this.onAnimationFrame);
+    }
+  }
   playContextAction(action: string): void {
     const mapped = jobActionToAvatarAction(action);
     this.player.beginMicroAction(mapped, mapped === 'carry' || mapped === 'cycle' ? 1.8 : 1.25, true);
@@ -368,6 +462,7 @@ export class GameEngine {
     this.debug.dispose();
     this.audio.dispose();
     this.weather.dispose();
+    this.lighting.dispose();
     this.npcs.dispose();
     this.namedNpcs.dispose();
     this.voice?.dispose();
@@ -387,6 +482,8 @@ export class GameEngine {
 
   private readonly onAnimationFrame = (timestamp: number): void => {
     if (this.disposed) return;
+    if (this.previousFrameTimestamp !== null) this.performance.recordFrame(timestamp - this.previousFrameTimestamp);
+    this.previousFrameTimestamp = timestamp;
     this.loop.frame(timestamp);
     this.animationFrame = requestAnimationFrame(this.onAnimationFrame);
   };
@@ -457,7 +554,8 @@ export class GameEngine {
     }
 
     this.gameMinutes = (this.gameMinutes + realSecondsToGameMinutes(deltaSeconds)) % 1440;
-    this.measureSystem('lighting', () => this.lighting.update(this.gameMinutes, this.avatar.root.position));
+    this.materials.setTime(this.gameMinutes);
+    this.measureSystem('lighting', () => this.lighting.update(this.gameMinutes, this.avatar.root.position, this.weather.wetness));
     this.measureSystem('weather', () => this.weather.update(deltaSeconds, this.avatar.root.position));
     this.measureSystem('ambient-npcs', () => this.npcs.update(deltaSeconds, this.avatar.root.position));
     this.measureSystem('named-npcs', () => this.namedNpcs.update(deltaSeconds, this.gameMinutes, this.avatar.root.position));
@@ -490,14 +588,14 @@ export class GameEngine {
     this.measureSystem('render', () => this.renderer.renderer.render(this.scene, this.camera.camera));
     const info = this.renderer.renderer.info.render;
     this.performance.recordRenderer(info.calls, info.triangles);
-    this.performance.recordFrame(performance.now() - start);
+    this.performance.recordCpuFrame(performance.now() - start);
     this.sceneMetricsElapsed += deltaSeconds;
     if (this.sceneMetricsElapsed >= 0.25) {
       this.sceneMetricsElapsed = 0;
       this.recordSceneMetrics();
     }
     this.applyVisualBudget(this.adaptiveQuality.sample(this.performance.read()));
-    this.debug.update(deltaSeconds, { weather: this.weather.state, gameTime: formatGameTime(this.gameMinutes) });
+    this.debug.update(deltaSeconds, { weather: this.weather.state, gameTime: formatGameTime(this.gameMinutes), position: playerPosition });
   }
 
   private measureSystem<T>(name: string, operation: () => T): T {

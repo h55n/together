@@ -17,7 +17,7 @@ export class DebugOverlay {
     parent.appendChild(this.element);
   }
 
-  update(deltaSeconds: number, extras: { weather: string; gameTime: string }): void {
+  update(deltaSeconds: number, extras: { weather: string; gameTime: string; position?: { x: number; z: number } }): void {
     this.elapsed += deltaSeconds;
     if (this.elapsed < 0.25) return;
     this.elapsed = 0;
@@ -25,8 +25,11 @@ export class DebugOverlay {
     this.element.textContent = [
       `${this.rendererInfo.backend.toUpperCase()} · ${p.fps.toFixed(0)} fps · ${p.cpuFrameMs.toFixed(1)} ms CPU`,
       `${p.drawCalls} draws · ${(p.triangles / 1000).toFixed(0)}k tris`,
+      `p95/p99 ${p.p95FrameMs.toFixed(1)}/${p.p99FrameMs.toFixed(1)} ms · >50ms ${p.framesOver50ms}/${p.frameSampleCount}`,
+      `stream ${p.pendingStreamingJobs} pending · ${p.streamingCommitMs.toFixed(1)} ms commit`,
       `chunks A/V/H ${p.activeChunks}/${p.visualChunks}/${p.horizonChunks}`,
       `${extras.gameTime} · ${extras.weather.replaceAll('_', ' ')}`,
+      ...(extras.position ? [`position ${extras.position.x.toFixed(1)}, ${extras.position.z.toFixed(1)}`] : []),
       `V camera · E interact · Shift jog`,
     ].join('\n');
   }

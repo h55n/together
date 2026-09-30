@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { venueVisualProfile } from './venues.js';
+import { venueDepth, venueFrontApproach, venueVisualProfile, venueYaw } from './venues.js';
+import { AMAYA_BAY_VENUES } from './city.js';
 
 test('venue visual profiles keep groceries, cafés, repair shops and laundries visually distinct', () => {
   const grocery = venueVisualProfile('grocery', false);
@@ -32,4 +33,18 @@ test('every everyday venue category maps to an in-world gameplay role', async ()
   assert.equal(venueGameplayRole('furniture'), 'furniture_shop');
   assert.equal(venueGameplayRole('plants'), 'plant_shop');
   assert.equal(venueGameplayRole('rental'), 'rental');
+});
+
+test('ordinary venue prompts sit outside the rendered frontage and aligned collider', () => {
+  for (const venue of AMAYA_BAY_VENUES) {
+    if (['dev_cycle_hut', 'kayak_cove', 'hill_tea_hut'].includes(venue.id)) continue;
+    const approach = venueFrontApproach(venue);
+    const yaw = venueYaw(venue);
+    const forward = { x: -Math.sin(yaw), z: -Math.cos(yaw) };
+    const offset = { x: approach.x - venue.position.x, z: approach.z - venue.position.z };
+    const frontDistance = offset.x * forward.x + offset.z * forward.z;
+    const sideways = offset.x * -forward.z + offset.z * forward.x;
+    assert.ok(frontDistance > venueDepth(venue) / 2 + 0.5, `${venue.id} is inside its frontage`);
+    assert.ok(Math.abs(sideways) < 1e-6, `${venue.id} is off-centre from its frontage`);
+  }
 });
