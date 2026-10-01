@@ -2,11 +2,11 @@
   "project": "Together",
   "city": "Amaya Bay",
   "prd": "docs/PRD.md",
-  "branch": "codex/playtest-polish-2026-09-30",
-  "head": "309a724a84b64b5a405e17a483a979c57779a187",
-  "head_note": "Published game implementation milestone. Documentation-only evidence follows; use git rev-parse HEAD for latest.",
-  "last_completed_phase": "Phase 13 — Home Growth + Moving (complete with known limitations)",
-  "active_phase": "World visual production — build first, optimize after completion",
+  "branch": "build/amaya-bay-v1",
+  "head": "057f20f",
+  "head_note": "Local integration checkpoint; publication pending six-player browser startup regression. Use git rev-parse HEAD for exact current commit.",
+  "last_completed_phase": "Phase 13 \u2014 Home Growth + Moving (complete with known limitations)",
+  "active_phase": "World visual production \u2014 build first, optimize after completion",
   "visual_pass_2026_09_30": {
     "status": "IN PROGRESS; reference art and release performance targets not met",
     "changes": "Shared and instanced vegetation, nearby/distant crown detail, street-facing facade prototypes and rotated collisions, planted residential terrain, continuous painted sky/light, analytic water normals and distant cadence, bounded retirement and stale queue cancellation, real animation-frame timing",
@@ -16,8 +16,8 @@
   },
   "verification": {
     "local_environment": "Node 24 and pnpm 12.4.1 in current Windows workspace",
-    "full_pnpm_verify": "PASS (2026-09-30; inspected 2026-10-01)",
-    "automated_tests": "PASS (shared, content, server, client, and 176 pure verification checks)",
+    "full_pnpm_verify": "PASS (merged source, 2026-10-01)",
+    "automated_tests": "PASS: 125 shared, 8 content, 119 client Vitest, 10 client Node, 30 server, 196 pure checks",
     "client_typecheck": "PASS",
     "shared_typecheck": "PASS",
     "content_typecheck": "PASS",
@@ -26,10 +26,10 @@
     "content_validation": "PASS",
     "repository_integrity": "PASS",
     "production_build": "PASS",
-    "playwright": "PASS: 3 arrival/guide/recovery tests and 7-district capture with actual 20-second walking sample; complete continuous normal-speed route and full venue acceptance remain",
+    "playwright": "Merged result: Couple two-context, solo world and 3 arrival/recovery tests PASS; Friends six-context loading timeout FAIL, including focus and 960x540 diagnostic reruns.",
     "native_webgpu": "Physical WebGPU UNVERIFIED; ordinary browser recovers to native WebGL2 after local device creation failure",
     "target_hardware_performance": "NOT RUN",
-    "merged_result": "PENDING re-verification after integration"
+    "merged_result": "Full pnpm verify PASS; browser 5/6 PASS. Friends six-player startup loading timeout remains; not published."
   },
   "completed_systems": [
     "data-driven story engine and 36-story V1 library",
@@ -66,11 +66,12 @@
     "The accelerated browser route passes; normal-speed camera/composition and human acceptance remain unverified.",
     "The visual art pass remains below the attached reference quality bar.",
     "Local WebGPU device creation fails; ordinary browser now recovers to native WebGL2. Recovery resets transient engine state.",
-    "Latest district samples reach 881 draws and about 2.1M triangles; cold streaming p99 up to 1116.5ms and warm 37-60 FPS at 960x540 leave smoothness targets unmet.",
-    "Production Supabase, TURN, multiplayer soak, and target-hardware performance remain unverified."
+    "Pre-merge performance only: 881 draws, about 2.1M triangles, cold streaming p99 up to 1116.5ms and warm 37-60 FPS at 960x540. Merged release performance remains unverified.",
+    "Production Supabase, TURN, multiplayer soak, and target-hardware performance remain unverified.",
+    "Merged six-player browser acceptance stalls during later-player world preparation beyond 30 seconds; root cause unconfirmed."
   ],
   "external_setup": [
-    "Supabase project, database migrations 001-009, Auth and private Storage bucket",
+    "Supabase project, database migrations 001-012, Auth and private Storage bucket",
     "production TURN service for WebRTC",
     "final licensed/original GLB/KTX2/audio asset pipeline"
   ],
@@ -103,7 +104,7 @@
     "verified_runtime_head": "5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073",
     "verified_github_actions_run": "35490206098",
     "head_note": "Documentation may descend from the verified runtime head; use git rev-parse HEAD for the exact current documentation SHA.",
-    "active_phase": "Phase 16 — Performance + Accessibility + Release Quality",
+    "active_phase": "Phase 16 \u2014 Performance + Accessibility + Release Quality",
     "verification": {
       "connected_ci": "PASS",
       "node": "24",
@@ -143,5 +144,15 @@
       "final audio/weather/LOD/compression acceptance",
       "Quiet Walk, Shared Kitchen, Money, Rain, Moving, Memory and No-HUD acceptance tests"
     ]
+  },
+  "integration_2026_10_01": {
+    "branches": [
+      "codex/playtest-polish-2026-09-30",
+      "fix/audit-recovery-2026-09-17 through 77646da",
+      "fix/audit-hardening-2026-09-17 through c3dc06d"
+    ],
+    "target": "build/amaya-bay-v1",
+    "status": "Saved locally; publication pending six-player browser startup regression",
+    "report": "docs/MERGE_CLEANUP_2026_10_01.md"
   }
 }

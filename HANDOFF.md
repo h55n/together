@@ -10,10 +10,14 @@ The product is about the feeling of living a life with someone. It is not a comb
 
 `docs/PRD.md` is the single source of truth. It supersedes every old Game Bible, prototype assumption, historical implementation note and old architecture wherever they conflict.
 
+## Current integration — October 1
+
+See `docs/MERGE_CLEANUP_2026_10_01.md` for merged branches, cleanup and current verification. Earlier verification statements below refer to their recorded recovery checkpoints. The coastal onboarding, guide, gaze, textures and native graphics recovery are included alongside production auth/network and embodied gameplay work.
+
 ## Current Repository State
 
 - Project: Together V1 — Amaya Bay
-- Active recovery branch: `fix/audit-recovery-2026-09-17`
+- Integrated default branch: `build/amaya-bay-v1`
 - Latest fully verified runtime HEAD: `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073`
 - Verified GitHub Actions run: `35490206098` — **success**
 - Documentation-only commits may descend from that runtime baseline; use `git rev-parse HEAD` for the current documentation SHA.

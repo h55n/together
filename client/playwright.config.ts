@@ -12,6 +12,7 @@ export default defineConfig({
   use: {
     baseURL,
     trace: 'retain-on-failure',
+    launchOptions: process.platform === 'win32' ? { args: ['--use-angle=d3d11'] } : {},
     screenshot: 'only-on-failure',
   },
   webServer: {
