@@ -28,3 +28,10 @@ The ordinary browser smoke initially rendered a white world with zero draws. Con
 Recovery now rebuilds a fresh canvas with native WebGL2 on universal fallback or device loss. Healthy WebGPU remains preferred. The ordinary URL renders with the native backend after recovery. Regression tests cover the internal compatibility override, fresh canvas, disposal, open-menu input neutrality and ignored stale callbacks; 17 focused tests pass. Reviewer Important findings about menu gating and canceled startup callbacks were fixed and retested.
 
 Ruling: rebuild the engine after graphics failure to restore a usable browser session — a canvas cannot switch its established context type — cost if wrong: in-session world position/time and transient local activity state can reset. Persisted identity, household and guide state are retained; physical WebGPU, mid-session recovery continuity and production soak remain acceptance work.
+
+## Final evidence and publishing — October 1
+Implementation milestone `309a724a84b64b5a405e17a483a979c57779a187` was pushed successfully; `git ls-remote` matched local HEAD. All requested source changes in this milestone are on GitHub.
+
+Refreshed world capture passed (2.1 minutes): seven district viewpoints, close street/cafe/shore surfaces, rain/sunset and actual 20-second ordinary walking. No page errors. Hardware: Intel UHD via ANGLE D3D11, viewport 960×540. Warm district FPS: Mogra 54.4, Lantern 58.5, Bay 37.1, Park 55.3, Rain Tree 42.1, Common 47.9, Hill 60.0. Walk 41.6 FPS. Cold loading p99 up to 1116.5 ms; peak warm draws 881. Evidence: `.art-review/playtest-world-refresh.log` and `.art-review/current-world/metrics.json`.
+
+Inspected new arrival and player-height surface screenshots. Recorded `.art-review/amaya-bay-playtest-2026-10-01.mp4` and rebuilt seven-district overview. Review travel uses developer teleport between viewpoints; it is not a complete continuous world/venue acceptance route. Reference art quality, bounded cold construction, 1080p targets, final animation/audio, gameplay balancing and online/device acceptance remain unfinished as listed in the state report.

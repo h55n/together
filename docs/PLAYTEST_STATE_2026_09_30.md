@@ -10,7 +10,7 @@ There is no reliable single percentage: implementation, production assets and re
 
 1. **World production art:** richer building shapes, foregrounds, terrain/shore composition, props and interiors matching the supplied references. Current procedural assets are still development art.
 2. **Character and atmosphere:** final humanoid models/rigs/clips/IK, NPC pathing/facial animation, district soundscapes and interaction audio.
-3. **Comfort and performance:** cold chunk work split into bounded preparation, fewer draw submissions, sustained 1080p Medium/Low targets and the full continuous normal-speed route. Latest earlier 960×540 samples were 38–60 FPS stationary and approximately 40 FPS walking; this texture pass is not a performance certification.
+3. **Comfort and performance:** cold chunk work split into bounded preparation, fewer draw submissions, sustained 1080p Medium/Low targets and the full continuous normal-speed route. Refreshed 960×540 Intel UHD/ANGLE samples were 37.1–60.0 FPS stationary and 41.6 FPS walking. Cold district loading p99 reached 1116.5 ms and the densest view reached 881 draw calls; smoothness targets are still unmet. These short automated samples are not 1080p acceptance.
 4. **Gameplay polish:** player testing of story/job/task clarity, pacing, activity locations, progression and onboarding retention. First-day tasks now teach the basic controls; all progression and activities still need a complete playtest/balancing pass.
 5. **Online release testing:** production Supabase/storage, TURN/voice, multiplayer/device/controller/accessibility matrix, physical WebGPU and mid-session recovery continuity, and soak/observability. The ordinary browser URL now automatically recovers to native WebGL2 when the preferred renderer fails on this machine.
 
@@ -22,4 +22,7 @@ The local service uses an in-memory repository and needs `ALLOW_DEV_AUTH=true`; 
 Graphics recovery rebuilds the local engine on a fresh canvas, preserving identity/household and guide progress. Mid-session position/time and transient local activity state can reset; seamless recovery still needs acceptance testing.
 
 ## GitHub
-Work is being published in verified milestones to `h55n/together`, branch `codex/playtest-polish-2026-09-30`. The initial world checkpoint is `ec4775c`. Final entry/control/texture commit and exact verification evidence are recorded in the implementation progress ledger. Generated media and local runtime state are excluded.
+Work is published in verified milestones to `h55n/together`, branch `codex/playtest-polish-2026-09-30`. The world checkpoint is `ec4775c`; the onboarding/control/texture/recovery milestone is `309a724`. Both remote commits were verified. Generated media and local runtime state are excluded.
+
+## Latest evidence — October 1
+Full repository verification passed. All three arrival/guide/browser recovery tests passed, and the refreshed district capture passed in 2.1 minutes with no page errors. Local screenshots are in `.art-review/playtest-entry/` and `.art-review/current-world/`. The recording `.art-review/amaya-bay-playtest-2026-10-01.mp4` includes all seven district viewpoints, close surface views, rain/sunset and a 20-second walking sample. District transitions in this review use developer travel; it is not a continuous traversal of every street or venue.

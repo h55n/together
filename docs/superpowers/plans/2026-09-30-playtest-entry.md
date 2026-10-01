@@ -51,9 +51,9 @@ Files: `InputManager.ts/test.ts`, `PlayerAvatar.ts`, `CameraController.ts`, `pla
 ## Task 5 — Surface identity
 Files: `SurfaceTextures.ts`, `MaterialLibrary.ts`.
 - [x] Generate distinct seamless grass/asphalt/plaster/wood/paving maps and assign stable shared materials with matching repeat/roughness.
-- [ ] Inspect close player-height surfaces in daylight/evening; verify no extra per-frame texture work or disposed shared maps.
+- [x] Inspect close player-height surfaces in daylight/evening; verify no extra per-frame texture work or disposed shared maps.
 
 ## Task 6 — Verification and evidence
-- [ ] Run `pnpm verify`, new entry/guide browser test and targeted world capture. Save screenshots and state report.
+- [x] Run `pnpm verify`, new entry/guide browser test and targeted world capture. Save screenshots and state report.
 - [x] Independent whole-change review; fix Important/Critical findings with regression proof, record minor items.
-- [ ] Commit verified control/texture changes, push branch and verify remote commit. Update state/progress with exact unfinished release work.
+- [x] Commit verified control/texture changes, push branch and verify remote commit. Update state/progress with exact unfinished release work.

@@ -3,8 +3,8 @@
   "city": "Amaya Bay",
   "prd": "docs/PRD.md",
   "branch": "codex/playtest-polish-2026-09-30",
-  "head": "ec4775c06ac151c41d90e7aab9ff19953009da74",
-  "head_note": "Published world checkpoint; newer verified playtest milestone recorded in progress ledger. Use git rev-parse HEAD for latest.",
+  "head": "309a724a84b64b5a405e17a483a979c57779a187",
+  "head_note": "Published game implementation milestone. Documentation-only evidence follows; use git rev-parse HEAD for latest.",
   "last_completed_phase": "Phase 13 — Home Growth + Moving (complete with known limitations)",
   "active_phase": "World visual production — build first, optimize after completion",
   "visual_pass_2026_09_30": {
@@ -17,7 +17,7 @@
   "verification": {
     "local_environment": "Node 24 and pnpm 12.4.1 in current Windows workspace",
     "full_pnpm_verify": "PASS (2026-09-30; inspected 2026-10-01)",
-    "automated_tests": "PASS (shared, content, server, client, and 175 pure-verification checks)",
+    "automated_tests": "PASS (shared, content, server, client, and 176 pure verification checks)",
     "client_typecheck": "PASS",
     "shared_typecheck": "PASS",
     "content_typecheck": "PASS",
@@ -26,7 +26,7 @@
     "content_validation": "PASS",
     "repository_integrity": "PASS",
     "production_build": "PASS",
-    "playwright": "PASS in explicit WebGL2 mode for home exit, three district viewpoints, and accelerated browser player/Rapier traversal from home through Lantern Street to Bay Steps; human-paced acceptance remains",
+    "playwright": "PASS: 3 arrival/guide/recovery tests and 7-district capture with actual 20-second walking sample; complete continuous normal-speed route and full venue acceptance remain",
     "native_webgpu": "Physical WebGPU UNVERIFIED; ordinary browser recovers to native WebGL2 after local device creation failure",
     "target_hardware_performance": "NOT RUN"
   },
@@ -65,7 +65,7 @@
     "The accelerated browser route passes; normal-speed camera/composition and human acceptance remain unverified.",
     "The visual art pass remains below the attached reference quality bar.",
     "Local WebGPU device creation fails; ordinary browser now recovers to native WebGL2. Recovery resets transient engine state.",
-    "Lantern Street headless snapshot reached about 790 draws and 2.1M triangles, above Medium budgets; optimization is deferred until the world pass is complete.",
+    "Latest district samples reach 881 draws and about 2.1M triangles; cold streaming p99 up to 1116.5ms and warm 37-60 FPS at 960x540 leave smoothness targets unmet.",
     "Production Supabase, TURN, multiplayer soak, and target-hardware performance remain unverified."
   ],
   "external_setup": [
@@ -88,9 +88,10 @@
     "optimization_complete": false
   },
   "playtest_entry_2026_10_01": {
-    "status": "Implemented and verified; refreshed world evidence in progress",
+    "status": "Implemented, verified and published; broader game production remains in progress",
     "changes": "Original coastal onboarding, resumable first-day guide, focus-safe drag/pointer controls, neck gaze, differentiated shared surface maps, automatic native WebGL2 recovery",
     "verification": "Full pnpm verify PASS; all 3 browser tests PASS (1.1m), including ordinary URL automatic native WebGL2 recovery, guide persistence and menu input gating",
-    "remaining": "Reference art, production rigs/audio/NPC pathing, cold streaming and target-hardware performance, gameplay balancing, production online acceptance and seamless mid-session recovery"
+    "remaining": "Reference art, production rigs/audio/NPC pathing, cold streaming and target-hardware performance, gameplay balancing, production online acceptance and seamless mid-session recovery",
+    "world_capture": "PASS: 7 districts, close surfaces, rain/sunset and 20-second ordinary walk. 960x540 Intel UHD ANGLE D3D11: warm 37.1-60.0 FPS, walk 41.6 FPS; cold loading p99 up to 1116.5 ms. Not 1080p acceptance."
   }
 }
