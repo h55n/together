@@ -10,6 +10,7 @@ import { streetCenterline } from './world/StreetNetwork';
 import { AmayaBayEnvironment } from './world/AmayaBayEnvironment';
 import { WorldStreamer } from './world/WorldStreamer';
 import { amayaBayBoundaryCuboids, createAmayaBayChunkFactory } from './world/AmayaBayChunkFactory';
+import type { FirstSessionAction } from './core/FirstSession';
 import { PlayerAvatar } from './player/PlayerAvatar';
 import { PlayerController } from './player/PlayerController';
 import { CameraController } from './camera/CameraController';
@@ -46,6 +47,7 @@ export type GameEngineOptions = {
   onDomesticAction?: (action: HomeAction, interactionId: string) => void;
   onVoiceState?: (state: { mode: VoiceMode; muted: boolean; pushToTalk: boolean }) => void;
   onMoment?: (message: string) => void;
+  onFirstSessionAction?: (action: FirstSessionAction) => void;
   onVenueInteraction?: (venue: { venueId: string; displayName: string; role: VenueGameplayRole }) => void;
   onKitchenInteraction?: () => void;
   onAutoStand?: () => void;
@@ -56,6 +58,8 @@ export type GameEngineOptions = {
   avatarConfig?: AvatarConfig;
   propertyId?: string;
   forceRendererBackend?: 'webgl2';
+  recoverRenderer?: boolean;
+  onRendererDeviceLost?: () => void;
 };
 
 export class GameEngine {
@@ -77,6 +81,11 @@ export class GameEngine {
   private locationElapsed = Number.POSITIVE_INFINITY;
   private sceneMetricsElapsed = Number.POSITIVE_INFINITY;
   private lastLocation: string | null = null;
+  private onFirstSessionAction: GameEngineOptions['onFirstSessionAction'];
+  private readonly firstSessionActions = new Set<FirstSessionAction>();
+  private firstSessionLook = 0;
+  private firstSessionWalk = 0;
+  private firstSessionPosition: { x: number; z: number } | null = null;
   private homeCenter = { x: 0, z: 0 };
   private homeReserveRadius = 0;
   private autoRide: { start: THREE.Vector3; end: THREE.Vector3; elapsed: number; duration: number } | null = null;
@@ -147,7 +156,11 @@ export class GameEngine {
   }
 
   static async create(options: GameEngineOptions): Promise<GameEngine> {
-    const renderer = await Renderer.create(options.canvas, options.forceRendererBackend ? { forceBackend: options.forceRendererBackend } : undefined);
+    const renderer = await Renderer.create(options.canvas, {
+      ...(options.forceRendererBackend ? { forceBackend: options.forceRendererBackend } : {}),
+      ...(options.recoverRenderer ? { recoverFromDeviceLoss: true } : {}),
+      ...(options.onRendererDeviceLost ? { onDeviceLost: options.onRendererDeviceLost } : {}),
+    });
     const physics = await PhysicsWorld.create();
     const materials = new MaterialLibrary();
     const scene = new THREE.Scene();
@@ -267,6 +280,7 @@ export class GameEngine {
     );
     engine.homeCenter = home.center;
     engine.homeReserveRadius = home.reserveRadius;
+    engine.onFirstSessionAction = options.onFirstSessionAction;
     return engine;
   }
 
@@ -278,6 +292,16 @@ export class GameEngine {
     this.previousFrameTimestamp = null;
     this.loop.reset();
     this.animationFrame = requestAnimationFrame(this.onAnimationFrame);
+  }
+
+  resetFirstSessionProgress(): void {
+    this.firstSessionActions.clear(); this.firstSessionLook = 0; this.firstSessionWalk = 0;
+    this.firstSessionPosition = null;
+  }
+
+  private reportFirstSessionAction(action: FirstSessionAction): void {
+    if (this.firstSessionActions.has(action)) return;
+    this.firstSessionActions.add(action); this.onFirstSessionAction?.(action);
   }
 
   setWeather(state: WeatherState): void {
@@ -493,11 +517,20 @@ export class GameEngine {
     const input = this.input.consumeSnapshot();
     if (input.cameraTogglePressed) this.camera.toggle();
     this.camera.applyLook(input.lookDeltaX, input.lookDeltaY);
+    this.firstSessionLook += Math.abs(input.lookDeltaX) + Math.abs(input.lookDeltaY);
+    if (this.firstSessionLook >= 30) this.reportFirstSessionAction('look');
     this.player.setInput(input);
     if (this.autoRide) this.updateAutoRide(deltaSeconds);
     this.measureSystem('player', () => this.player.syncVisual(this.camera.yaw, deltaSeconds));
+    this.avatar.updateGaze(this.camera.yaw, this.camera.pitch, deltaSeconds);
     this.measureSystem('camera', () => this.camera.update(deltaSeconds, this.player.isMoving(), this.player.isJogging()));
     const playerPosition = this.player.getPosition();
+    if (this.firstSessionPosition && this.player.isMoving() && this.player.getTransportMode() === 'on_foot') {
+      const distance = Math.hypot(playerPosition.x - this.firstSessionPosition.x, playerPosition.z - this.firstSessionPosition.z);
+      if (distance < 1) this.firstSessionWalk += distance;
+      if (this.firstSessionWalk >= 1.5) this.reportFirstSessionAction('walk');
+    }
+    this.firstSessionPosition = { x: playerPosition.x, z: playerPosition.z };
     if (input.transportDismountPressed && this.player.getTransportMode() !== 'on_foot') {
       this.player.setTransportMode('on_foot');
       this.interactions.setEnabled(true);
@@ -508,6 +541,7 @@ export class GameEngine {
     } else {
       const interaction = this.interactions.update({ x: playerPosition.x, z: playerPosition.z, yaw: this.camera.yaw });
       if (input.interactPressed && interaction) {
+        let interactionSucceeded = true;
         if (interaction.id === 'home_cooking' || interaction.id.endsWith(':cooking')) {
           this.player.beginMicroAction('point', 0.5);
           this.onKitchenInteraction?.();
@@ -525,10 +559,11 @@ export class GameEngine {
           if (venue) {
             this.player.beginMicroAction('point', 0.7);
             this.onVenueInteraction?.({ venueId: venue.id, displayName: venue.displayName, role: venueGameplayRole(venue.category) });
-          }
+          } else interactionSucceeded = false;
         } else if (interaction.id === 'bicycle_rack' || interaction.transportMode) {
           const mode = interaction.id === 'bicycle_rack' ? 'bicycle' : interaction.transportMode!;
           if (mode === 'kayak' && !weatherAllowsKayak(this.weather.state)) {
+            interactionSucceeded = false;
             this.onMoment?.('The kayak hut is closed in heavy weather. The bay will be here tomorrow.');
           } else {
             this.player.setTransportMode(mode);
@@ -543,6 +578,7 @@ export class GameEngine {
           this.player.beginMicroAction(interaction.action, interaction.durationSeconds ?? 1.25);
           if (interaction.activityId) this.onActivityInteraction?.(interaction.activityId);
         }
+        if (interactionSucceeded) this.reportFirstSessionAction('interact');
       }
     }
     this.locationElapsed += deltaSeconds;

@@ -8,9 +8,9 @@ export function selectRendererBackend(capabilities: RendererCapabilities, forceB
   return 'unsupported';
 }
 
-export function resolveRendererForceBackend(search: string, requested?: 'webgl2'): 'webgl2' | undefined {
+export function resolveRendererForceBackend(search: string, requested?: 'webgl2', recoveringFromDeviceLoss = false): 'webgl2' | undefined {
   if (requested !== 'webgl2') return undefined;
-  return new URLSearchParams(search).get('renderer') === 'webgl2' ? 'webgl2' : undefined;
+  return recoveringFromDeviceLoss || new URLSearchParams(search).get('renderer') === 'webgl2' ? 'webgl2' : undefined;
 }
 
 export function detectRendererCapabilities(canvas: HTMLCanvasElement, probeWebgl2 = false): RendererCapabilities {

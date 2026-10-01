@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { sampleAvatarMotion, type AvatarAction } from '@together/shared';
+import { gazeAngles } from './gazeMath';
 
 export type AvatarAppearance = {
   skinTone?: THREE.ColorRepresentation;
@@ -59,12 +60,13 @@ export class PlayerAvatar {
     this.root.add(this.part(new THREE.CylinderGeometry(0.09, 0.1, 0.12, 8), this.skin, [0, 1.53, 0]));
     const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), this.skin);
     headMesh.scale.set(0.86, 1.08, 0.92);
-    headMesh.position.y = 1.67;
+    this.head.position.y = 1.53;
+    headMesh.position.y = .14;
     headMesh.castShadow = true;
     this.head.add(headMesh);
     const hairMesh = new THREE.Mesh(new THREE.SphereGeometry(0.184, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.52), this.hair);
     hairMesh.scale.set(0.9, 1.02, 0.96);
-    hairMesh.position.y = 1.695;
+    hairMesh.position.y = .165;
     hairMesh.castShadow = true;
     this.head.add(hairMesh);
     this.root.add(this.head);
@@ -106,9 +108,17 @@ export class PlayerAvatar {
     this.autoRickshaw.visible = mode === 'auto_rickshaw';
   }
 
-  setTransform(position: { x: number; y: number; z: number }, yaw: number): void {
+  setTransform(position: { x: number; y: number; z: number }, yaw: number, deltaSeconds = 0): void {
     this.root.position.set(position.x, position.y - 0.87, position.z);
-    this.root.rotation.y = yaw;
+    const turn = Math.atan2(Math.sin(yaw - this.root.rotation.y), Math.cos(yaw - this.root.rotation.y));
+    this.root.rotation.y = deltaSeconds > 0 ? this.root.rotation.y + turn * (1 - Math.exp(-deltaSeconds * 10)) : yaw;
+  }
+
+  updateGaze(cameraYaw: number, cameraPitch: number, deltaSeconds: number): void {
+    const target = gazeAngles(cameraYaw, cameraPitch, this.root.rotation.y);
+    const blend = 1 - Math.exp(-Math.max(0, deltaSeconds) * 14);
+    this.head.rotation.y += (target.yaw - this.head.rotation.y) * blend;
+    this.head.rotation.x += (target.pitch - this.head.rotation.x) * blend;
   }
 
   updateMotion(deltaSeconds: number, action: AvatarAction): void {

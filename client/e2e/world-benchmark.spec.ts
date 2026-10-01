@@ -28,6 +28,7 @@ test('captures fixed district frames and separates warm rendering from streaming
   await page.getByRole('button', { name: 'Explore Amaya Bay', exact: true }).click();
   await expect(page.getByLabel('Amaya Bay 3D world')).toBeVisible();
   await page.waitForFunction(() => typeof (window as ReviewWindow).__amayaReviewMetrics === 'function');
+  await page.getByRole('button', { name: 'Dismiss first day guide' }).click();
   const records: unknown[] = [];
   await expect(page.getByTestId('debug-overlay')).toContainText(/WEBGL2|WEBGPU/);
   const backend = (await page.getByTestId('debug-overlay').innerText()).split(' ')[0];

@@ -27,6 +27,10 @@ describe('renderer compatibility override', () => {
   it('only forces WebGL2 when the URL explicitly requests compatibility mode', () => {
     expect(resolveRendererForceBackend('?renderer=webgl2', 'webgl2')).toBe('webgl2');
   });
+
+  it('allows device loss recovery to select compatibility on an ordinary URL', () => {
+    expect(resolveRendererForceBackend('', 'webgl2', true)).toBe('webgl2');
+  });
 });
 
 describe('detectRendererCapabilities', () => {

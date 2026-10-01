@@ -69,6 +69,29 @@ describe('GameCanvas engine lifecycle', () => {
 
     expect(create).toHaveBeenCalledTimes(1);
     expect(create.mock.calls[0]?.[0].forceRendererBackend).toBeUndefined();
+    expect(mounted.host.querySelector('.weather-debug')).toBeNull();
+  });
+
+  it('replaces a failed graphics canvas, reapplies menu input gating and ignores stale failures', async () => {
+    const initial = engineStub();
+    const recovered = engineStub();
+    create.mockResolvedValueOnce(initial).mockResolvedValueOnce(recovered);
+    mounted = await renderGame();
+    await flushAsyncWork();
+    const firstCanvas = mounted.host.querySelector('canvas');
+    const failure = create.mock.calls[0]?.[0].onRendererDeviceLost;
+    await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM' })); });
+    expect(initial.setInputEnabled).toHaveBeenLastCalledWith(false);
+    await act(async () => { failure?.(); });
+    await flushAsyncWork();
+    expect(initial.dispose).toHaveBeenCalledOnce();
+    expect(mounted.host.querySelector('canvas')).not.toBe(firstCanvas);
+    expect(create.mock.calls[1]?.[0].forceRendererBackend).toBe('webgl2');
+    expect(create.mock.calls[1]?.[0].recoverRenderer).toBe(true);
+    expect(recovered.setInputEnabled).toHaveBeenLastCalledWith(false);
+    await act(async () => { failure?.(); });
+    expect(mounted.host.querySelector('.world-loading')).toBeNull();
+    expect(create).toHaveBeenCalledTimes(2);
   });
 
   it('does not recreate the engine when automatic Memory capture toggles UI capture state', async () => {
@@ -135,6 +158,7 @@ describe('GameCanvas engine lifecycle', () => {
   });
 
   it('keeps resident dialogue reactive to weather chosen by the game UI', async () => {
+    window.history.replaceState({}, '', '/?worldReview=1');
     const engine = engineStub();
     create.mockResolvedValue(engine);
     const npc = namedNpcs[0];

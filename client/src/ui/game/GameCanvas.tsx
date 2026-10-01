@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { DEFAULT_GAME_SETTINGS, normalizeGameSettings, resolveStartupGameSettings, scoreMemoryCapture, shouldAutoCapture, type ActivityId, type ActivityStep, type AvatarConfig, type GameSettings, type HomeAction, type JobId, type Placement2D, type RecipeStep, type StoryDefinition, type StoryTaskStateValue, type VoiceMode } from '@together/shared';
 import { GameEngine } from '../../game/GameEngine';
+import { advanceFirstSession, readFirstSession, type FirstSessionAction } from '../../game/core/FirstSession';
+import { FirstSessionGuide } from './FirstSessionGuide';
 import type { WeatherState } from '../../game/weather/weatherModel';
 import type { NetworkSession } from '../../network/GameSocketClient';
 import { MemoryBook, type MemoryView } from './MemoryBook';
@@ -28,6 +30,17 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const [weatherState, setWeatherState] = useState<WeatherState>('clear');
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [compatibilityRenderer, setCompatibilityRenderer] = useState(false);
+  const recoverRenderer = useCallback(() => { setReady(false); setError(null); setCompatibilityRenderer(true); }, []);
+  const guideStorageKey = `together:first-day:v1:${networkSession?.userId ?? 'solo'}`;
+  const [guideCompleted, setGuideCompleted] = useState<FirstSessionAction[]>(() => readFirstSession(localStorage.getItem(guideStorageKey)));
+  const [guideHidden, setGuideHidden] = useState(() => localStorage.getItem(`${guideStorageKey}:hidden`) === 'true');
+  const onFirstSessionAction = useCallback((action: FirstSessionAction) => {
+    setGuideCompleted(current => {
+      const next = advanceFirstSession(current, action);
+      localStorage.setItem(guideStorageKey, JSON.stringify(next)); return next;
+    });
+  }, [guideStorageKey]);
   const [interactionPrompt, setInteractionPrompt] = useState<string | null>(null);
   const [location, setLocation] = useState<string | null>(null);
   const [connection, setConnection] = useState<'connecting' | 'connected' | 'reconnecting' | 'disconnected'>(networkSession ? 'connecting' : 'disconnected');
@@ -707,7 +720,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     void refreshMemories().catch(() => undefined);
 
     const requestedRenderer = new URLSearchParams(window.location.search).get('renderer');
-    const forceRendererBackend = requestedRenderer === 'webgl2' ? 'webgl2' as const : undefined;
+    const forceRendererBackend = compatibilityRenderer || requestedRenderer === 'webgl2' ? 'webgl2' as const : undefined;
 
     void GameEngine.create({
       canvas,
@@ -729,10 +742,13 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       onMemoryOpportunity: (tag) => void captureAutomaticMemory(tag),
       onActivityInteraction: (activityId) => void openActivity(activityId),
       onNpcInteraction: (nextNpcId) => void openNpc(nextNpcId),
+      onFirstSessionAction,
       onHomeGrowthInteraction: openHomeGrowth,
       ...(avatarConfig ? { avatarConfig } : {}),
       ...(propertyId ? { propertyId } : {}),
       ...(forceRendererBackend ? { forceRendererBackend } : {}),
+      recoverRenderer: compatibilityRenderer,
+      onRendererDeviceLost: () => { if (!cancelled) recoverRenderer(); },
     }).then((engine) => {
       if (cancelled) { engine.dispose(); return; }
       engineRef.current = engine;
@@ -756,10 +772,10 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
           (reset) => { if (reset) engine.performance.resetFrameSamples(); return structuredClone(engine.performance.read()); };
       }
       setReady(true);
-    }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
+    }).catch((cause: unknown) => { if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause)); });
 
     return () => { cancelled = true; delete (window as Window & { __amayaReviewTravel?: (destinationId: string) => void }).__amayaReviewTravel; delete (window as Window & { __amayaReviewPlace?: (x: number, z: number) => void }).__amayaReviewPlace; delete (window as Window & { __amayaReviewFace?: (yaw: number) => void }).__amayaReviewFace; delete (window as Window & { __amayaReviewWeather?: (weather: WeatherState) => void }).__amayaReviewWeather; delete (window as Window & { __amayaReviewTime?: (minutes: number) => void }).__amayaReviewTime; delete (window as Window & { __amayaReviewWalkRoute?: () => unknown }).__amayaReviewWalkRoute; delete (window as Window & { __amayaReviewMetrics?: (reset?: boolean) => unknown }).__amayaReviewMetrics; engineRef.current?.dispose(); engineRef.current = null; };
-  }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, propertyId, refreshHomeState, refreshMemories]);
+  }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, propertyId, refreshHomeState, refreshMemories, onFirstSessionAction, compatibilityRenderer, recoverRenderer]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -785,7 +801,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   useEffect(() => {
     engineRef.current?.setInputEnabled(!anyPanelOpen);
     if (anyPanelOpen && document.pointerLockElement) void document.exitPointerLock();
-  }, [anyPanelOpen]);
+  }, [anyPanelOpen, ready]);
 
   useEffect(() => {
     const normalized = normalizeGameSettings(settings);
@@ -797,7 +813,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
   const setWeather = (weather: WeatherState) => { engineRef.current?.setWeather(weather); setWeatherState(weather); };
   return <div ref={containerRef} className="game-shell">
-    <canvas ref={canvasRef} className="game-canvas" aria-label="Amaya Bay 3D world" />
+    <canvas key={compatibilityRenderer ? 'compatibility' : 'preferred'} ref={canvasRef} className="game-canvas" aria-label="Amaya Bay 3D world" />
     {!ready && !error && <div className="world-loading">Preparing Amaya Bay…</div>}
     {error && <div className="compatibility-card"><strong>Amaya Bay notice</strong><span>{error}</span><button className="quiet-action" onClick={() => setError(null)}>Dismiss</button></div>}
     {location && !anyPanelOpen && <div className="location-chip">{location}</div>}
@@ -805,6 +821,8 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     {networkSession && !anyPanelOpen && <div className={`connection-pill ${connection}`}>{connection === 'connected' ? 'household connected' : connection}</div>}
     {toast && <div className="memory-toast">{toast}</div>}
     {ready && !anyPanelOpen && <div className="quick-keys"><span>P · Photo</span><span>B · Memories</span><span>Tab · Life</span><span>M · Map</span><span>O · Settings</span><span>C · Decorate</span><span>J · Story</span><span>V · Camera</span></div>}
+    {ready && !anyPanelOpen && !guideHidden && <FirstSessionGuide completed={guideCompleted} onMap={() => setMapOpen(true)} onSkip={() => { setGuideHidden(true); localStorage.setItem(`${guideStorageKey}:hidden`, 'true'); }}/ >}
+    {ready && !anyPanelOpen && guideHidden && <button className="guide-replay" onClick={() => { setGuideCompleted([]); setGuideHidden(false); localStorage.removeItem(guideStorageKey); localStorage.removeItem(`${guideStorageKey}:hidden`); engineRef.current?.resetFirstSessionProgress(); }}>First day guide ↗</button>}
     {ready && !anyPanelOpen && networkSession && <div className="voice-controls" aria-label="household voice controls">
       {voiceState.mode === 'off' ? <>
         <button onClick={() => void engineRef.current?.enableVoice('household').catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))}>Voice · Household</button>
@@ -816,7 +834,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
         <button onClick={() => engineRef.current?.disableVoice()}>Off</button>
       </>}
     </div>}
-    {ready && !anyPanelOpen && <div className="weather-debug" aria-label="development weather controls"><span>DEV</span><button onClick={() => setWeather('clear')}>Clear</button><button onClick={() => setWeather('light_rain')}>Rain</button><button onClick={() => setWeather('monsoon_rain')}>Monsoon</button></div>}
+    {ready && !anyPanelOpen && import.meta.env.DEV && new URLSearchParams(window.location.search).get('worldReview') === '1' && <div className="weather-debug" aria-label="development weather controls"><span>DEV</span><button onClick={() => setWeather('clear')}>Clear</button><button onClick={() => setWeather('light_rain')}>Rain</button><button onClick={() => setWeather('monsoon_rain')}>Monsoon</button></div>}
     {captureBusy && <div className="capture-flash" aria-hidden="true" />}
     {networkSession && <MemoryBook open={memoryOpen} memories={memories} networkSession={networkSession} onClose={() => setBookOpen(false)} onCaptionChange={updateMemoryCaption} onExport={exportMemory} />}
     <LifePanel open={lifeOpen} data={lifeData} onClose={() => setLifeOpen(false)} />

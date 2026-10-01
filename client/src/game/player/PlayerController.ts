@@ -59,7 +59,7 @@ export class PlayerController {
 
   syncVisual(yaw: number, deltaSeconds: number): void {
     const position = this.physicsHandle.body.translation();
-    this.avatar.setTransform(position, yaw);
+    this.avatar.setTransform(position, yaw, deltaSeconds);
     if (this.microAction) {
       this.microActionRemaining -= deltaSeconds;
       if (this.microActionRemaining <= 0) {

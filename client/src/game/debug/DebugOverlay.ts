@@ -8,6 +8,8 @@ export class DebugOverlay {
   constructor(parent: HTMLElement, private readonly performanceMonitor: PerformanceMonitor, private readonly rendererInfo: RendererRuntimeInfo) {
     this.element = document.createElement('div');
     this.element.dataset.testid = 'debug-overlay';
+    const review = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('worldReview') === '1';
+    this.element.hidden = !import.meta.env.DEV || !review;
     this.element.style.cssText = [
       'position:absolute', 'left:12px', 'bottom:12px', 'padding:8px 10px',
       'background:rgba(22,28,25,.62)', 'color:#e8ece7', 'font:11px/1.5 ui-monospace,monospace',

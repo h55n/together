@@ -25,35 +25,35 @@
 - Tutorial should fit small windows and not obscure central interactions.
 
 ## Task 1 — Preserve and publish current progress
-- [ ] Inspect status/remote and exclude runtime state; create `codex/playtest-polish-2026-09-30`.
-- [ ] Run repository verification and review staged source/document changes.
-- [ ] Commit coherent current world checkpoint; push new branch and inspect result.
+- [x] Inspect status/remote and exclude runtime state; create `codex/playtest-polish-2026-09-30`.
+- [x] Run repository verification and review staged source/document changes.
+- [x] Commit coherent current world checkpoint; push new branch and inspect result.
 
 ## Task 2 — Custom entry
 Files: `client/src/App.tsx`, `client/src/ui/entry/CoastalArrival.tsx`, `client/src/ui/entry/arrival.css`.
-- [ ] Implement original coastal SVG composition and responsive split entry layout, step indicators and control cards.
-- [ ] Preserve Display name, Continue, solo/household/invite actions and retry errors; put solo first and use human copy.
-- [ ] Verify fresh and returning entry paths in the browser; save screenshot.
+- [x] Implement original coastal SVG composition and responsive split entry layout, step indicators and control cards.
+- [x] Preserve Display name, Continue, solo/household/invite actions and retry errors; put solo first and use human copy.
+- [x] Verify fresh and returning entry paths in the browser; save screenshot.
 
 ## Task 3 — Playable first-session guide
 Files: `client/src/game/core/FirstSession.ts`, test; `GameEngine.ts`, `GameCanvas.tsx`, `ui/game/FirstSessionGuide.tsx`.
 Interface: `FirstSessionAction = 'look' | 'walk' | 'interact'`; engine optional `onFirstSessionAction(action)` callback; model `advanceFirstSession(completed, action)` preserves unique observed actions.
-- [ ] Write/run failing tests for ordered next lesson, unique actions, skip/resume state and no invented completion.
-- [ ] Implement actual look accumulation, displacement-only walking (>1.5 m), successful-target interaction events and persistent optional UI with map action/replay.
-- [ ] Run tests and browser guide action assertions; commit verified entry/tutorial milestone and push.
+- [x] Write/run failing tests for ordered next lesson, unique actions, skip/resume state and no invented completion.
+- [x] Implement actual look accumulation, displacement-only walking (>1.5 m), successful-target interaction events and persistent optional UI with map action/replay.
+- [x] Run tests and browser guide action assertions; commit verified entry/tutorial milestone and push.
 
 ## Task 4 — Reliable look and gaze
 Files: `InputManager.ts/test.ts`, `PlayerAvatar.ts`, `CameraController.ts`, `player/gazeMath.ts/test.ts`.
-- [ ] Write/run failing tests for drag look, neutral input on blur, and constrained shortest-angle gaze.
-- [ ] Add canvas drag fallback and graceful pointer-lock rejection, clear held input on blur, neck pivot and damped head gaze; retain normal camera/control settings.
-- [ ] Verify menu input gating and actual pointer/drag movement in browser; run tests/typecheck.
+- [x] Write/run failing tests for drag look, neutral input on blur, and constrained shortest-angle gaze.
+- [x] Add canvas drag fallback and graceful pointer-lock rejection, clear held input on blur, neck pivot and damped head gaze; retain normal camera/control settings.
+- [x] Verify menu input gating and actual pointer/drag movement in browser; run tests/typecheck.
 
 ## Task 5 — Surface identity
 Files: `SurfaceTextures.ts`, `MaterialLibrary.ts`.
-- [ ] Generate distinct seamless grass/asphalt/plaster/wood/paving maps and assign stable shared materials with matching repeat/roughness.
+- [x] Generate distinct seamless grass/asphalt/plaster/wood/paving maps and assign stable shared materials with matching repeat/roughness.
 - [ ] Inspect close player-height surfaces in daylight/evening; verify no extra per-frame texture work or disposed shared maps.
 
 ## Task 6 — Verification and evidence
 - [ ] Run `pnpm verify`, new entry/guide browser test and targeted world capture. Save screenshots and state report.
-- [ ] Independent whole-change review; fix Important/Critical findings with regression proof, record minor items.
+- [x] Independent whole-change review; fix Important/Critical findings with regression proof, record minor items.
 - [ ] Commit verified control/texture changes, push branch and verify remote commit. Update state/progress with exact unfinished release work.

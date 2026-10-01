@@ -71,11 +71,18 @@ export class MaterialLibrary {
     const plaster = createSurfaceTexture('plaster');
     const wood = createSurfaceTexture('wood');
     const paving = createSurfaceTexture('paving');
-    this.textures.push(mineral, plaster, wood, paving);
-    for (const key of ['asphalt', 'asphaltPatch', 'soil', 'stone', 'sandstone', 'grass'] as const) this.get(key).map = mineral;
+    const grass = createSurfaceTexture('grass'), asphalt = createSurfaceTexture('asphalt');
+    this.textures.push(mineral, plaster, wood, paving, grass, asphalt);
+    for (const key of ['soil', 'stone', 'sandstone'] as const) this.get(key).map = mineral;
+    for (const key of ['asphalt', 'asphaltPatch'] as const) this.get(key).map = asphalt;
+    this.get('grass').map = grass;
     for (const key of ['warmPlaster', 'terracottaPlaster', 'sagePlaster'] as const) this.get(key).map = plaster;
     this.get('concrete').map = paving;
     this.get('wood').map = wood;
+    this.get('warmPlaster').bumpMap = plaster; this.get('warmPlaster').bumpScale = .018;
+    this.get('terracottaPlaster').bumpMap = plaster; this.get('terracottaPlaster').bumpScale = .018;
+    this.get('sagePlaster').bumpMap = plaster; this.get('sagePlaster').bumpScale = .018;
+    this.get('wood').bumpMap = wood; this.get('wood').bumpScale = .012;
     for (const [key, material] of this.materials) {
       material.userData.togetherShared = true;
       this.dryColors.set(key, material.color.clone());

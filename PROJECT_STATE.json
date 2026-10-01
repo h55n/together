@@ -2,9 +2,9 @@
   "project": "Together",
   "city": "Amaya Bay",
   "prd": "docs/PRD.md",
-  "branch": "fix/audit-recovery-2026-09-17",
-  "head": "9f355fd6607902c2dbe035102a014c5abc1e9466",
-  "head_note": "This is the implementation commit. Final handoff documentation is committed after it; use git rev-parse HEAD for the documentation-only final HEAD.",
+  "branch": "codex/playtest-polish-2026-09-30",
+  "head": "ec4775c06ac151c41d90e7aab9ff19953009da74",
+  "head_note": "Published world checkpoint; newer verified playtest milestone recorded in progress ledger. Use git rev-parse HEAD for latest.",
   "last_completed_phase": "Phase 13 — Home Growth + Moving (complete with known limitations)",
   "active_phase": "World visual production — build first, optimize after completion",
   "visual_pass_2026_09_30": {
@@ -16,7 +16,7 @@
   },
   "verification": {
     "local_environment": "Node 24 and pnpm 12.4.1 in current Windows workspace",
-    "full_pnpm_verify": "PASS (2026-09-23)",
+    "full_pnpm_verify": "PASS (2026-09-30; inspected 2026-10-01)",
     "automated_tests": "PASS (shared, content, server, client, and 175 pure-verification checks)",
     "client_typecheck": "PASS",
     "shared_typecheck": "PASS",
@@ -27,7 +27,7 @@
     "repository_integrity": "PASS",
     "production_build": "PASS",
     "playwright": "PASS in explicit WebGL2 mode for home exit, three district viewpoints, and accelerated browser player/Rapier traversal from home through Lantern Street to Bay Steps; human-paced acceptance remains",
-    "native_webgpu": "UNVERIFIED; headless default renderer lost graphics device",
+    "native_webgpu": "Physical WebGPU UNVERIFIED; ordinary browser recovers to native WebGL2 after local device creation failure",
     "target_hardware_performance": "NOT RUN"
   },
   "completed_systems": [
@@ -42,7 +42,7 @@
     "quality profile gameplay-invariance rules"
   ],
   "partial_systems": [
-    "WebGPU-first runtime exists but headless device loss and physical-hardware validation remain unresolved",
+    "WebGPU-first runtime with automatic fresh-canvas native WebGL2 recovery; physical WebGPU and seamless mid-session recovery acceptance remain",
     "Amaya Bay procedural/development art pending production asset replacement",
     "procedural avatar/micro-motion pending production rig, clips and IK",
     "five home shells pending final interior art",
@@ -64,7 +64,7 @@
   "known_issues": [
     "The accelerated browser route passes; normal-speed camera/composition and human acceptance remain unverified.",
     "The visual art pass remains below the attached reference quality bar.",
-    "Headless default WebGPU lost its graphics device; explicit WebGL2 mode renders.",
+    "Local WebGPU device creation fails; ordinary browser now recovers to native WebGL2. Recovery resets transient engine state.",
     "Lantern Street headless snapshot reached about 790 draws and 2.1M triangles, above Medium budgets; optimization is deferred until the world pass is complete.",
     "Production Supabase, TURN, multiplayer soak, and target-hardware performance remain unverified."
   ],
@@ -86,5 +86,11 @@
     "reference_quality_achieved": false,
     "native_webgpu_validated": false,
     "optimization_complete": false
+  },
+  "playtest_entry_2026_10_01": {
+    "status": "Implemented and verified; refreshed world evidence in progress",
+    "changes": "Original coastal onboarding, resumable first-day guide, focus-safe drag/pointer controls, neck gaze, differentiated shared surface maps, automatic native WebGL2 recovery",
+    "verification": "Full pnpm verify PASS; all 3 browser tests PASS (1.1m), including ordinary URL automatic native WebGL2 recovery, guide persistence and menu input gating",
+    "remaining": "Reference art, production rigs/audio/NPC pathing, cold streaming and target-hardware performance, gameplay balancing, production online acceptance and seamless mid-session recovery"
   }
 }

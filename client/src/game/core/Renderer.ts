@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { observeDeviceLoss } from './DeviceLoss';
 import { detectRendererCapabilities, hasWebGpuAdapter, resolveRendererForceBackend, selectRendererBackend, type RendererBackend } from './rendererBackend';
 
 export type RendererRuntimeInfo = {
@@ -13,6 +14,8 @@ export type RendererRuntimeInfo = {
 type RenderInfo = { render: { calls: number; triangles: number } };
 
 type RuntimeRenderer = {
+  backend?: { isWebGPUBackend?: boolean; isWebGLBackend?: boolean; device?: { lost?: Promise<{ reason?: string }> } };
+  onDeviceLost?: (info: unknown) => void;
   info: RenderInfo;
   shadowMap: { enabled: boolean };
   outputColorSpace: THREE.ColorSpace;
@@ -37,16 +40,18 @@ export class Renderer {
   readonly info: RendererRuntimeInfo;
   private pixelRatioCap = 2;
   private appliedPixelRatio = Number.NaN;
+  private disposed = false;
 
   private constructor(renderer: RuntimeRenderer, info: RendererRuntimeInfo) {
     this.renderer = renderer;
     this.info = info;
   }
 
-  static async create(canvas: HTMLCanvasElement, options: { forceBackend?: 'webgl2' } = {}): Promise<Renderer> {
+  static async create(canvas: HTMLCanvasElement, options: { forceBackend?: 'webgl2'; recoverFromDeviceLoss?: boolean; onDeviceLost?: () => void } = {}): Promise<Renderer> {
     const forceBackend = resolveRendererForceBackend(
       typeof window === 'undefined' ? '' : window.location.search,
       options.forceBackend,
+      options.recoverFromDeviceLoss,
     );
     const capabilities = detectRendererCapabilities(canvas, forceBackend === 'webgl2');
     const preferredBackend = selectRendererBackend(capabilities, forceBackend);
@@ -92,6 +97,7 @@ export class Renderer {
         if (renderer.init) await renderer.init();
         universalRendererLoaded = true;
       } catch (error) {
+        options.onDeviceLost?.();
         fallbackReason = error instanceof Error ? error.message : String(error);
         backend = 'webgl2';
         try {
@@ -125,6 +131,15 @@ export class Renderer {
       universalRendererLoaded,
     });
     result.appliedPixelRatio = initialPixelRatio;
+    if (universalRendererLoaded && options.onDeviceLost) {
+      renderer.onDeviceLost = () => { if (!result.disposed) options.onDeviceLost?.(); };
+      // Three may silently substitute its universal WebGL backend when adapter
+      // discovery succeeds but device creation fails. Rebuild on a fresh canvas
+      // using the native compatibility renderer, just as for a lost GPU device.
+      if (renderer.backend?.isWebGLBackend) options.onDeviceLost();
+    }
+    const lost = renderer.backend?.device?.lost;
+    if (backend === 'webgpu' && lost && options.onDeviceLost) observeDeviceLoss(lost, () => result.disposed, options.onDeviceLost);
     return result;
   }
 
@@ -144,6 +159,7 @@ export class Renderer {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.renderer.dispose();
   }
 
