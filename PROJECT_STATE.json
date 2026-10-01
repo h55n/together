@@ -153,6 +153,7 @@
     ],
     "target": "build/amaya-bay-v1",
     "status": "Published to default and coastal branches at explicit user request; six-player startup acceptance remains unresolved",
-    "report": "docs/MERGE_CLEANUP_2026_10_01.md"
+    "report": "docs/MERGE_CLEANUP_2026_10_01.md",
+    "startup_investigation": "Player three completes renderer, physics, scene and initial chunks; stalls in asynchronous shader prewarm. Explicit WebGL flush did not fix it. Temporary diagnostic code removed; no runtime fix claimed."
   }
 }

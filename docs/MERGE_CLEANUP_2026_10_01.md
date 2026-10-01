@@ -30,3 +30,8 @@ The initial household browser run timed out while software graphics rendered bel
 Pre-merge media/performance samples belong to their recorded checkpoints; merged world performance and physical WebGPU/hosted Supabase/TURN acceptance remain distinct release gates.
 
 GitHub publication confirmed for integration checkpoint 54e54d1 on October 1, 2026. The final documentation commit follows it; both remote branches are synchronized without force pushing.
+
+## Follow-up startup investigation
+Six-player failure reproduced with temporary startup instrumentation. Players zero and one completed renderer, physics, scene, initial chunks, asynchronous shader compile and first render. Player two completed renderer/physics/scene/initial chunks, then stalled awaiting Renderer.prewarm / compileAsync. Explicit WebGL flush after starting compileAsync did not resolve the stall. Instrumentation and unsuccessful flush experiment were removed; no runtime fix is claimed. Evidence: .art-review/six-player-startup-stages.log and .art-review/six-player-shader-flush.log. The remaining investigation is shader compile completion and GPU/context resources under concurrent worlds.
+
+Ongoing work is committed and pushed to the existing default branch build/amaya-bay-v1, with the coastal branch synchronized.
