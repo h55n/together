@@ -27,7 +27,7 @@ This repository is a substantial V1 implementation and handoff build, not a clai
 - WebRTC household/proximity voice architecture with Socket.IO signaling and authenticated server-issued TURN credentials;
 - sticky notes, accessibility controls, quality tiers, performance diagnostics and debug tooling foundations.
 
-See `docs/IMPLEMENTATION_STATUS.md` and `docs/KNOWN_LIMITATIONS.md` for the strict acceptance status.
+See [the October 1 project audit](docs/PROJECT_AUDIT_2026_10_01.md) for current findings and prioritized remaining work. Local full verification passes; current browser CI and six-player startup acceptance fail. `docs/IMPLEMENTATION_STATUS.md` and `docs/KNOWN_LIMITATIONS.md` retain detailed system and historical acceptance notes.
 
 ## Requirements
 

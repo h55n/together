@@ -29,7 +29,8 @@
     "playwright": "Merged result: Couple two-context, solo world and 3 arrival/recovery tests PASS; Friends six-context loading timeout FAIL, including focus and 960x540 diagnostic reruns.",
     "native_webgpu": "Physical WebGPU UNVERIFIED; ordinary browser recovers to native WebGL2 after local device creation failure",
     "target_hardware_performance": "NOT RUN",
-    "merged_result": "Full pnpm verify PASS; browser 5/6 PASS. Friends six-player startup loading timeout remains; published as current development state at user request."
+    "merged_result": "Full pnpm verify PASS; browser 5/6 PASS. Friends six-player startup loading timeout remains; published as current development state at user request.",
+    "connected_ci": "FAIL at 8f1fd09: run 36816902610, browser 11 failed / 2 passed / 2 skipped"
   },
   "completed_systems": [
     "data-driven story engine and 36-story V1 library",
@@ -56,10 +57,9 @@
   ],
   "missing_systems": [
     "production humanoid art/animation/IK package",
-    "production Amaya Bay environment/vegetation/furniture/food/transport art package",
+    "production-quality Three.js-native compiled environment/vegetation/furniture/food/transport art families",
     "production district/interaction audio library",
     "baked per-chunk NPC navmesh/path batching/door-link system",
-    "production observability/rate-limit hardening",
     "complete PRD developer-debug editor suite"
   ],
   "known_issues": [
@@ -73,9 +73,10 @@
   "external_setup": [
     "Supabase project, database migrations 001-012, Auth and private Storage bucket",
     "production TURN service for WebRTC",
-    "final licensed/original GLB/KTX2/audio asset pipeline"
+    "Three.js-native compiled world art and production character/audio assets; optional imported assets where appropriate"
   ],
   "next_tasks": [
+    "Resolve shader prewarm startup regression and restore green full browser CI before wider playtesting.",
     "Visually inspect normal-speed Mogra Court to Lantern Street to Bay Steps play, including camera and transitions.",
     "Polish district architecture, props, vegetation, water and street life to the attached reference quality bar.",
     "Verify embodied job, leisure, interior, NPC, weather and night presentation in-world.",
@@ -155,5 +156,13 @@
     "status": "Published to default and coastal branches at explicit user request; six-player startup acceptance remains unresolved",
     "report": "docs/MERGE_CLEANUP_2026_10_01.md",
     "startup_investigation": "Player three completes renderer, physics, scene and initial chunks; stalls in asynchronous shader prewarm. Explicit WebGL flush did not fix it. Temporary diagnostic code removed; no runtime fix claimed."
+  },
+  "audit_2026_10_01": {
+    "report": "docs/PROJECT_AUDIT_2026_10_01.md",
+    "audited_head": "8f1fd095804fd5296d9188f2e418972b0a33305e",
+    "verdict": "Substantial playable development build; V1 and release acceptance incomplete",
+    "local_verify": "PASS: 488 automated tests/checks, typecheck, lint with one warning, validation and production build",
+    "latest_ci": "FAIL: run 36816902610 at audited SHA; 11 browser failures, 2 passes, 2 skips",
+    "priority": "Startup/shader prewarm and browser CI; life-loop acceptance; native world/character/audio production; target performance; hosted services and human acceptance"
   }
 }

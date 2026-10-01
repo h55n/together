@@ -1,5 +1,7 @@
 # Together V1 — Asset Requirements
 
+> **October 1, 2026 current audit:** [PROJECT_AUDIT_2026_10_01.md](PROJECT_AUDIT_2026_10_01.md). Earlier verification/baseline claims below apply to their recorded checkpoints. Current local full verification passes; current GitHub browser CI fails. PRD v3.1 requires Three.js-native compiled world art; external GLB/DCC production is not mandatory for world assets.
+
 The current build intentionally uses substantial procedural **development art** so systems/world scale can be implemented without pretending placeholder geometry is shipping art. This document defines the replacement path.
 
 ## Runtime format rules

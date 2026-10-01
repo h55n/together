@@ -1,5 +1,7 @@
 # Together V1 — Amaya Bay Build Plan
 
+> **October 1, 2026 current audit:** [PROJECT_AUDIT_2026_10_01.md](PROJECT_AUDIT_2026_10_01.md). Earlier verification/baseline claims below apply to their recorded checkpoints. Current local full verification passes; current GitHub browser CI fails. PRD v3.1 requires Three.js-native compiled world art; external GLB/DCC production is not mandatory for world assets.
+
 > **Execution rule:** work in dependency order, test the smallest meaningful unit first, verify integration at every phase boundary, and never mark experiential work complete because files merely exist.
 
 **Goal:** build the most complete coherent browser-playable Together V1 possible while preserving `docs/PRD.md` as the single product source of truth.

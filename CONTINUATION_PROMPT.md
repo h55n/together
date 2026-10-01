@@ -9,6 +9,7 @@ Start with `git status --short`, `git fetch origin --prune`, then update the cle
 
 Read:
 - `docs/PRD.md` for product requirements.
+- `docs/PROJECT_AUDIT_2026_10_01.md` for the current audit and prioritized exit gates.
 - `PROJECT_STATE.json` and `docs/MERGE_CLEANUP_2026_10_01.md` for integration state.
 - `docs/PLAYTEST_STATE_2026_09_30.md` for the previous playtest milestone and unfinished release work.
 - `docs/KNOWN_LIMITATIONS.md`, `docs/ASSET_REQUIREMENTS.md` and `docs/DEVELOPMENT.md`.

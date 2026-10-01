@@ -1,5 +1,7 @@
 # Repository Audit Against PRD — Together V1 “Amaya Bay”
 
+> **October 1, 2026 current audit:** [PROJECT_AUDIT_2026_10_01.md](PROJECT_AUDIT_2026_10_01.md). Earlier verification/baseline claims below apply to their recorded checkpoints. Current local full verification passes; current GitHub browser CI fails. PRD v3.1 requires Three.js-native compiled world art; external GLB/DCC production is not mandatory for world assets.
+
 **Audit date:** 2026-09-15  
 **Authoritative product source:** `docs/PRD.md`  
 **Imported baseline:** `5c4730ee1d30ebcc05c7f2f7675f996580ca1654` (`legacy-import`)  
