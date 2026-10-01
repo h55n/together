@@ -17,6 +17,13 @@ export class JobSessionService {
     }
     const job = jobById(jobId);
     if (!job) throw new Error('Unknown job');
+    const retry = await this.repository.getJobSessionByStartKey(idempotencyKey);
+    if (retry) {
+      if (retry.householdId !== householdId || retry.userId !== userId || retry.jobId !== jobId) {
+        throw new Error('Idempotency key belongs to a different job session scope');
+      }
+      return this.view(retry);
+    }
     const now = new Date().toISOString();
     const session: JobSessionRecord = {
       id: crypto.randomUUID(), startIdempotencyKey: idempotencyKey, householdId, userId, jobId,

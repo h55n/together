@@ -55,7 +55,7 @@ export class HouseholdService {
     household.hiddenState = {
       ...household.hiddenState,
       soloExplorer: true,
-      flags: { property_assigned: true, moved_in: true },
+      flags: { ...this.flags(household), property_assigned: true, moved_in: true },
     };
     await this.repository.saveHousehold(household);
     return household;
@@ -93,6 +93,12 @@ export class HouseholdService {
     if (!household) throw new Error('Household not found');
     if (!household.members.some((member) => member.userId === userId && member.membershipState === 'active')) throw new Error('User is not an active member of this household');
     return household;
+  }
+
+  private flags(household: HouseholdRecord): Record<string, boolean> {
+    const raw = household.hiddenState.flags;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Boolean(value)]));
   }
 
   private async createUniqueInviteCode(): Promise<string> {

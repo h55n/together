@@ -555,4 +555,3 @@ function jointBends(
 
   return { leftElbow, rightElbow, leftKnee, rightKnee };
 }
-

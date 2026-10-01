@@ -80,7 +80,7 @@ async function enterIdentity(page: Page, displayName: string): Promise<void> {
   await page.addInitScript(() => {
     localStorage.setItem('together:game-settings', JSON.stringify({ quality: 'low', reducedMotion: true }));
   });
-  await page.goto('/?renderer=webgl2', { waitUntil: 'networkidle' });
+  await page.goto('/?renderer=webgl2&worldReview=1', { waitUntil: 'networkidle' });
   await page.getByLabel('Display name').fill(displayName);
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { name: 'Create a household' })).toBeVisible();

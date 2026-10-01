@@ -1,11 +1,16 @@
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const tscBin = require.resolve('typescript/bin/tsc');
+const tscCommand = [process.execPath, [tscBin]];
 
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const commands = [
   [process.execPath, ['tools/verify-pure.mjs'], 'pure domain/integration tests'],
-  [pnpm, ['exec', 'tsc', '-p', 'client/tsconfig.json', '--noEmit'], 'client TypeScript'],
-  [pnpm, ['exec', 'tsc', '-p', 'shared/tsconfig.json', '--noEmit'], 'shared TypeScript'],
-  [pnpm, ['exec', 'tsc', '-p', 'content/tsconfig.json', '--noEmit'], 'content TypeScript'],
+  [tscCommand[0], [...tscCommand[1], '-p', 'client/tsconfig.json', '--noEmit'], 'client TypeScript'],
+  [tscCommand[0], [...tscCommand[1], '-p', 'shared/tsconfig.json', '--noEmit'], 'shared TypeScript'],
+  [tscCommand[0], [...tscCommand[1], '-p', 'content/tsconfig.json', '--noEmit'], 'content TypeScript'],
   [process.execPath, ['tools/validate-repository.mjs'], 'repository integrity'],
 ];
 
