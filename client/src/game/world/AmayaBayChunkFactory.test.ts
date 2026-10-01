@@ -65,6 +65,34 @@ describe('createAmayaBayChunkFactory', () => {
     }
   });
 
+  it('renders the shared world-space surface network in traversable chunks', () => {
+    const materials = new MaterialLibrary();
+    try {
+      const createChunk = createAmayaBayChunkFactory(materials);
+      const chunk = createChunk(-1, 0, 'visual');
+      const surfaces = chunk.getObjectByName('chunk-surface-network');
+
+      expect(surfaces).toBeTruthy();
+      expect(surfaces?.children.some((child) => child.name.startsWith('static-batch:'))).toBe(true);
+    } finally {
+      materials.dispose();
+    }
+  });
+
+  it('compiles placed vegetation into per-chunk static material batches', () => {
+    const materials = new MaterialLibrary();
+    try {
+      const createChunk = createAmayaBayChunkFactory(materials);
+      const chunk = createChunk(0, 0, 'visual');
+      const vegetation = chunk.getObjectByName('chunk-vegetation');
+
+      expect(vegetation).toBeTruthy();
+      expect(vegetation?.children.some((child) => child.name.startsWith('static-batch:'))).toBe(true);
+    } finally {
+      materials.dispose();
+    }
+  });
+
   it('uses perimeter walls for static city safety instead of a flat world floor', () => {
     const boundaryLayout = (chunkFactoryModule as unknown as {
       amayaBayBoundaryCuboids?: () => readonly BoundaryCuboid[];

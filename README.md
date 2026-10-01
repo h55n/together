@@ -10,7 +10,7 @@ This repository is a substantial V1 implementation and handoff build, not a clai
 
 - WebGPU-first Three.js renderer architecture with WebGL2 fallback;
 - Rapier kinematic player physics, first/third-person cameras, gamepad and remappable keyboard input;
-- a ~900m × 900m Amaya Bay world split into 128m chunks;
+- a ~900m × 900m Amaya Bay world split into 128m chunks, with a shared streamed world-space road/path/promenade network;
 - 7 major districts, 28 named subareas/colonies, 45 distributed everyday venues, terrain/elevation, streamed neighborhood dressing and vegetation;
 - five starter home shells and persistent furniture/surface customization;
 - 92 furniture/decor definitions, including 20 greenery options;
@@ -20,11 +20,11 @@ This repository is a substantial V1 implementation and handoff build, not a clai
 - server-authoritative personal/shared wallets, transaction idempotency and five job definitions;
 - bicycle, scooter, kayak and auto-rickshaw transport foundations;
 - 8 persistent leisure activities with shared sessions;
-- 12 named persistent NPCs with schedules, memory flags and authored contextual dialogue;
+- 12 named persistent NPCs with schedules, memory flags and authored contextual dialogue, plus an instanced ambient city population;
 - 36 data-driven household stories (20 shared, 8 Couple, 8 Friends) and seven life stages;
 - private manual/automatic Memory capture, captions and share-card export;
 - renovation and moving flows with voting, packing decisions and moving memories;
-- WebRTC household/proximity voice architecture with Socket.IO signaling and optional TURN;
+- WebRTC household/proximity voice architecture with Socket.IO signaling and authenticated server-issued TURN credentials;
 - sticky notes, accessibility controls, quality tiers, performance diagnostics and debug tooling foundations.
 
 See `docs/IMPLEMENTATION_STATUS.md` and `docs/KNOWN_LIMITATIONS.md` for the strict acceptance status.
@@ -35,17 +35,14 @@ See `docs/IMPLEMENTATION_STATUS.md` and `docs/KNOWN_LIMITATIONS.md` for the stri
 - pnpm **12.4.1** through Corepack
 - a modern desktop browser with WebGPU or WebGL2
 
-The supplied sandbox had Node 22 and no registry/DNS access, so it could not generate `pnpm-lock.yaml` or perform a clean dependency install. On the first connected Node 24 machine, generate and commit the lockfile:
+The connected CI baseline uses Node 24, Corepack and the committed dependency graph with `pnpm install --frozen-lockfile`. For local development, use the same major runtime and package-manager versions rather than copying `node_modules` across platforms.
 
 ```bash
 corepack enable
-corepack prepare pnpm@12.4.1 --activate
-pnpm install
+pnpm install --frozen-lockfile
 pnpm verify
 pnpm test:e2e
 ```
-
-After that, use `pnpm install --frozen-lockfile` in CI and subsequent environments.
 
 ## Local development
 
@@ -64,24 +61,21 @@ Without Supabase credentials, development uses the in-memory repository and loca
 
 ## Verification
 
-Normal connected environment:
+Authoritative connected gate:
 
 ```bash
 pnpm typecheck
 pnpm lint
 pnpm test
 pnpm validate
+pnpm validate:repo
 pnpm build
 pnpm test:e2e
 ```
 
-Sandbox-safe verification (does not require pnpm, Vite/Rollup, or the missing server declaration packages):
+As of 2026-09-20, runtime HEAD `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073` passes the complete GitHub Actions gate in run `35490206098`, including solo playable-frame/movement/camera acceptance, two-browser Couple household movement replication, and a six-browser Friends movement + reconnect acceptance in explicit WebGL2 compatibility mode. Normal product startup remains WebGPU-first.
 
-```bash
-node tools/verify-sandbox.mjs
-```
-
-At handoff this passes 161 automated domain/integration tests plus client/shared/content TypeScript and repository integrity validation.
+`node tools/verify-sandbox.mjs` remains available as a reduced offline diagnostic, but it is no longer the authoritative verification record. See `docs/VERIFICATION.md`.
 
 ## Repository structure
 
@@ -118,20 +112,22 @@ DATABASE_URL=
 SUPABASE_MEMORY_BUCKET=together-memories
 ```
 
-Apply `server/src/db/migrations/001_*.sql` through `009_*.sql` in order.
+Enable Supabase anonymous sign-in for the V1 client identity flow. Client builds also require `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+
+Build the server and run `DATABASE_URL=... pnpm --filter @together/server migrate` to apply migrations `001` through `012` with advisory locking/checksum protection.
 
 ### Voice
 
-STUN works without application credentials. Production-grade NAT traversal requires TURN:
+STUN works without application credentials. Production-grade NAT traversal requires server-side TURN configuration:
 
 ```text
-VITE_STUN_URL=stun:stun.l.google.com:19302
-VITE_TURN_URL=
-VITE_TURN_USERNAME=
-VITE_TURN_CREDENTIAL=
+STUN_URL=stun:stun.l.google.com:19302
+TURN_URL=
+TURN_SHARED_SECRET=
+TURN_TTL_SECONDS=3600
 ```
 
-Voice audio is never stored by the application.
+The browser authenticates to `/api/voice/ice-config` and receives short-lived credentials. Never expose `TURN_SHARED_SECRET` through a `VITE_*` variable. Voice audio is never stored by the application.
 
 ## Documentation
 

@@ -13,8 +13,8 @@ async function setup() {
 
 test('named NPC memory uses authored discrete flags and repeated memories stay idempotent', async () => {
   const { household, service } = await setup();
+  await service.remember(household.id, 'user-a', 'roshan', 'first_meeting', 4);
   let state = await service.remember(household.id, 'user-a', 'roshan', 'first_meeting', 4);
-  state = await service.remember(household.id, 'user-a', 'roshan', 'first_meeting', 4);
   assert.deepEqual(state.flags, ['first_meeting']);
   assert.equal(state.familiarity, 8);
   state = await service.remember(household.id, 'user-a', 'roshan', 'player_works_here', 200);

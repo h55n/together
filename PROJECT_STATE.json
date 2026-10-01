@@ -28,7 +28,8 @@
     "production_build": "PASS",
     "playwright": "PASS: 3 arrival/guide/recovery tests and 7-district capture with actual 20-second walking sample; complete continuous normal-speed route and full venue acceptance remain",
     "native_webgpu": "Physical WebGPU UNVERIFIED; ordinary browser recovers to native WebGL2 after local device creation failure",
-    "target_hardware_performance": "NOT RUN"
+    "target_hardware_performance": "NOT RUN",
+    "merged_result": "PENDING re-verification after integration"
   },
   "completed_systems": [
     "data-driven story engine and 36-story V1 library",
@@ -93,5 +94,54 @@
     "verification": "Full pnpm verify PASS; all 3 browser tests PASS (1.1m), including ordinary URL automatic native WebGL2 recovery, guide persistence and menu input gating",
     "remaining": "Reference art, production rigs/audio/NPC pathing, cold streaming and target-hardware performance, gameplay balancing, production online acceptance and seamless mid-session recovery",
     "world_capture": "PASS: 7 districts, close surfaces, rain/sunset and 20-second ordinary walk. 960x540 Intel UHD ANGLE D3D11: warm 37.1-60.0 FPS, walk 41.6 FPS; cold loading p99 up to 1116.5 ms. Not 1080p acceptance."
+  },
+  "recovery_branch_baseline": {
+    "project": "Together",
+    "city": "Amaya Bay",
+    "prd": "docs/PRD.md",
+    "branch": "fix/audit-recovery-2026-09-17",
+    "verified_runtime_head": "5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073",
+    "verified_github_actions_run": "35490206098",
+    "head_note": "Documentation may descend from the verified runtime head; use git rev-parse HEAD for the exact current documentation SHA.",
+    "active_phase": "Phase 16 — Performance + Accessibility + Release Quality",
+    "verification": {
+      "connected_ci": "PASS",
+      "node": "24",
+      "frozen_install": "PASS",
+      "typecheck": "PASS",
+      "lint": "PASS",
+      "content_validation": "PASS",
+      "repository_integrity": "PASS: 12 ordered migrations and heuristic committed-secret scan",
+      "production_build": "PASS",
+      "server_tests": "11 files / 25 tests passed",
+      "client_tests": "28 files / 80 tests passed",
+      "pure_verification": "195 tests passed",
+      "browser_e2e": "3/3 passed: solo playable frame + Couple 2-context + Friends 6-context/reconnect",
+      "target_hardware_performance": "NOT RUN",
+      "real_webgpu_matrix": "NOT RUN",
+      "production_supabase_turn": "NOT RUN"
+    },
+    "production_hardening": [
+      "Supabase anonymous client sessions with Bearer REST/Socket.IO auth and token refresh",
+      "split-origin REST routing through VITE_SERVER_URL",
+      "production CORS allow-list and local-auth fail closed",
+      "health/readiness probes, request IDs and structured HTTP completion logs",
+      "production HTTP fixed-window rate limiter",
+      "graceful SIGTERM/SIGINT shutdown",
+      "authenticated short-lived TURN credentials from a server-only shared secret",
+      "private together-memories bucket migration",
+      "12 ordered migrations plus advisory-locked/checksummed migration runner",
+      "six-player Friends movement/reconnect browser acceptance"
+    ],
+    "remaining_release_gates": [
+      "Medium 1080p target-hardware performance and GPU-memory benchmark",
+      "real WebGPU/browser/controller matrix",
+      "real-device network latency/loss/long-duration multiplayer soak",
+      "production hosted Supabase anonymous auth/RLS/migrations/private Memory Storage acceptance",
+      "real TURN traversal and voice-quality tests across different networks",
+      "final world/avatar/NPC/interaction visual and animation quality against PRD acceptance",
+      "final audio/weather/LOD/compression acceptance",
+      "Quiet Walk, Shared Kitchen, Money, Rain, Moving, Memory and No-HUD acceptance tests"
+    ]
   }
 }

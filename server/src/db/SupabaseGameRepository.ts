@@ -584,7 +584,7 @@ export class SupabaseGameRepository implements GameRepository {
 
 
 
-function inflateJobSession(row: Record<string, any>): JobSessionRecord {
+function inflateJobSession(row: Record<string, unknown>): JobSessionRecord {
   return {
     id: String(row.id),
     startIdempotencyKey: String(row.start_idempotency_key),

@@ -5,6 +5,8 @@ import {
   validateFurniturePlacement,
   applyHomeAction,
   createStarterHomeState,
+  applyDomesticInteractionStep,
+  type DomesticInteractionProgress,
   type HomeAction,
   type HomeObjectMutation,
   type HomeState,
@@ -106,6 +108,32 @@ export class HomeService {
     return this.commit(current, idempotencyKey, { roomStates: { ...current.roomStates, domestic: nextDomestic } });
   }
 
+  async applyDomesticStep(
+    householdId: string,
+    userId: string,
+    interactionId: string,
+    stepId: string,
+    expectedVersion: number,
+    idempotencyKey: string,
+  ): Promise<HomeStateRecord> {
+    const { current } = await this.prepareMutation(householdId, userId, expectedVersion, idempotencyKey);
+    if (current.processedMutations[idempotencyKey] !== undefined) return current;
+    const interactions = this.domesticInteractionStates(current);
+    const progress = applyDomesticInteractionStep(
+      interactions[interactionId],
+      interactionId,
+      stepId,
+      userId,
+      new Date().toISOString(),
+    );
+    return this.commit(current, idempotencyKey, {
+      roomStates: {
+        ...current.roomStates,
+        domesticInteractions: { ...interactions, [interactionId]: progress },
+      },
+    });
+  }
+
   async setSurface(
     householdId: string,
     userId: string,
@@ -137,6 +165,12 @@ export class HomeService {
       : { ownerType: 'household' as const, ownerId: householdId, itemId: definitionId, quantity: 0, metadata: { category: 'furniture' } };
     await this.repository.saveInventory({ ...before, quantity: before.quantity + 1 });
     return before;
+  }
+
+  private domesticInteractionStates(current: HomeStateRecord): Record<string, DomesticInteractionProgress> {
+    const candidate = current.roomStates.domesticInteractions;
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return {};
+    return structuredClone(candidate) as Record<string, DomesticInteractionProgress>;
   }
 
   private domesticState(current: HomeStateRecord): HomeState {

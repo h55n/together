@@ -1,4 +1,4 @@
-import { advanceTransportSpeed, type AvatarAction, type TransportMode } from '@together/shared';
+import { advanceTransportHeading, advanceTransportSpeed, constrainKayakMovement, type AvatarAction, type TransportMode } from '@together/shared';
 import type { InputSnapshot } from '../core/InputManager';
 import type { PhysicsWorld, PlayerPhysicsHandle } from '../physics/PhysicsWorld';
 import type { PlayerAvatar } from './PlayerAvatar';
@@ -11,8 +11,11 @@ export class PlayerController {
   private jogging = false;
   private microAction: AvatarAction | null = null;
   private microActionRemaining = 0;
+  private microActionCompletion: { promise: Promise<void>; resolve: () => void } | null = null;
   private transportMode: TransportMode = 'on_foot';
   private transportSpeed = 0;
+  private transportYaw = 0;
+  private transportHeadingInitialized = false;
   private interactionLocked = false;
 
   constructor(
@@ -31,10 +34,18 @@ export class PlayerController {
 
   beginMicroAction(action: Exclude<AvatarAction, 'idle' | 'walk' | 'jog'>, durationSeconds = 1.25, allowWhileLocked = false): void {
     if (this.transportMode !== 'on_foot' || (this.interactionLocked && !allowWhileLocked)) return;
+    this.finishMicroAction();
+    let resolve!: () => void;
+    const promise = new Promise<void>((complete) => { resolve = complete; });
+    this.microActionCompletion = { promise, resolve };
     this.microAction = action;
     this.microActionRemaining = Math.max(0.25, durationSeconds);
     this.moving = false;
     this.jogging = false;
+  }
+
+  waitForMicroActionCompletion(): Promise<void> {
+    return this.microActionCompletion?.promise ?? Promise.resolve();
   }
 
   fixedUpdate(deltaSeconds: number, cameraYaw: number): void {
@@ -44,28 +55,38 @@ export class PlayerController {
     if (this.transportMode === 'bicycle' || this.transportMode === 'scooter' || this.transportMode === 'kayak') {
       const throttle = Math.max(0, input.moveZ);
       this.transportSpeed = advanceTransportSpeed(this.transportMode, this.transportSpeed, throttle, input.moveZ < -0.05, deltaSeconds);
-      const steer = Math.max(-0.65, Math.min(0.65, input.moveX * 0.65));
-      movement = movementVector({ moveX: steer, moveZ: 1, jog: false }, cameraYaw, this.transportSpeed);
+      if (!this.transportHeadingInitialized) {
+        this.transportYaw = cameraYaw;
+        this.transportHeadingInitialized = true;
+      }
+      const steer = Math.max(-1, Math.min(1, input.moveX));
+      this.transportYaw = advanceTransportHeading(this.transportMode, this.transportYaw, steer, this.transportSpeed, deltaSeconds);
+      movement = movementVector({ moveX: 0, moveZ: 1, jog: false }, this.transportYaw, this.transportSpeed);
       this.moving = this.transportSpeed > 0.08;
     } else {
       movement = movementVector(input, cameraYaw);
     }
+    const intended = { x: movement.x * deltaSeconds, z: movement.z * deltaSeconds };
+    const horizontal = this.transportMode === 'kayak'
+      ? constrainKayakMovement(this.getPosition(), intended)
+      : intended;
     this.physics.moveCharacter(this.physicsHandle, {
-      x: movement.x * deltaSeconds,
+      x: horizontal.x,
       y: -4.5 * deltaSeconds,
-      z: movement.z * deltaSeconds,
+      z: horizontal.z,
     });
   }
 
   syncVisual(yaw: number, deltaSeconds: number): void {
     const position = this.physicsHandle.body.translation();
-    this.avatar.setTransform(position, yaw, deltaSeconds);
+    if (this.transportMode !== 'on_foot' && !this.transportHeadingInitialized) {
+      this.transportYaw = yaw;
+      this.transportHeadingInitialized = true;
+    }
+    this.avatar.setTransform(position, this.presentationYaw(yaw), deltaSeconds);
     if (this.microAction) {
       this.microActionRemaining -= deltaSeconds;
-      if (this.microActionRemaining <= 0) {
-        this.microAction = null;
-        this.microActionRemaining = 0;
-      }
+      if (this.microActionRemaining <= 0) this.finishMicroAction();
     }
     this.avatar.updateMotion(deltaSeconds, this.animationTag());
   }
@@ -78,12 +99,19 @@ export class PlayerController {
   setTransportMode(mode: 'on_foot' | 'bicycle' | 'scooter' | 'kayak' | 'auto_rickshaw'): void {
     this.transportMode = mode;
     this.transportSpeed = 0;
-    this.microAction = null;
+    this.transportHeadingInitialized = mode === 'on_foot' || mode === 'auto_rickshaw' ? false : this.transportHeadingInitialized;
+    this.finishMicroAction();
     this.avatar.setTransportMode(mode);
   }
 
   getTransportMode(): 'on_foot' | 'bicycle' | 'scooter' | 'kayak' | 'auto_rickshaw' {
     return this.transportMode as 'on_foot' | 'bicycle' | 'scooter' | 'kayak' | 'auto_rickshaw';
+  }
+
+  presentationYaw(cameraYaw: number): number {
+    return this.transportMode === 'bicycle' || this.transportMode === 'scooter' || this.transportMode === 'kayak'
+      ? this.transportYaw
+      : cameraYaw;
   }
 
   setWorldPosition(position: { x: number; y: number; z: number }): void {
@@ -115,6 +143,15 @@ export class PlayerController {
   }
 
   dispose(): void {
+    this.finishMicroAction();
     this.physics.disposePlayer(this.physicsHandle);
+  }
+
+  private finishMicroAction(): void {
+    this.microAction = null;
+    this.microActionRemaining = 0;
+    const completion = this.microActionCompletion;
+    this.microActionCompletion = null;
+    completion?.resolve();
   }
 }

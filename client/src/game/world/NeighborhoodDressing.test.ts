@@ -10,7 +10,7 @@ it('aligns building collision with its rotated street-facing facade', () => {
   const materials = new MaterialLibrary();
   const createFixedCuboid = vi.fn((_position: unknown, _halfExtents: unknown, _yaw?: number) => ({}));
   addChunkDressing(new THREE.Group(), { buildings: [lot], props: [] }, -440, 420, 'active', materials, { createFixedCuboid, removeCollider: vi.fn() } as never);
-  expect(createFixedCuboid.mock.calls[0]?.[2]).toBe(lot.rotationY);
+  expect(createFixedCuboid.mock.calls[0]?.[2]).toBe(lot.rotationY + Math.PI / 2);
   materials.dispose();
 });
 

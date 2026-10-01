@@ -45,6 +45,21 @@ describe('WorldStreamer', () => {
     streamer.dispose();
     expect(disposed.mock.calls.length).toBeGreaterThan(20);
   });
+  it('prepares only a bounded set of nearest active chunks before gameplay starts', () => {
+    const created: Array<{ x: number; z: number; ring: string }> = [];
+    const streamer = new WorldStreamer((x, z, ring) => {
+      created.push({ x, z, ring });
+      return new THREE.Group();
+    });
+
+    streamer.prepareInitial(new THREE.Vector3(0, 0, 0), 5);
+
+    expect(created).toHaveLength(5);
+    expect(created[0]).toEqual({ x: 0, z: 0, ring: 'active' });
+    expect(created.every((entry) => entry.ring === 'active')).toBe(true);
+    expect(streamer.pendingJobs()).toBeGreaterThan(0);
+  });
+
   it('commits only one expensive initial chunk per update frame', () => {
     let created = 0;
     const streamer = new WorldStreamer(() => { created += 1; return new THREE.Group(); });

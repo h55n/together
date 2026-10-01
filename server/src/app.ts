@@ -1,6 +1,8 @@
 import { socketEvents } from '@together/shared';
 import { createApp as createCoreApp, type AppDependencies as CoreAppDependencies } from './appCore.js';
 import type { HomeService } from './game/HomeService.js';
+import type { CookingService } from './game/CookingService.js';
+import type { ActivityService } from './game/ActivityService.js';
 import { logger } from './logging/logger.js';
 
 export type PublishHouseholdEvent = (householdId: string, event: string, payload: unknown) => void;
@@ -16,6 +18,8 @@ export function createApp(dependencies: AppDependencies) {
   return createCoreApp({
     ...coreDependencies,
     homeService: withRealtimeHomePublishing(coreDependencies.homeService, publishHouseholdEvent),
+    cookingService: withRealtimeCookingPublishing(coreDependencies.cookingService, publishHouseholdEvent),
+    activityService: withRealtimeActivityPublishing(coreDependencies.activityService, publishHouseholdEvent),
   });
 }
 
@@ -69,9 +73,110 @@ function withRealtimeHomePublishing(homeService: HomeService, publish: PublishHo
           return home;
         };
       }
+      if (property === 'applyDomesticStep') {
+        return async (...args: Parameters<HomeService['applyDomesticStep']>) => {
+          const home = await target.applyDomesticStep(...args);
+          notify(args[0], socketEvents.homeObjectState, home.version);
+          return home;
+        };
+      }
 
       const value = Reflect.get(target, property, target);
       return typeof value === 'function' ? value.bind(target) : value;
     },
   }) as HomeService;
+}
+
+
+function withRealtimeCookingPublishing(cookingService: CookingService, publish: PublishHouseholdEvent): CookingService {
+  const notify = (householdId: string, sessionId: string): void => {
+    try {
+      publish(householdId, socketEvents.cookingState, { sessionId });
+    } catch (error) {
+      logger.warn('Could not publish household cooking update', {
+        householdId,
+        sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  return new Proxy(cookingService, {
+    get(target, property) {
+      if (property === 'start') {
+        return async (...args: Parameters<CookingService['start']>) => {
+          const session = await target.start(...args);
+          notify(args[0], session.id);
+          return session;
+        };
+      }
+      if (property === 'claimStation') {
+        return async (...args: Parameters<CookingService['claimStation']>) => {
+          const session = await target.claimStation(...args);
+          notify(args[0], session.id);
+          return session;
+        };
+      }
+      if (property === 'releaseStation') {
+        return async (...args: Parameters<CookingService['releaseStation']>) => {
+          const session = await target.releaseStation(...args);
+          notify(args[0], session.id);
+          return session;
+        };
+      }
+      if (property === 'completeStep') {
+        return async (...args: Parameters<CookingService['completeStep']>) => {
+          const session = await target.completeStep(...args);
+          notify(args[0], session.id);
+          return session;
+        };
+      }
+
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as CookingService;
+}
+
+
+function withRealtimeActivityPublishing(activityService: ActivityService, publish: PublishHouseholdEvent): ActivityService {
+  const notify = (householdId: string, sessionId: string): void => {
+    try {
+      publish(householdId, socketEvents.activityState, { sessionId });
+    } catch (error) {
+      logger.warn('Could not publish household activity update', {
+        householdId,
+        sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  return new Proxy(activityService, {
+    get(target, property) {
+      if (property === 'start') {
+        return async (...args: Parameters<ActivityService['start']>) => {
+          const session = await target.start(...args);
+          notify(session.householdId, session.id);
+          return session;
+        };
+      }
+      if (property === 'join') {
+        return async (...args: Parameters<ActivityService['join']>) => {
+          const session = await target.join(...args);
+          notify(session.householdId, session.id);
+          return session;
+        };
+      }
+      if (property === 'advance') {
+        return async (...args: Parameters<ActivityService['advance']>) => {
+          const session = await target.advance(...args);
+          notify(session.householdId, session.id);
+          return session;
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as ActivityService;
 }

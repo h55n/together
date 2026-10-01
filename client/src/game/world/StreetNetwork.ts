@@ -161,7 +161,7 @@ export function streetFrontageLotsForChunk(cx: number, cz: number): BuildingLot[
         lots.push({
           id: `street-frontage:${route.id}:${i}:${side}`, x: x - cx * 128, z: z - cz * 128,
           width, depth, height: variant % 2 ? 9.3 : 6.4,
-          rotationY: Math.atan2(sample.nz * side, -sample.nx * side),
+          rotationY: Math.atan2(sample.nz * side, -sample.nx * side) - Math.PI / 2,
           style: district.id === 'lantern_street' ? (variant % 2 ? 'lantern_mixed_use' : 'lantern_shopfront')
             : district.id === 'rain_tree_lane' ? 'rain_tree_old_home'
               : district.id === 'the_common' ? 'civic_modern' : 'mogra_balcony',

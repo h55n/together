@@ -1,23 +1,23 @@
-Continue `h55n/together` from the exact remote state produced by the 2026-09-16 gameplay/world recovery pass. Do not restart the project, do not recreate systems already present, and do not use an older local checkout as the source of truth.
+Continue `h55n/together` from the exact remote state after the 2026-09-20 production-readiness/auth/network hardening pass. Do not restart the project, do not recreate systems already present, and do not use an older local checkout as the source of truth.
 
 ## 1. Synchronize before doing anything
 
 Repository: `https://github.com/h55n/together`
-Canonical working branch: `build/amaya-bay-v1`
-Recovery implementation floor: `f27efcab7a491d4c23e58b48be131e83d9916400`
+Canonical working branch: `fix/audit-recovery-2026-09-17`
+Latest fully verified runtime floor: `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073` (GitHub Actions run `35490206098`)
 
 Run:
 
 ```bash
 git status --short
 git fetch origin --prune
-git switch build/amaya-bay-v1
-git pull --ff-only origin build/amaya-bay-v1
+git switch fix/audit-recovery-2026-09-17
+git pull --ff-only origin fix/audit-recovery-2026-09-17
 git rev-parse HEAD
 git log --oneline --decorate -15
 ```
 
-The branch you pull must contain commit `f27efcab7a491d4c23e58b48be131e83d9916400` or a descendant. If your local branch has unrelated uncommitted work, preserve it safely before switching; do not overwrite it. Do not reset the remote branch backwards.
+The branch you pull must contain commit `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073` or a descendant. If your local branch has unrelated uncommitted work, preserve it safely before switching; do not overwrite it. Do not reset the remote branch backwards.
 
 ## 2. Read the authoritative context in this order
 
@@ -119,7 +119,11 @@ Relevant files:
 - ESLint was made environment-aware so browser/Node globals do not produce hundreds of false `no-undef` errors;
 - client test coverage now includes world/assets/map recovery work through the correct Vitest/Node runners.
 
-A clean GitHub Actions run on implementation commit `f27efcab7a491d4c23e58b48be131e83d9916400` passed install, typecheck, lint, tests, validation and production build.
+The historical recovery implementation commit `f27efcab7a491d4c23e58b48be131e83d9916400` established the world/camera recovery floor.
+
+The current connected baseline is much newer: runtime HEAD `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073`, GitHub Actions run `35490206098`, passes frozen install, typecheck, lint, all tests, content/repository validation, production build and 3/3 Playwright tests. Browser acceptance includes solo movement/camera, a two-context Couple household flow, and a six-context Friends flow with movement replication and reconnect.
+
+Production hardening already present and not to be redone blindly: Supabase anonymous client sessions/Bearer auth, token refresh, split-origin REST routing, production CORS/fail-fast readiness, health/readiness probes, request IDs/structured logs, HTTP throttling, graceful shutdown, 12 migrations + deterministic migration runner/private Memory bucket bootstrap, and authenticated short-lived TURN credentials with the long-lived secret kept server-side.
 
 ## 5. Your FIRST task: verify in a real browser before adding features
 
@@ -291,3 +295,4 @@ The immediate objective is not “more systems.” It is to make the existing ga
 ## Current world-building pass — 2026-09-22
 
 See [World build status](docs/WORLD_BUILD_2026_09.md) for implemented visuals, actual verification, and outstanding work. This pass is **in progress**; finished-reference quality, full route validation and optimization are not claimed. Earlier status entries below/above are historical.
+The immediate objective is not “more systems.” The core code path and multiplayer browser acceptance are green; focus next on real-device/WebGPU performance, hosted Supabase/TURN acceptance, and making the existing world/avatar/NPC/interaction presentation actually meet the V3.1 quality bar.

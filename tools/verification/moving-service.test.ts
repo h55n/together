@@ -25,12 +25,12 @@ async function setup(repo: LocalGameRepository = new LocalGameRepository()) {
   await repo.saveInventory({ ownerType: 'household', ownerId: household.id, itemId: 'lamp_floor_01', quantity: 1, metadata: { category: 'furniture' } });
   await repo.saveInventory({ ownerType: 'household', ownerId: household.id, itemId: 'chair_wood_01', quantity: 1, metadata: { category: 'furniture' } });
   const home = new HomeService(repo);
-  let state = await home.placeFurniture(household.id, 'a', {
+  const firstPlacement = await home.placeFurniture(household.id, 'a', {
     objectId: 'lamp-memory', definitionId: 'lamp_floor_01', roomId: 'living_sleep', expectedVersion: 0,
     idempotencyKey: 'moving-lamp-place-0001', transform: { position: { x: 1.2, y: 0, z: 1.2 }, rotationY: 0, scale: 1 },
   });
-  state = await home.placeFurniture(household.id, 'a', {
-    objectId: 'chair-donate', definitionId: 'chair_wood_01', roomId: 'living_sleep', expectedVersion: state.version,
+  await home.placeFurniture(household.id, 'a', {
+    objectId: 'chair-donate', definitionId: 'chair_wood_01', roomId: 'living_sleep', expectedVersion: firstPlacement.version,
     idempotencyKey: 'moving-chair-place-0001', transform: { position: { x: 3.5, y: 0, z: 2.4 }, rotationY: 0, scale: 1 },
   });
   return { repo, household, moving: new MovingService(repo, households) };

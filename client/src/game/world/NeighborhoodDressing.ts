@@ -47,13 +47,13 @@ export function addChunkDressing(
       ? createHorizonVolume(lot, materials)
       : createLayeredBuilding(lot, materials, ring === 'active');
     building.position.set(wx, y, wz);
-    building.rotation.y = lot.rotationY;
+    building.rotation.y = lot.rotationY + Math.PI / 2;
     root.add(building);
     if (ring === 'active' && physics) {
       colliders.push(physics.createFixedCuboid(
         { x: wx, y: y + lot.height / 2, z: wz },
         { x: lot.width / 2, y: lot.height / 2, z: lot.depth / 2 },
-        lot.rotationY,
+        lot.rotationY + Math.PI / 2,
       ));
     }
   }
@@ -117,17 +117,21 @@ const prototypeGeometryOwners = new WeakMap<Map<string, THREE.Group>, Set<THREE.
 function buildLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, detailed: boolean): THREE.Group {
   const group = new THREE.Group();
   group.name = `building:${lot.id}:${lot.style}`;
-  const body = box(lot.width, lot.height, lot.depth, materials.get(STYLE_MATERIALS[lot.style]));
+
+  const wallMaterial = materials.get(STYLE_MATERIALS[lot.style]);
+  const body = box(lot.width, lot.height, lot.depth, wallMaterial);
   body.position.y = lot.height / 2;
   body.castShadow = detailed;
   body.receiveShadow = true;
   group.add(body);
 
-  const plinth = box(lot.width + 0.4, 0.35, lot.depth + 0.45, materials.get('stone'));
-  plinth.position.y = 0.18;
+  const plinth = box(lot.width + 0.5, 0.38, lot.depth + 0.5, materials.get('stone'));
+  plinth.position.y = 0.19;
   group.add(plinth);
-  const parapet = box(lot.width + 0.25, 0.32, lot.depth + 0.25, materials.get('stone'));
-  parapet.position.y = lot.height + 0.16;
+
+  const parapetHeight = lot.style === 'waterfront_hut' || lot.style === 'park_pavilion' ? 0.18 : 0.42;
+  const parapet = box(lot.width + 0.28, parapetHeight, lot.depth + 0.28, materials.get('stone'));
+  parapet.position.y = lot.height + parapetHeight / 2;
   group.add(parapet);
 
   if (!detailed) { dressSimpleFacades(group, materials, lot.width, lot.depth, lot.height); return group; }
@@ -135,13 +139,18 @@ function buildLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, deta
   const faceX = lot.width / 2 + 0.015;
 
   if (lot.style === 'lantern_shopfront' || lot.style === 'lantern_mixed_use') {
-    const shopWindow = box(0.09, 2.25, Math.min(4.8, lot.depth * 0.55), materials.get('glass'));
-    shopWindow.position.set(faceX + 0.03, 1.25, 0);
+    const shopWindow = box(lot.width * 0.62, 2.3, 0.1, materials.get('glass'));
+    shopWindow.position.set(faceX + 0.03, 1.28, -lot.depth * 0.1);
     group.add(shopWindow);
-    const awning = box(1.35, 0.14, Math.min(5.2, lot.depth * 0.6), materials.get(lot.style === 'lantern_shopfront' ? 'sagePlaster' : 'terracottaPlaster'));
-    awning.position.set(faceX + 0.63, 2.65, 0);
-    awning.rotation.z = -0.08;
+    const awning = box(lot.width * 0.74, 0.14, 1.45, materials.get(lot.style === 'lantern_shopfront' ? 'sagePlaster' : 'terracottaPlaster'));
+    awning.rotation.y = Math.PI / 2;
+    awning.position.set(faceX + 0.68, 2.72, -lot.depth * 0.08);
+    awning.rotation.x = -0.08;
     group.add(awning);
+    const sign = box(Math.min(5.8, lot.width * 0.58), 0.55, 0.12, materials.get('curtainWarm'));
+    sign.rotation.y = Math.PI / 2;
+    sign.position.set(faceX + 0.12, 3.35, -lot.depth * 0.06);
+    group.add(sign);
   }
 
   dressFacade(group, materials, lot.width, lot.depth, lot.height, lot.balconyCount);
@@ -151,9 +160,14 @@ function buildLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, deta
   const service = box(Math.min(2.5, lot.width * 0.3), 1.1, Math.min(2.4, lot.depth * 0.25), materials.get('concrete'));
   service.position.set(-lot.width * 0.18, lot.height + 0.55, lot.depth * 0.16);
   group.add(service);
+  if (lot.style !== 'waterfront_hut' && lot.style !== 'park_pavilion') {
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 1.0, 10), materials.get('metalDark'));
+    tank.position.set(lot.width * 0.22, lot.height + 0.62, -lot.depth * 0.14);
+    group.add(tank);
+  }
+
   return group;
 }
-
 function createHorizonVolume(lot: BuildingLot, materials: MaterialLibrary): THREE.Group {
   const group = new THREE.Group();
   const body = box(lot.width, lot.height * 0.9, lot.depth, materials.get(STYLE_MATERIALS[lot.style]));

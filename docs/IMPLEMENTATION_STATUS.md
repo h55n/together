@@ -2,26 +2,25 @@
 
 Status is evaluated against the strict exit criteria in `docs/PRD.md` / `docs/BUILD_PLAN.md`. "Implemented" does not mean the corresponding phase is marked complete when required browser/manual/asset verification was unavailable.
 
-## Verification baseline at handoff
+## Current verification baseline
 
-Green in this environment:
+Verified on branch `fix/audit-recovery-2026-09-17` at `5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073` by GitHub Actions run `35490206098`:
 
-- `node tools/verify-sandbox.mjs`
-- 161 automated domain/integration tests
-- client TypeScript
-- shared TypeScript
-- content TypeScript
-- content validation through the emitted validation module
-- repository/migration/secret/legacy-entrypoint integrity
+- frozen pnpm install on Node 24;
+- full workspace TypeScript;
+- ESLint;
+- shared/content/client/server automated tests;
+- content validation;
+- repository/migration/secret/legacy-entrypoint integrity;
+- production build;
+- Chromium installation;
+- real client+server Playwright solo-entry E2E through a rendered playable frame in explicit WebGL2 compatibility mode;
+- live browser W movement through Rapier and V first-person/third-person camera switching;
+- two-context Couple create/join/property/world/movement replication acceptance;
+- six-context Friends membership/property/movement/reload-reconnect acceptance;
+- bounded first-playable preload/physics/renderer warmup before control is released.
 
-Environment-blocked:
-
-- clean `pnpm install` (registry DNS unavailable; pnpm not installed)
-- full `pnpm typecheck/lint/test/validate/build`
-- Vite production build (copied Windows dependency tree lacks Linux Rollup native package)
-- full server `tsc` (copied dependency tree lacks declared Express/Supertest types/current Drizzle package)
-- Playwright/browser E2E
-- real target-hardware performance measurement
+Normal product startup remains WebGPU-first; real-device WebGPU/browser-matrix and target-hardware performance measurements remain outstanding. The connected headless WebGL2 diagnostic sample at this baseline measured 88.7 FPS, p95 17.2 ms, p99 18.2 ms, 148 draw calls and 223,782 triangles with no sampled frames over 33 ms; treat these as CI diagnostics only.
 
 See `docs/VERIFICATION.md`.
 
@@ -41,11 +40,13 @@ Implemented:
 - structured server logging;
 - Socket.IO connection/presence/movement contract;
 - Supabase/local persistence adapters;
-- Supabase-oriented auth adapter;
-- migrations and verification utilities;
+- production Supabase anonymous client sessions with Bearer auth and token refresh;
+- split-origin REST + Socket.IO server routing;
+- production CORS/fail-fast readiness/request IDs/structured HTTP logs/fixed-window API throttling/graceful shutdown;
+- 12 migrations, private Memory bucket bootstrap and deterministic migration runner;
 - performance/debug overlay foundations.
 
-Strict blocker: two-browser boot/connect cannot be manually verified in this sandbox dependency state.
+Remaining acceptance gap: real-device WebGPU/browser/controller acceptance and production hosted Supabase/TURN validation.
 
 ## Phase 1 — World feel vertical slice
 
@@ -81,11 +82,13 @@ Implemented:
 - 128m chunk streaming with active/visual/horizon rings;
 - deterministic district dressing and vegetation;
 - quality-dependent far residency;
+- shared world-space road/path/promenade network rendered through streamed terrain-following batches;
+- procedural building/prop/vegetation clearance against the same connective surface graph;
 - transport/location anchors and district identity.
 
 Missing/limited:
 
-- final authored terrain/road meshes;
+- final production-grade terrain/road art and district-specific surface polish;
 - production LOD assets;
 - fully baked navmesh/path service;
 - end-to-end measured traversal/performance on target hardware.
@@ -113,7 +116,7 @@ Missing: production rig, authored clips, IK, facial system and release-quality b
 
 Implemented:
 
-- fast/local identity path with Supabase adapter architecture;
+- local development identity plus production Supabase anonymous session/Bearer identity;
 - create/join household;
 - Couple/Friends limits;
 - six-character invite code;
@@ -124,7 +127,7 @@ Implemented:
 - synchronized movement/profile state;
 - reconnect to authoritative household snapshot.
 
-Strict blocker: two real browser/device acceptance run not performed here.
+Automated acceptance now covers a two-browser Couple flow and a six-browser Friends flow with movement replication and reconnect. Remaining blocker is real-device/network latency/loss/long-duration soak plus hosted production Supabase validation.
 
 ## Phase 5 — Home system
 
@@ -224,7 +227,7 @@ Missing: release-quality vehicle handling/animation/physics and activity-specifi
 
 Implemented:
 
-- ambient NPC pool/update tiers;
+- ambient NPC pool/update tiers rendered through two dynamic instanced batches for body/head geometry;
 - 12 named residents;
 - time schedules;
 - discrete household-specific memory flags;
@@ -297,7 +300,7 @@ Implemented:
 
 - WebRTC peer architecture;
 - Socket.IO offer/answer/ICE signaling;
-- STUN/TURN configuration builder;
+- authenticated server-issued short-lived STUN/TURN ICE configuration;
 - off/household/proximity modes;
 - mute and push-to-talk;
 - distance attenuation hooks;
@@ -335,15 +338,16 @@ Implemented:
 - controller movement/look/action mappings;
 - frame/draw-call/triangle/chunk debug metrics;
 - repository/secret/migration validation;
+- request tracing, health/readiness probes, production CORS, HTTP abuse guard, per-socket event flood budgets and graceful shutdown;
+- two-browser Couple and six-browser Friends Chromium acceptance;
 - sandbox-safe verification command.
 
 Outstanding:
 
-- clean connected dependency install/lockfile;
-- lint/full build/Playwright;
-- target hardware benchmark;
-- browser matrix;
-- broader network latency/loss soak;
+- target hardware benchmark for the Medium 1080p performance target;
+- real WebGPU/browser/controller matrix beyond the WebGL2 Chromium CI compatibility gate;
+- broader network latency/loss and multi-client soak;
+- production Supabase/TURN acceptance;
 - final asset compression/LOD benchmark.
 
 ## V3.1 technical-direction supersession

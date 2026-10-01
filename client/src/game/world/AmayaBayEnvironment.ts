@@ -103,9 +103,15 @@ export class AmayaBayEnvironment {
     const lawn = new THREE.Mesh(lawnGeometry, this.materials.get('foliageMid'));
     lawn.position.set(185, 0, 110); lawn.receiveShadow = true; root.add(lawn);
     const basin = new THREE.Mesh(new THREE.CylinderGeometry(7.5, 8, 0.65, 32), this.materials.get('stone'));
-    basin.position.set(184, y + 0.35, 108); root.add(basin);
+    basin.position.set(184, y + 0.35, 108);
+    root.add(basin);
     const water = new THREE.Mesh(new THREE.CylinderGeometry(6.9, 6.9, 0.08, 32), this.materials.get('water'));
-    water.position.set(184, y + 0.7, 108); root.add(water);
+    water.position.set(184, y + 0.7, 108);
+    root.add(water);
+    const fountainColumn = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.62, 2.1, 12), this.materials.get('stone'));
+    fountainColumn.position.set(184, y + 1.45, 108);
+    root.add(fountainColumn);
+
     const vegetation = new VegetationSystem(this.materials);
     for (let i = 0; i < 13; i += 1) {
       const a = i / 13 * Math.PI * 2;
@@ -113,6 +119,44 @@ export class AmayaBayEnvironment {
       tree.position.set(185 + Math.cos(a) * 43, cityHeightAt(185 + Math.cos(a) * 43, 110 + Math.sin(a) * 39), 110 + Math.sin(a) * 39);
       root.add(tree);
     }
+
+    // Quiet seating ring and lighting around the fountain.
+    for (let i = 0; i < 6; i += 1) {
+      const a = i / 6 * Math.PI * 2;
+      const bx = 184 + Math.cos(a) * 15;
+      const bz = 108 + Math.sin(a) * 15;
+      addBench(root, this.materials, bx, cityHeightAt(bx, bz), bz, -a + Math.PI / 2);
+    }
+    for (let i = 0; i < 8; i += 1) {
+      const a = i / 8 * Math.PI * 2 + Math.PI / 8;
+      const lx = 184 + Math.cos(a) * 27;
+      const lz = 108 + Math.sin(a) * 27;
+      addLamp(root, this.materials, lx, cityHeightAt(lx, lz), lz);
+    }
+
+    // Small open pavilion keeps the park useful in sun and rain.
+    const pavilionX = 213;
+    const pavilionZ = 92;
+    const pavilionY = cityHeightAt(pavilionX, pavilionZ);
+    addBox(root, [9.5, 0.18, 7.2], [pavilionX, pavilionY + 3.25, pavilionZ], this.materials.get('wood'));
+    for (const px of [-4.0, 4.0]) {
+      for (const pz of [-2.9, 2.9]) {
+        addBox(root, [0.18, 3.2, 0.18], [pavilionX + px, pavilionY + 1.6, pavilionZ + pz], this.materials.get('metalDark'));
+      }
+    }
+    addBox(root, [7.6, 0.18, 1.0], [pavilionX, pavilionY + 0.5, pavilionZ], this.materials.get('wood'));
+
+    // Flower beds provide seasonal colour blocks without visual noise.
+    for (const [fx, fz] of [[154, 95], [162, 139], [211, 137], [219, 112]] as const) {
+      const fy = cityHeightAt(fx, fz);
+      addBox(root, [5.2, 0.16, 2.1], [fx, fy + 0.08, fz], this.materials.get('soil'), false);
+      for (let j = -2; j <= 2; j += 1) {
+        const flower = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 4), this.materials.get(j % 2 === 0 ? 'curtainWarm' : 'terracottaPlaster'));
+        flower.position.set(fx + j * 0.72, fy + 0.34, fz);
+        root.add(flower);
+      }
+    }
+
     const badminton = locationAnchor('park_badminton')!;
     const courtY = cityHeightAt(badminton.position.x, badminton.position.z);
     const courtGeometry = new THREE.PlaneGeometry(13, 6.1, 12, 6);
@@ -137,7 +181,6 @@ export class AmayaBayEnvironment {
     }
     return root;
   }
-
   private createBaySteps(): THREE.Group {
     const root = new THREE.Group(); root.name = 'landmark:bay-steps';
     const vegetation = new VegetationSystem(this.materials);
@@ -215,6 +258,7 @@ export class AmayaBayEnvironment {
       addBox(root, [0.12, 2, 0.12], [118 - 1.65, 0.9, -314 - i * 6], this.materials.get('metalDark'));
       addBox(root, [0.12, 2, 0.12], [118 + 1.65, 0.9, -314 - i * 6], this.materials.get('metalDark'));
     }
+
     const cycle = locationAnchor('bay_cycle_hut')!;
     addBox(root, [9, 3.6, 5], [cycle.position.x, 2.0, cycle.position.z], this.materials.get('sagePlaster'));
     addBox(root, [10, 0.18, 6], [cycle.position.x, 3.9, cycle.position.z], this.materials.get('wood'));
@@ -308,7 +352,6 @@ export class AmayaBayEnvironment {
     this.physics?.createFixedCuboid({ x: rackX, y: 0.52, z: rackZ }, { x: 2, y: 0.5, z: 1.8 });
     return root;
   }
-
   private createRainTreeLane(): THREE.Group {
     const root = new THREE.Group(); root.name = 'landmark:rain-tree-lane'; addDistrictDetails(root, 'rain', this.materials);
     const vegetation = new VegetationSystem(this.materials);
@@ -344,7 +387,6 @@ export class AmayaBayEnvironment {
     }
     return root;
   }
-
   private createCommon(): THREE.Group {
     const root = new THREE.Group(); root.name = 'landmark:the-common'; addDistrictDetails(root, 'common', this.materials); const y = cityHeightAt(215, -80);
     addBox(root, [38, 8, 25], [215, y + 4, -80], this.materials.get('warmPlaster'));
@@ -378,7 +420,6 @@ export class AmayaBayEnvironment {
     const courtyard = addBox(root, [62, 0.16, 50], [215, y + 0.08, -45], this.materials.get('stone'), false); courtyard.receiveShadow = true;
     return root;
   }
-
   private createHillGarden(): THREE.Group {
     const root = new THREE.Group(); root.name = 'landmark:hill-garden'; addDistrictDetails(root, 'hill', this.materials);
     const teaX = 283, teaZ = 272, y = cityHeightAt(teaX, teaZ);
@@ -411,10 +452,30 @@ export class AmayaBayEnvironment {
     const teaSign = this.materials.createSign('HILL TEA HUT', 8.8, 0.5);
     teaSign.position.set(teaX, y + 3.43, teaFront - 1.54); teaSign.rotation.y = Math.PI; root.add(teaSign);
     const railRadius = 7.8;
+    const railPoints: Array<{ x: number; z: number }> = [];
     for (let i = 0; i < 14; i += 1) {
       const a = (i / 14) * Math.PI * 1.45 + 0.15;
+      railPoints.push({ x: teaX + Math.cos(a) * railRadius, z: teaZ + Math.sin(a) * railRadius });
       addBox(root, [0.12, 1.2, 0.12], [teaX + Math.cos(a) * railRadius, y + 1.1, teaZ + Math.sin(a) * railRadius], this.materials.get('metalDark'));
     }
+    for (let i = 1; i < railPoints.length; i += 1) {
+      const a = railPoints[i - 1]!;
+      const b = railPoints[i]!;
+      addBeam(root, this.materials, a.x, y + 1.62, a.z, b.x, y + 1.62, b.z, 0.09);
+    }
+
+    // Terraced garden beds make the climb feel authored.
+    for (const [tx, tz, rot] of [[238, 286, 0.18], [247, 303, -0.12], [275, 311, 0.08]] as const) {
+      const ty = cityHeightAt(tx, tz);
+      const bed = addBox(root, [13, 0.18, 3.5], [tx, ty + 0.09, tz], this.materials.get('soil'), false);
+      bed.rotation.y = rot;
+      for (let i = -4; i <= 4; i += 1) {
+        const plant = new THREE.Mesh(new THREE.SphereGeometry(0.26, 7, 5), this.materials.get(i % 2 ? 'foliageLight' : 'foliageDeep'));
+        plant.position.set(tx + i * 1.22, ty + 0.42, tz);
+        root.add(plant);
+      }
+    }
+
     const golf = locationAnchor('hill_minigolf')!;
     for (let hole = 0; hole < 6; hole += 1) {
       const hx = golf.position.x + (hole % 3) * 9 - 9;
@@ -450,6 +511,52 @@ export class AmayaBayEnvironment {
     }
     return root;
   }
+}
+
+function addBench(
+  group: THREE.Group,
+  materials: MaterialLibrary,
+  x: number,
+  y: number,
+  z: number,
+  rotation = 0,
+): void {
+  const bench = new THREE.Group();
+  addBox(bench, [2.0, 0.14, 0.55], [0, 0.52, 0], materials.get('wood'));
+  addBox(bench, [2.0, 0.14, 0.5], [0, 0.9, 0.38], materials.get('wood'));
+  for (const bx of [-0.74, 0.74]) addBox(bench, [0.1, 0.5, 0.1], [bx, 0.25, 0], materials.get('metalDark'));
+  bench.position.set(x, y, z);
+  bench.rotation.y = rotation;
+  group.add(bench);
+}
+
+function addLamp(group: THREE.Group, materials: MaterialLibrary, x: number, y: number, z: number): void {
+  addBox(group, [0.12, 3.5, 0.12], [x, y + 1.75, z], materials.get('metalDark'));
+  const shade = new THREE.Mesh(new THREE.SphereGeometry(0.23, 8, 6), materials.get('curtainWarm'));
+  shade.position.set(x, y + 3.5, z);
+  group.add(shade);
+}
+
+function addBeam(
+  group: THREE.Group,
+  materials: MaterialLibrary,
+  startX: number,
+  startY: number,
+  startZ: number,
+  endX: number,
+  endY: number,
+  endZ: number,
+  thickness: number,
+): void {
+  const start = new THREE.Vector3(startX, startY, startZ);
+  const end = new THREE.Vector3(endX, endY, endZ);
+  const direction = end.clone().sub(start);
+  const length = direction.length();
+  if (length <= 1e-6) return;
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(thickness / 2, thickness / 2, length, 6), materials.get('metalDark'));
+  beam.position.copy(start).add(end).multiplyScalar(0.5);
+  beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+  group.add(beam);
 }
 
 function addBox(group: THREE.Group, size: [number, number, number], position: [number, number, number], material: THREE.Material, cast = true): THREE.Mesh {

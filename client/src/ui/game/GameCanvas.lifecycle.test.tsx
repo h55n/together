@@ -1,4 +1,4 @@
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { namedNpcs, npcDialogue } from '@together/content';
@@ -12,6 +12,7 @@ vi.mock('../../game/GameEngine', () => ({
 function engineStub() {
   return {
     applySettings: vi.fn(),
+    prepareFirstPlayable: vi.fn(async () => undefined),
     start: vi.fn(),
     dispose: vi.fn(),
     setInputEnabled: vi.fn(),
@@ -20,6 +21,7 @@ function engineStub() {
     clearHomeDecorationPreview: vi.fn(),
     getPlayerPosition: vi.fn(() => ({ x: 0, y: 1.2, z: 0 })),
     getMemoryContext: vi.fn(() => ({ locationId: 'Bay Steps', weather: 'clear', gameMinutes: 18 * 60 })),
+    getMemoryParticipantContext: vi.fn(() => ({ onlineUserIds: [], visibleUserIds: [], composition: 0.82 })),
     captureFrame: vi.fn(async () => new Blob(['frame'], { type: 'image/jpeg' })),
   } as unknown as GameEngine;
 }
@@ -30,6 +32,17 @@ async function renderGame(props: Parameters<typeof GameCanvas>[0] = {}): Promise
   const root = createRoot(host);
   await act(async () => {
     root.render(<GameCanvas {...props} />);
+    await Promise.resolve();
+  });
+  return { root, host };
+}
+
+async function renderStrictGame(props: Parameters<typeof GameCanvas>[0] = {}): Promise<{ root: Root; host: HTMLDivElement }> {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  await act(async () => {
+    root.render(<React.StrictMode><GameCanvas {...props} /></React.StrictMode>);
     await Promise.resolve();
   });
   return { root, host };
@@ -62,6 +75,38 @@ describe('GameCanvas engine lifecycle', () => {
     vi.unstubAllGlobals();
   });
 
+  it('does not start gameplay until the first-playable warmup resolves', async () => {
+    let releaseWarmup!: () => void;
+    const warmup = new Promise<void>((resolve) => { releaseWarmup = resolve; });
+    const engine = engineStub();
+    engine.prepareFirstPlayable = vi.fn(() => warmup);
+    create.mockResolvedValue(engine);
+
+    mounted = await renderGame();
+    await flushAsyncWork();
+
+    expect(engine.prepareFirstPlayable).toHaveBeenCalledTimes(1);
+    expect(engine.start).not.toHaveBeenCalled();
+
+    await act(async () => { releaseWarmup(); await warmup; });
+    await flushAsyncWork();
+
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    expect(mounted.host.querySelector('.world-loading')).toBeNull();
+  });
+
+  it('does not overlap async engine creation when React StrictMode replays effects', async () => {
+    const engine = engineStub();
+    create.mockResolvedValue(engine);
+
+    mounted = await renderStrictGame();
+    await flushAsyncWork();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(engine.prepareFirstPlayable).toHaveBeenCalledTimes(1);
+    expect(engine.start).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps normal startup WebGPU-first instead of forcing WebGL2 compatibility mode', async () => {
     create.mockResolvedValue(engineStub());
     mounted = await renderGame();
@@ -70,6 +115,19 @@ describe('GameCanvas engine lifecycle', () => {
     expect(create).toHaveBeenCalledTimes(1);
     expect(create.mock.calls[0]?.[0].forceRendererBackend).toBeUndefined();
     expect(mounted.host.querySelector('.weather-debug')).toBeNull();
+  });
+
+  it('disposes a created engine when first-playable preparation fails', async () => {
+    const engine = engineStub();
+    vi.mocked(engine.prepareFirstPlayable).mockRejectedValue(new Error('prewarm failed'));
+    create.mockResolvedValue(engine);
+    mounted = await renderGame();
+    await flushAsyncWork();
+    expect(engine.dispose).toHaveBeenCalledOnce();
+    expect(engine.start).not.toHaveBeenCalled();
+    expect(mounted.host.textContent).toContain('prewarm failed');
+    await act(async () => mounted?.root.unmount());
+    expect(engine.dispose).toHaveBeenCalledOnce();
   });
 
   it('replaces a failed graphics canvas, reapplies menu input gating and ignores stale failures', async () => {

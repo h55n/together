@@ -23,6 +23,7 @@ export class MicroActionRuntime {
 
   constructor(
     private readonly onPrompt?: (prompt: string | null) => void,
+    private readonly onStep?: (step: MicroActionStep, interactionId: string) => void,
     private readonly onComplete?: (action: HomeAction, interactionId: string) => void,
     private readonly onFinished?: () => void,
   ) {}
@@ -80,6 +81,7 @@ export class MicroActionRuntime {
     const action = avatarActionForPrimitive(current.primitive);
     const duration = durationForStep(current);
     player.beginMicroAction(action, duration, true);
+    this.onStep?.(current, this.source?.id ?? this.session.id);
     this.session = advanceMicroAction(this.session, current.primitive);
     this.cooldown = duration;
     this.promptShownForStep = null;

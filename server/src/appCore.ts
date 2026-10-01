@@ -22,6 +22,10 @@ import type { JobSessionService } from './game/JobSessionService.js';
 import type { TransitService } from './game/TransitService.js';
 import type { ActivityService } from './game/ActivityService.js';
 import { logger } from './logging/logger.js';
+import { productionReadiness } from './runtime/productionReadiness.js';
+import { createFixedWindowRateLimiter } from './runtime/rateLimit.js';
+import { allowedClientOrigins } from './runtime/clientOrigins.js';
+import { createVoiceIceConfig } from './runtime/turnCredentials.js';
 
 export type AppDependencies = {
   householdService: HouseholdService;
@@ -62,10 +66,37 @@ function bearerToken(request: Request): string | undefined {
 
 export function createApp(dependencies: AppDependencies) {
   const app = express();
-  const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
+  const clientOrigins = allowedClientOrigins();
+  app.set('trust proxy', 1);
   app.use(helmet({ contentSecurityPolicy: false }));
-  app.use(cors({ origin: [clientUrl, 'http://localhost:5173', 'http://localhost:4173'], credentials: true }));
+  app.use(cors({ origin: clientOrigins, credentials: true }));
+  app.use((request, response, next) => {
+    const requestId = request.header('x-request-id')?.slice(0, 128) || crypto.randomUUID();
+    const startedAt = performance.now();
+    response.setHeader('x-request-id', requestId);
+    response.on('finish', () => logger.info('HTTP request completed', {
+      requestId,
+      method: request.method,
+      path: request.path,
+      status: response.statusCode,
+      durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+    }));
+    next();
+  });
+  if (process.env.NODE_ENV === 'production' || process.env.API_RATE_LIMIT_PER_MINUTE) {
+    const configured = Number(process.env.API_RATE_LIMIT_PER_MINUTE ?? '240');
+    app.use('/api', createFixedWindowRateLimiter({
+      maxRequests: Number.isFinite(configured) ? Math.max(30, Math.min(2_000, Math.floor(configured))) : 240,
+      windowMs: 60_000,
+    }));
+  }
   app.use(express.json({ limit: '2mb' }));
+
+  app.get('/healthz', (_request, response) => response.json({ status: 'ok' }));
+  app.get('/readyz', (_request, response) => {
+    const readiness = productionReadiness();
+    response.status(readiness.ready ? 200 : 503).json({ status: readiness.ready ? 'ready' : 'not_ready', issues: readiness.issues });
+  });
 
   app.get('/api/health', (_request, response) => {
     response.json({
@@ -87,6 +118,11 @@ export function createApp(dependencies: AppDependencies) {
       response.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
     }
   };
+
+  app.get('/api/voice/ice-config', authenticate, (request: AuthenticatedRequest, response) => {
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.json(createVoiceIceConfig(request.identity!.userId));
+  });
 
   app.get('/api/profile', authenticate, async (request: AuthenticatedRequest, response, next) => {
     try {
@@ -474,6 +510,25 @@ export function createApp(dependencies: AppDependencies) {
         routeParam(request, 'id'),
         request.identity!.userId,
         input.action,
+        input.expectedVersion,
+        input.idempotencyKey,
+      ));
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/households/:id/home/domestic-steps', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const input = z.object({
+        interactionId: z.string().min(1).max(120),
+        stepId: z.string().min(1).max(120),
+        expectedVersion: z.number().int().nonnegative(),
+        idempotencyKey: z.string().min(8).max(128),
+      }).parse(request.body);
+      response.json(await dependencies.homeService.applyDomesticStep(
+        routeParam(request, 'id'),
+        request.identity!.userId,
+        input.interactionId,
+        input.stepId,
         input.expectedVersion,
         input.idempotencyKey,
       ));
