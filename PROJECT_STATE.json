@@ -3,8 +3,8 @@
   "city": "Amaya Bay",
   "prd": "docs/PRD.md",
   "branch": "build/amaya-bay-v1",
-  "head": "057f20f",
-  "head_note": "Local integration checkpoint; publication pending six-player browser startup regression. Use git rev-parse HEAD for exact current commit.",
+  "head": "54e54d177e07286469e001ccde25b67fb03bc6f9",
+  "head_note": "Published integration checkpoint; documentation may descend from this commit. Use git rev-parse HEAD for exact current commit.",
   "last_completed_phase": "Phase 13 \u2014 Home Growth + Moving (complete with known limitations)",
   "active_phase": "World visual production \u2014 build first, optimize after completion",
   "visual_pass_2026_09_30": {
@@ -29,7 +29,7 @@
     "playwright": "Merged result: Couple two-context, solo world and 3 arrival/recovery tests PASS; Friends six-context loading timeout FAIL, including focus and 960x540 diagnostic reruns.",
     "native_webgpu": "Physical WebGPU UNVERIFIED; ordinary browser recovers to native WebGL2 after local device creation failure",
     "target_hardware_performance": "NOT RUN",
-    "merged_result": "Full pnpm verify PASS; browser 5/6 PASS. Friends six-player startup loading timeout remains; not published."
+    "merged_result": "Full pnpm verify PASS; browser 5/6 PASS. Friends six-player startup loading timeout remains; published as current development state at user request."
   },
   "completed_systems": [
     "data-driven story engine and 36-story V1 library",
@@ -152,7 +152,7 @@
       "fix/audit-hardening-2026-09-17 through c3dc06d"
     ],
     "target": "build/amaya-bay-v1",
-    "status": "Saved locally; publication pending six-player browser startup regression",
+    "status": "Published to default and coastal branches at explicit user request; six-player startup acceptance remains unresolved",
     "report": "docs/MERGE_CLEANUP_2026_10_01.md"
   }
 }
