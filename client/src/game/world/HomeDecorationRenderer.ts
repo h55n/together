@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import {
+  cityHeightAt,
   furnitureById,
   layoutRoomZone,
   mapRoomPlacementToShell,
@@ -43,6 +44,7 @@ export class HomeDecorationRenderer {
     private readonly physics: PhysicsWorld,
   ) {
     this.root.name = `home-decor:${propertyId}`;
+    this.root.position.y = cityHeightAt(center.x, center.z);
   }
 
   sync(objects: readonly HomeObjectView[], surfaces: Readonly<Record<string, string>> = {}): void {
@@ -161,7 +163,7 @@ export class HomeDecorationRenderer {
     const depth = (definition.footprint.width * sin + definition.footprint.depth * cos) * scale;
     const height = furnitureHeight(definition) * scale;
     return this.physics.createFixedCuboid(
-      { x, y: y + height / 2, z },
+      { x, y: this.root.position.y + y + height / 2, z },
       { x: Math.max(0.08, width / 2), y: Math.max(0.08, height / 2), z: Math.max(0.08, depth / 2) },
     );
   }
@@ -298,4 +300,3 @@ function finishColor(finishId: string): THREE.ColorRepresentation {
     default: return 0xd8cbb5;
   }
 }
-

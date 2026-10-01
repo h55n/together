@@ -1,4 +1,4 @@
-import { buildVoiceIceServers, type VoiceMode } from '@together/shared';
+import type { VoiceMode } from '@together/shared';
 import type { GameSocketClient } from '../GameSocketClient';
 
 type ActiveVoiceMode = Exclude<VoiceMode, 'off'>;
@@ -17,6 +17,7 @@ export class VoiceManager {
   private muted = false;
   private pushToTalk = false;
   private pushToTalkHeld = false;
+  private iceServers: RTCIceServer[] = [];
 
   constructor(
     private readonly selfUserId: string,
@@ -26,6 +27,8 @@ export class VoiceManager {
 
   async enable(mode: ActiveVoiceMode): Promise<void> {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access is not supported by this browser');
+    this.iceServers = await this.network.fetchVoiceIceServers();
+    if (this.iceServers.length === 0) throw new Error('Voice network configuration is unavailable');
     if (!this.localStream) {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -119,7 +122,7 @@ export class VoiceManager {
   private ensurePeer(userId: string): VoicePeer {
     const existing = this.peers.get(userId);
     if (existing) return existing;
-    const connection = new RTCPeerConnection({ iceServers: iceServersFromEnvironment() });
+    const connection = new RTCPeerConnection({ iceServers: this.iceServers });
     const peer: VoicePeer = { connection, gain: null, source: null };
     this.peers.set(userId, peer);
     for (const track of this.localStream?.getAudioTracks() ?? []) connection.addTrack(track, this.localStream!);
@@ -155,13 +158,4 @@ export class VoiceManager {
   }
 
   private emitState(): void { this.onState?.({ mode: this.mode, muted: this.muted, pushToTalk: this.pushToTalk }); }
-}
-
-function iceServersFromEnvironment(): RTCIceServer[] {
-  return buildVoiceIceServers({
-    stunUrl: import.meta.env.VITE_STUN_URL as string | undefined,
-    turnUrl: import.meta.env.VITE_TURN_URL as string | undefined,
-    turnUsername: import.meta.env.VITE_TURN_USERNAME as string | undefined,
-    turnCredential: import.meta.env.VITE_TURN_CREDENTIAL as string | undefined,
-  });
 }

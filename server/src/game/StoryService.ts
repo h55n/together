@@ -54,7 +54,8 @@ export class StoryService {
     const outcome = chooseStoryOutcome(definition, failures);
     if (!outcome) throw new Error('Story has no matching outcome');
 
-    const flags = { ...this.flags(household), ...(outcome.setFlags ?? {}) };
+    const lifecycleFlags = instance.eventId === 'move_in_day' ? { moved_in: true } : {};
+    const flags = { ...this.flags(household), ...lifecycleFlags, ...(outcome.setFlags ?? {}) };
     household.hiddenState = { ...household.hiddenState, flags };
     await this.repository.saveHousehold(household);
 

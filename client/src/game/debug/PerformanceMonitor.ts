@@ -5,6 +5,7 @@ export type PerformanceSnapshot = {
   p99FrameMs: number;
   framesOver33ms: number;
   framesOver50ms: number;
+  frameSampleCount: number;
   drawCalls: number;
   triangles: number;
   meshes: number;
@@ -19,7 +20,9 @@ export type PerformanceSnapshot = {
   pendingStreamingJobs: number;
   streamingGenerationMs: number;
   streamingCommitMs: number;
+  streamingMaxCommitMs: number;
   systemTimings: Readonly<Record<string, number>>;
+  systemMaxTimings: Readonly<Record<string, number>>;
 };
 
 const MAX_FRAME_SAMPLES = 240;
@@ -35,6 +38,7 @@ export class PerformanceMonitor {
     p99FrameMs: 16.67,
     framesOver33ms: 0,
     framesOver50ms: 0,
+    frameSampleCount: 0,
     drawCalls: 0,
     triangles: 0,
     meshes: 0,
@@ -49,16 +53,30 @@ export class PerformanceMonitor {
     pendingStreamingJobs: 0,
     streamingGenerationMs: 0,
     streamingCommitMs: 0,
+    streamingMaxCommitMs: 0,
     systemTimings: {},
+    systemMaxTimings: {},
   };
 
   recordFrame(frameMs: number): void {
+    if (!Number.isFinite(frameMs)) return;
     const normalized = Math.max(0, frameMs);
     this.smoothedFrameMs = this.smoothedFrameMs * 0.9 + normalized * 0.1;
     this.frameSamples.push(normalized);
     if (this.frameSamples.length > MAX_FRAME_SAMPLES) this.frameSamples.shift();
     this.snapshot.fps = this.smoothedFrameMs > 0 ? 1000 / this.smoothedFrameMs : 0;
-    this.snapshot.cpuFrameMs = this.smoothedFrameMs;
+    this.sampleMetricsDirty = true;
+  }
+
+  recordCpuFrame(milliseconds: number): void {
+    if (!Number.isFinite(milliseconds)) return;
+    this.snapshot.cpuFrameMs = this.snapshot.cpuFrameMs * 0.9 + Math.max(0, milliseconds) * 0.1;
+  }
+
+  resetFrameSamples(): void {
+    this.frameSamples.length = 0;
+    this.smoothedFrameMs = 16.67;
+    this.snapshot.fps = 60;
     this.sampleMetricsDirty = true;
   }
 
@@ -83,13 +101,20 @@ export class PerformanceMonitor {
   }
 
   recordStreaming(pendingStreamingJobs: number, generationMs: number, commitMs: number): void {
+    const normalizedCommit = Math.max(0, commitMs);
     this.snapshot.pendingStreamingJobs = pendingStreamingJobs;
-    this.snapshot.streamingGenerationMs = generationMs;
-    this.snapshot.streamingCommitMs = commitMs;
+    this.snapshot.streamingGenerationMs = Math.max(0, generationMs);
+    this.snapshot.streamingCommitMs = normalizedCommit;
+    this.snapshot.streamingMaxCommitMs = Math.max(this.snapshot.streamingMaxCommitMs, normalizedCommit);
   }
 
   recordSystem(name: string, milliseconds: number): void {
-    this.snapshot.systemTimings = { ...this.snapshot.systemTimings, [name]: Math.max(0, milliseconds) };
+    const normalized = Math.max(0, milliseconds);
+    this.snapshot.systemTimings = { ...this.snapshot.systemTimings, [name]: normalized };
+    this.snapshot.systemMaxTimings = {
+      ...this.snapshot.systemMaxTimings,
+      [name]: Math.max(this.snapshot.systemMaxTimings[name] ?? 0, normalized),
+    };
   }
 
   read(): Readonly<PerformanceSnapshot> {
@@ -104,6 +129,7 @@ export class PerformanceMonitor {
     this.snapshot.p99FrameMs = percentile(sorted, 0.99);
     this.snapshot.framesOver33ms = this.frameSamples.filter((sample) => sample > 33).length;
     this.snapshot.framesOver50ms = this.frameSamples.filter((sample) => sample > 50).length;
+    this.snapshot.frameSampleCount = this.frameSamples.length;
     this.sampleMetricsDirty = false;
   }
 }

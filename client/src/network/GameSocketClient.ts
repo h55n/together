@@ -21,6 +21,9 @@ export type NetworkCallbacks = {
   onPlayerSnapshot?: (userId: string, snapshot: PlayerSnapshot) => void;
   onPlayerProfile?: (userId: string, profile: RemoteProfile) => void;
   onPlayerLeave?: (userId: string) => void;
+  onHomeStateChanged?: () => void;
+  onCookingStateChanged?: () => void;
+  onActivityStateChanged?: () => void;
   onError?: (message: string) => void;
   onVoiceJoin?: (payload: { userId?: string; peers?: string[]; mode: Exclude<VoiceMode, 'off'> }) => void;
   onVoiceOffer?: (payload: { sourceUserId: string; sdp: string; mode: Exclude<VoiceMode, 'off'> }) => void;
@@ -77,6 +80,14 @@ export class GameSocketClient {
         if (member.snapshot) this.callbacks.onPlayerSnapshot?.(member.userId, member.snapshot);
       }
     });
+    const invalidateHome = (): void => this.callbacks.onHomeStateChanged?.();
+    socket.on(socketEvents.homeFurniturePlace, invalidateHome);
+    socket.on(socketEvents.homeFurnitureMove, invalidateHome);
+    socket.on(socketEvents.homeFurnitureRemove, invalidateHome);
+    socket.on(socketEvents.homeSurfaceChange, invalidateHome);
+    socket.on(socketEvents.homeObjectState, invalidateHome);
+    socket.on(socketEvents.cookingState, () => this.callbacks.onCookingStateChanged?.());
+    socket.on(socketEvents.activityState, () => this.callbacks.onActivityStateChanged?.());
     socket.on(socketEvents.playerJoin, (payload: unknown) => {
       if (!payload || typeof payload !== 'object') return;
       const value = payload as { userId?: unknown; profile?: unknown };
@@ -135,6 +146,27 @@ export class GameSocketClient {
       if (!payload || typeof payload !== 'object') return;
       const userId = (payload as { userId?: unknown }).userId;
       if (typeof userId === 'string') this.callbacks.onPlayerLeave?.(userId);
+    });
+  }
+
+  async fetchVoiceIceServers(): Promise<RTCIceServer[]> {
+    const baseUrl = (import.meta.env.VITE_SERVER_URL || 'http://localhost:3001').replace(/\/$/, '');
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (this.session.accessToken) headers.Authorization = `Bearer ${this.session.accessToken}`;
+    else headers['x-dev-user-id'] = this.session.userId;
+    const response = await fetch(`${baseUrl}/api/voice/ice-config`, { headers, cache: 'no-store' });
+    if (!response.ok) throw new Error(`Voice network configuration failed (${response.status})`);
+    const payload = await response.json() as { iceServers?: unknown };
+    if (!Array.isArray(payload.iceServers)) throw new Error('Voice network configuration is invalid');
+    return payload.iceServers.flatMap((candidate): RTCIceServer[] => {
+      if (!candidate || typeof candidate !== 'object') return [];
+      const value = candidate as { urls?: unknown; username?: unknown; credential?: unknown };
+      if (typeof value.urls !== 'string' || !value.urls) return [];
+      return [{
+        urls: value.urls,
+        ...(typeof value.username === 'string' ? { username: value.username } : {}),
+        ...(typeof value.credential === 'string' ? { credential: value.credential } : {}),
+      }];
     });
   }
 

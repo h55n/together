@@ -157,7 +157,7 @@ export const AMAYA_BAY_VENUES: readonly CityVenueDefinition[] = [
   { id: 'paper_leaf_books', displayName: 'Paper & Leaf', districtId: 'lantern_street', category: 'books', position: { x: -10, z: 22 }, frontageMetres: 6, open: '09:00', close: '21:00', character: 'books, stationery and postcards' },
   { id: 'lantern_threads', displayName: 'Lantern Threads', districtId: 'lantern_street', category: 'clothing', position: { x: 62, z: 42 }, frontageMetres: 8, open: '10:00', close: '21:00', character: 'everyday clothing and accessories' },
   { id: 'lantern_arcade', displayName: 'Afterglow Arcade', districtId: 'lantern_street', category: 'arcade', position: { x: 73, z: 110 }, frontageMetres: 9, open: '12:00', close: '23:00', character: 'small social arcade, warm not neon-heavy' },
-  { id: 'lantern_bank_kiosk', displayName: 'Amaya Bank Kiosk', districtId: 'lantern_street', category: 'bank', position: { x: -28, z: 142 }, frontageMetres: 5, open: '06:00', close: '23:00', character: 'embedded wallet-management kiosk' },
+  { id: 'lantern_bank_kiosk', displayName: 'Amaya Bank Kiosk', districtId: 'lantern_street', category: 'bank', position: { x: 6, z: 140 }, frontageMetres: 5, open: '06:00', close: '23:00', character: 'embedded wallet-management kiosk' },
   { id: 'lantern_cycle_courier', displayName: 'Lantern Courier Desk', districtId: 'lantern_street', category: 'repair', position: { x: 48, z: 72 }, frontageMetres: 7, open: '08:00', close: '21:00', character: 'bicycle delivery pickup, carrier racks and parcel shelves' },
 
   // Mogra Park — food/café choices around a real public park edge.
@@ -169,7 +169,7 @@ export const AMAYA_BAY_VENUES: readonly CityVenueDefinition[] = [
   { id: 'bay_tea_cart', displayName: 'Bay Tea Cart', districtId: 'bay_steps', category: 'cafe', position: { x: 12, z: -272 }, frontageMetres: 4, open: '06:30', close: '22:00', character: 'tea and coffee at the sea wall' },
   { id: 'pier_coffee_room', displayName: 'Pier Coffee Room', districtId: 'bay_steps', category: 'cafe', position: { x: 120, z: -252 }, frontageMetres: 7, open: '08:00', close: '21:30', character: 'quiet indoor seating looking over the pier' },
   { id: 'bay_provisions', displayName: 'Bay Provisions', districtId: 'bay_steps', category: 'grocery', position: { x: 174, z: -232 }, frontageMetres: 7, open: '08:00', close: '21:00', character: 'picnic basics, drinks and household staples' },
-  { id: 'bay_bhel_cart', displayName: 'Sea Wall Bites', districtId: 'bay_steps', category: 'food', position: { x: 82, z: -286 }, frontageMetres: 4, open: '15:30', close: '22:30', character: 'evening waterfront snack cart' },
+  { id: 'bay_bhel_cart', displayName: 'Sea Wall Bites', districtId: 'bay_steps', category: 'food', position: { x: 112, z: -272 }, frontageMetres: 4, open: '15:30', close: '22:30', character: 'evening waterfront snack cart' },
   { id: 'dev_cycle_hut', displayName: 'Dev Cycle & Scooter', districtId: 'bay_steps', category: 'repair', position: { x: 55, z: -252 }, frontageMetres: 8, open: '08:00', close: '19:00', character: 'rental, bicycle fixes and scooter access', hero: true },
   { id: 'kayak_cove', displayName: 'Kayak Cove', districtId: 'bay_steps', category: 'rental', position: { x: 135, z: -325 }, frontageMetres: 8, open: '08:00', close: '18:30', character: 'kayak rental and bay safety introduction', hero: true },
 
@@ -241,7 +241,7 @@ export const AMAYA_BAY_LOCATION_ANCHORS: readonly CityLocationAnchor[] = [
   { id: 'bay_cycle_hut', displayName: 'Dev Cycle Hut', districtId: 'bay_steps', position: { x: 55, z: -252 }, category: 'transport' },
   { id: 'bay_kayak_hut', displayName: 'Kayak Cove', districtId: 'bay_steps', position: { x: 135, z: -325 }, category: 'leisure' },
   { id: 'bay_cycle_route', displayName: 'Bay Cycle Route', districtId: 'bay_steps', position: { x: 58, z: -276 }, category: 'leisure' },
-  { id: 'the_common_library', displayName: 'Amaya Library & Co-work', districtId: 'the_common', position: { x: 215, z: -80 }, category: 'civic' },
+  { id: 'the_common_library', displayName: 'Amaya Library & Co-work', districtId: 'the_common', position: { x: 204.5, z: -63.2 }, category: 'civic' },
   { id: 'park_picnic_lawn', displayName: 'Picnic Lawn', districtId: 'mogra_park', position: { x: 168, z: 122 }, category: 'leisure' },
   { id: 'park_badminton', displayName: 'Badminton Court', districtId: 'mogra_park', position: { x: 232, z: 82 }, category: 'leisure' },
   { id: 'hill_minigolf', displayName: 'Hill Garden Mini-golf', districtId: 'hill_garden', position: { x: 278, z: 252 }, category: 'leisure' },

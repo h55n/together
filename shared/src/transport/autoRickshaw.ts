@@ -8,7 +8,7 @@ export type AutoDestination = {
 };
 
 export const AUTO_DESTINATIONS: readonly AutoDestination[] = [
-  { id: 'auto_mogra_court', displayName: 'Mogra Court', districtId: 'mogra_court', position: { x: -190, z: 130 } },
+  { id: 'auto_mogra_court', displayName: 'Mogra Court', districtId: 'mogra_court', position: { x: -200, z: 130 } },
   { id: 'auto_lantern_street', displayName: 'Lantern Street', districtId: 'lantern_street', position: { x: 28, z: 112 } },
   { id: 'auto_mogra_park', displayName: 'Mogra Park', districtId: 'mogra_park', position: { x: 178, z: 70 } },
   { id: 'auto_bay_steps', displayName: 'Bay Steps', districtId: 'bay_steps', position: { x: 66, z: -258 } },

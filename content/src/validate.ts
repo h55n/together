@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { validateRecipeGraph } from '@together/shared';
 import { activities, namedNpcs, recipes, storyEvents } from './index.js';
 
@@ -17,7 +19,8 @@ export function validateContent(): string[] {
   return issues;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const invokedPath = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : undefined;
+if (invokedPath === import.meta.url) {
   const issues = validateContent();
   if (issues.length) {
     console.error(issues.join('\n'));

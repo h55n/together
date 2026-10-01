@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { selectRendererBackend } from './rendererBackend';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { detectRendererCapabilities, hasWebGpuAdapter, resolveRendererForceBackend, selectRendererBackend } from './rendererBackend';
 
 describe('selectRendererBackend', () => {
   it('prefers WebGPU when both modern backends are available', () => {
@@ -16,5 +16,45 @@ describe('selectRendererBackend', () => {
 
   it('returns unsupported when neither backend exists', () => {
     expect(selectRendererBackend({ webgpu: false, webgl2: false })).toBe('unsupported');
+  });
+});
+
+describe('renderer compatibility override', () => {
+  it('ignores the legacy caller WebGL2 force on a normal URL', () => {
+    expect(resolveRendererForceBackend('', 'webgl2')).toBeUndefined();
+  });
+
+  it('only forces WebGL2 when the URL explicitly requests compatibility mode', () => {
+    expect(resolveRendererForceBackend('?renderer=webgl2', 'webgl2')).toBe('webgl2');
+  });
+
+  it('allows device loss recovery to select compatibility on an ordinary URL', () => {
+    expect(resolveRendererForceBackend('', 'webgl2', true)).toBe('webgl2');
+  });
+});
+
+describe('detectRendererCapabilities', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('does not acquire a WebGL context on the production canvas before WebGPU initialization', () => {
+    vi.stubGlobal('navigator', { gpu: {} });
+    const getContext = vi.fn(() => ({}));
+    const canvas = { getContext } as unknown as HTMLCanvasElement;
+
+    const capabilities = detectRendererCapabilities(canvas);
+
+    expect(capabilities.webgpu).toBe(true);
+    expect(getContext).not.toHaveBeenCalled();
+  });
+});
+
+describe('WebGPU adapter preflight', () => {
+  it('uses WebGL2 when the browser advertises WebGPU but has no adapter', async () => {
+    expect(await hasWebGpuAdapter({ requestAdapter: async () => null })).toBe(false);
+    expect(await hasWebGpuAdapter({ requestAdapter: async () => ({}) })).toBe(true);
+  });
+
+  it('treats adapter request failure as unavailable', async () => {
+    expect(await hasWebGpuAdapter({ requestAdapter: async () => { throw new Error('adapter failed'); } })).toBe(false);
   });
 });

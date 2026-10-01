@@ -5,8 +5,8 @@ export function interpolationAlpha(responsiveness: number, deltaSeconds: number)
 }
 
 export function lerpAngle(from: number, to: number, alpha: number): number {
-  let delta = to - from;
-  while (delta > Math.PI) delta -= Math.PI * 2;
-  while (delta < -Math.PI) delta += Math.PI * 2;
+  const tau = Math.PI * 2;
+  const raw = to - from;
+  const delta = ((raw + Math.PI) % tau + tau) % tau - Math.PI;
   return from + delta * Math.max(0, Math.min(1, alpha));
 }

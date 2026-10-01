@@ -9,11 +9,21 @@ export class JobSessionService {
 
   async start(householdId: string, userId: string, jobId: JobId, idempotencyKey: string): Promise<JobSessionView> {
     if (idempotencyKey.length < 8) throw new Error('Invalid idempotency key');
-    const retry = await this.repository.getJobSessionByStartKey(idempotencyKey);
-    if (retry) return this.view(retry);
     await this.authorize(householdId, userId);
+    const retry = await this.repository.getJobSessionByStartKey(idempotencyKey);
+    if (retry) {
+      if (retry.householdId !== householdId || retry.userId !== userId || retry.jobId !== jobId) throw new Error('Idempotency key belongs to a different job session');
+      return this.view(retry);
+    }
     const job = jobById(jobId);
     if (!job) throw new Error('Unknown job');
+    const retry = await this.repository.getJobSessionByStartKey(idempotencyKey);
+    if (retry) {
+      if (retry.householdId !== householdId || retry.userId !== userId || retry.jobId !== jobId) {
+        throw new Error('Idempotency key belongs to a different job session scope');
+      }
+      return this.view(retry);
+    }
     const now = new Date().toISOString();
     const session: JobSessionRecord = {
       id: crypto.randomUUID(), startIdempotencyKey: idempotencyKey, householdId, userId, jobId,
@@ -38,14 +48,30 @@ export class JobSessionService {
 
   async complete(sessionId: string, userId: string, idempotencyKey: string): Promise<{ session: JobSessionView; economy: EconomySnapshot }> {
     const session = await this.requireOwned(sessionId, userId);
+    if (session.state === 'complete') {
+      if (session.completionIdempotencyKey !== idempotencyKey) throw new Error('Job session is already complete and already paid');
+      const economy = await this.economy.completeJobShift(session.householdId, userId, session.jobId, session.mistakes === 0 ? 'standard' : 'early', idempotencyKey, session.id);
+      return { session: this.view(session), economy };
+    }
     const job = jobById(session.jobId)!;
     if (session.completedActions.length < job.actions.length) throw new Error('Job session is not complete');
     const quality = session.mistakes === 0 ? 'standard' : 'early';
-    const economy = await this.economy.completeJobShift(session.householdId, userId, session.jobId, quality, idempotencyKey);
-    session.state = 'complete';
-    session.updatedAt = new Date().toISOString();
-    await this.repository.saveJobSession(session);
-    return { session: this.view(session), economy };
+    const completedSession: JobSessionRecord = {
+      ...session,
+      state: 'complete',
+      completionIdempotencyKey: idempotencyKey,
+      updatedAt: new Date().toISOString(),
+    };
+    const economy = await this.economy.completeJobShift(
+      session.householdId,
+      userId,
+      session.jobId,
+      quality,
+      idempotencyKey,
+      session.id,
+      completedSession,
+    );
+    return { session: this.view(completedSession), economy };
   }
 
   async list(householdId: string, userId: string): Promise<JobSessionView[]> {
@@ -62,6 +88,7 @@ export class JobSessionService {
     const session = await this.repository.getJobSession(sessionId);
     if (!session) throw new Error('Job session not found');
     if (session.userId !== userId) throw new Error('Job session does not belong to this player');
+    await this.authorize(session.householdId, userId);
     return session;
   }
 

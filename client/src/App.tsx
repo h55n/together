@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import type { AvatarConfig, HouseholdType, StarterPropertyDefinition, VoteChoice } from '@together/shared';
 import { GameCanvas } from './ui/game/GameCanvas';
+import { CoastalArrival } from './ui/entry/CoastalArrival';
+import { authHeadersForIdentity, resolveClientIdentity, subscribeClientIdentity, type ClientIdentity } from './auth/clientAuth';
+import { apiFetch } from './network/api';
 
 export type HouseholdMemberSummary = {
   userId: string;
@@ -35,7 +38,9 @@ const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
 };
 
 export default function App(): ReactElement {
-  const [userId] = useState(() => getOrCreateDevUserId());
+  const [identity, setIdentity] = useState<ClientIdentity | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const userId = identity?.userId ?? '';
   const [displayName, setDisplayName] = useState(() => localStorage.getItem('together:display-name') ?? '');
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(() => loadAvatarConfig());
   const [step, setStep] = useState<EntryStep>(() => displayName ? 'household' : 'identity');
@@ -45,18 +50,31 @@ export default function App(): ReactElement {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const authHeaders = useMemo(() => ({ 'Content-Type': 'application/json', 'x-dev-user-id': userId }), [userId]);
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribe: () => void = () => undefined;
+    void resolveClientIdentity()
+      .then((resolved) => {
+        if (cancelled) return;
+        setIdentity(resolved);
+        unsubscribe = subscribeClientIdentity((updated) => { if (!cancelled) setIdentity(updated); });
+      })
+      .catch((error: unknown) => { if (!cancelled) setAuthError(errorMessage(error)); });
+    return () => { cancelled = true; unsubscribe(); };
+  }, []);
+
+  const authHeaders = identity ? authHeadersForIdentity(identity, true) : { 'Content-Type': 'application/json' };
 
   const refreshHousehold = useCallback(async (id = household?.id) => {
-    if (!id) return;
+    if (!id || !identity) return;
     setBusy(true);
     try {
-      const response = await fetch(`/api/households/${id}`, { headers: { 'x-dev-user-id': userId } });
+      const response = await apiFetch(`/api/households/${id}`, { headers: authHeadersForIdentity(identity) });
       const data = await readJson<HouseholdSummary>(response);
       setHousehold(data);
       localStorage.setItem('together:household-id', data.id);
       if (data.propertyId) setStep('home');
-      const propertyResponse = await fetch(`/api/households/${id}/properties`, { headers: { 'x-dev-user-id': userId } });
+      const propertyResponse = await apiFetch(`/api/households/${id}/properties`, { headers: authHeadersForIdentity(identity) });
       const propertyData = await readJson<PropertyPayload>(propertyResponse);
       setProperties(propertyData.properties);
       setPropertyVote(propertyData.vote);
@@ -68,22 +86,27 @@ export default function App(): ReactElement {
     } finally {
       setBusy(false);
     }
-  }, [household?.id, userId]);
+  }, [household?.id, identity]);
 
   useEffect(() => {
     if (!displayName || household) return;
     const rememberedHouseholdId = localStorage.getItem('together:household-id');
     if (!rememberedHouseholdId) return;
-    void refreshHousehold(rememberedHouseholdId).catch(() => {
-      localStorage.removeItem('together:household-id');
-      setStep('household');
-    });
+    void Promise.resolve()
+      .then(() => refreshHousehold(rememberedHouseholdId))
+      .catch(() => {
+        localStorage.removeItem('together:household-id');
+        setStep('household');
+      });
   }, [displayName, household, refreshHousehold]);
+
+  if (authError) return <EntryShell eyebrow="Together · Amaya Bay" title="Sign-in unavailable" copy={authError}><p className="status-copy error-copy">Check the client authentication configuration and reload.</p></EntryShell>;
+  if (!identity) return <EntryShell eyebrow="Together · Amaya Bay" title="Arriving in Amaya Bay" copy="Starting your private session…"><p className="status-copy">Connecting securely…</p></EntryShell>;
 
   const startSoloExplorer = async () => {
     setBusy(true); setMessage(null);
     try {
-      const response = await fetch('/api/solo-explorer', { method: 'POST', headers: authHeaders, body: '{}' });
+      const response = await apiFetch('/api/solo-explorer', { method: 'POST', headers: authHeaders, body: '{}' });
       const data = await readJson<HouseholdSummary>(response);
       setHousehold(data); localStorage.setItem('together:household-id', data.id); setStep('home');
     } catch (error) { setMessage(errorMessage(error)); }
@@ -92,18 +115,18 @@ export default function App(): ReactElement {
   const isSoloExplorer = household?.hiddenState?.soloExplorer === true;
 
   if (step === 'game' && household) {
-    return <GameCanvas networkSession={{ userId, householdId: household.id }} avatarConfig={avatarConfig} {...(household.propertyId ? { propertyId: household.propertyId } : {})} onPropertyChanged={(propertyId) => setHousehold((current) => current ? { ...current, propertyId } : current)} />;
+    return <GameCanvas networkSession={{ userId, householdId: household.id, ...(identity.accessToken ? { accessToken: identity.accessToken } : {}) }} avatarConfig={avatarConfig} {...(household.propertyId ? { propertyId: household.propertyId } : {})} onPropertyChanged={(propertyId) => setHousehold((current) => current ? { ...current, propertyId } : current)} />;
   }
 
   if (step === 'identity') {
     return (
-      <EntryShell eyebrow="Together · Amaya Bay" title="Who is arriving?" copy="Choose the name your household will see. Account linking comes after the first meaningful session.">
+      <EntryShell eyebrow="A little life by the sea" title="Make yourself at home." copy="A name, a familiar face, and a place to begin. Meet your neighbours, find your favourite corner, and make Amaya Bay yours.">
         <form onSubmit={(event) => {
           event.preventDefault();
           const value = displayName.trim();
           if (!value) return;
           setBusy(true); setMessage(null);
-          void fetch('/api/profile', { method: 'PUT', headers: authHeaders, body: JSON.stringify({ displayName: value, avatarConfig, settings: {} }) })
+          void apiFetch('/api/profile', { method: 'PUT', headers: authHeaders, body: JSON.stringify({ displayName: value, avatarConfig, settings: {} }) })
             .then(async (response) => { if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? 'Could not save profile'); })
             .then(() => {
               localStorage.setItem('together:display-name', value);
@@ -132,7 +155,7 @@ export default function App(): ReactElement {
       onCreate={async (name, type) => {
         setBusy(true); setMessage(null);
         try {
-          const response = await fetch('/api/households', { method: 'POST', headers: authHeaders, body: JSON.stringify({ name, type }) });
+          const response = await apiFetch('/api/households', { method: 'POST', headers: authHeaders, body: JSON.stringify({ name, type }) });
           const data = await readJson<HouseholdSummary>(response);
           setHousehold(data); localStorage.setItem('together:household-id', data.id); setStep('home');
         } catch (error) { setMessage(errorMessage(error)); }
@@ -142,7 +165,7 @@ export default function App(): ReactElement {
       onJoin={async (code) => {
         setBusy(true); setMessage(null);
         try {
-          const response = await fetch(`/api/households/join/${code.trim().toUpperCase()}`, { method: 'POST', headers: authHeaders, body: '{}' });
+          const response = await apiFetch(`/api/households/join/${code.trim().toUpperCase()}`, { method: 'POST', headers: authHeaders, body: '{}' });
           const data = await readJson<HouseholdSummary>(response);
           setHousehold(data); localStorage.setItem('together:household-id', data.id); setStep('home');
         } catch (error) { setMessage(errorMessage(error)); }
@@ -166,7 +189,7 @@ export default function App(): ReactElement {
               onOpen={async (propertyId) => {
                 setBusy(true); setMessage(null);
                 try {
-                  const response = await fetch(`/api/households/${household.id}/property-votes`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ propertyId }) });
+                  const response = await apiFetch(`/api/households/${household.id}/property-votes`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ propertyId }) });
                   setPropertyVote(await readJson<PropertyVote>(response));
                 } catch (error) { setMessage(errorMessage(error)); }
                 finally { setBusy(false); }
@@ -175,7 +198,7 @@ export default function App(): ReactElement {
                 if (!propertyVote) return;
                 setBusy(true); setMessage(null);
                 try {
-                  const response = await fetch(`/api/property-votes/${propertyVote.id}/cast`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ choice }) });
+                  const response = await apiFetch(`/api/property-votes/${propertyVote.id}/cast`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ choice }) });
                   const vote = await readJson<PropertyVote>(response);
                   setPropertyVote(vote);
                   if (vote.resolution === 'approved') await refreshHousehold(household.id);
@@ -207,7 +230,9 @@ function HouseholdEntry(props: {
   const [code, setCode] = useState('');
   const submit = (event: FormEvent) => { event.preventDefault(); void (mode === 'create' ? props.onCreate(name.trim(), type) : props.onJoin(code)); };
   return (
-    <EntryShell eyebrow={`Welcome, ${props.displayName}`} title="Create a household" copy="Couple and Friends use the same world. Only the social rules and story weighting differ.">
+    <EntryShell eyebrow={`Welcome, ${props.displayName}`} title="How will you arrive?" copy="Take your first walk on your own, or share a home with someone you know.">
+      <div className="solo-entry"><button className="primary-action" disabled={props.busy} onClick={() => void props.onExplore()}>Explore Amaya Bay solo</button><p>A ready home and room to discover. No invite needed.</p></div>
+      <div className="entry-divider">Or arrive together</div>
       <div className="segmented"><button className={mode === 'create' ? 'active' : ''} onClick={() => setMode('create')}>Create</button><button className={mode === 'join' ? 'active' : ''} onClick={() => setMode('join')}>Join</button></div>
       <form className="entry-form" onSubmit={submit}>
         {mode === 'create' ? <>
@@ -220,8 +245,6 @@ function HouseholdEntry(props: {
         {props.message && <p className="status-copy error-copy">{props.message}</p>}
         <button className="primary-action" disabled={props.busy || (mode === 'create' ? !name.trim() : code.trim().length !== 6)}>{props.busy ? 'Working…' : mode === 'create' ? 'Create household' : 'Join household'}</button>
       </form>
-      <div className="entry-actions"><button className="secondary-action" disabled={props.busy} onClick={() => void props.onExplore()}>Explore Amaya Bay solo</button></div>
-      <p className="status-copy">Start with a ready home and explore the complete world without an invite. You can begin a fresh explorer session at any time.</p>
     </EntryShell>
   );
 }
@@ -240,7 +263,8 @@ function PropertySelection(props: {
 }
 
 function EntryShell(props: { eyebrow: string; title: string; copy: string; children: ReactNode }): ReactElement {
-  return <main className="arrival-screen"><div className="arrival-sky" aria-hidden="true" /><section className="arrival-card"><p className="eyebrow">{props.eyebrow}</p><h1>{props.title}</h1><p className="arrival-copy">{props.copy}</p>{props.children}</section></main>;
+  const activeStep = props.title === 'Make yourself at home.' ? 0 : props.title === 'How will you arrive?' ? 1 : 2;
+  return <main className="arrival-screen"><aside className="arrival-landscape"><CoastalArrival/><div className="arrival-brand"><strong>together.</strong><span>A little life in Amaya Bay</span></div><div className="arrival-caption"><h2>Ordinary days.<br/>A world of possibility.</h2><p>Slow mornings, familiar streets, and stories you make along the way.</p></div></aside><section className="arrival-card"><ol className="arrival-steps" aria-label="Arrival progress">{['Your identity', 'Your company', 'Your first day'].map((label, index) => <li key={label} {...(index === activeStep ? { 'aria-current': 'step' as const } : {})}><span>{index + 1}</span>{label}</li>)}</ol><p className="eyebrow">{props.eyebrow}</p><h1>{props.title}</h1><p className="arrival-copy">{props.copy}</p>{props.children}<div className="arrival-control-note"><span><kbd>W A S D</kbd> Walk</span><span><kbd>Mouse</kbd> Look</span><span><kbd>E</kbd> Interact</span><span><kbd>Esc</kbd> Release cursor</span></div></section></main>;
 }
 
 function AvatarCreator({ config, onChange }: { config: AvatarConfig; onChange: (next: AvatarConfig) => void }): ReactElement {
@@ -276,10 +300,3 @@ async function readJson<T>(response: Response): Promise<T> {
 }
 
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'Something went wrong'; }
-function getOrCreateDevUserId(): string {
-  const existing = localStorage.getItem('together:dev-user-id');
-  if (existing) return existing;
-  const id = crypto.randomUUID();
-  localStorage.setItem('together:dev-user-id', id);
-  return id;
-}

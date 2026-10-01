@@ -1,9 +1,12 @@
 import * as THREE from 'three';
+import { dressFacade, dressSimpleFacades } from './FacadeDetails';
+import { streetClearanceAt } from './StreetNetwork';
 import { AMAYA_BAY_VENUES, cityHeightAt, type BuildingLot, type ChunkDressing, type DressingProp, type ResidencyRing } from '@together/shared';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
 import type { MaterialLibrary, WorldMaterialKey } from './MaterialLibrary';
 import { PROPERTY_WORLD_RESERVATIONS } from './PropertyLocations';
 import { StaticGeometryCache } from '../assets/runtime/StaticGeometryCache';
+import { compileStaticMeshesByMaterial } from '../assets/runtime/StaticBatchCompiler';
 
 const STYLE_MATERIALS: Record<BuildingLot['style'], WorldMaterialKey> = {
   mogra_balcony: 'warmPlaster',
@@ -18,6 +21,7 @@ const STYLE_MATERIALS: Record<BuildingLot['style'], WorldMaterialKey> = {
 };
 
 const staticGeometries = new StaticGeometryCache();
+const buildingPrototypes = new WeakMap<MaterialLibrary, Map<string, THREE.Group>>();
 
 export function addChunkDressing(
   root: THREE.Group,
@@ -36,17 +40,20 @@ export function addChunkDressing(
     if (Math.abs(wx + 30) < 34 && Math.abs(wz - 75) < 78) continue;
     if (PROPERTY_WORLD_RESERVATIONS.some(({ center, reserveRadius }) => Math.hypot(wx - center.x, wz - center.z) < reserveRadius)) continue;
     if (AMAYA_BAY_VENUES.some((venue) => Math.hypot(wx - venue.position.x, wz - venue.position.z) < Math.max(8, venue.frontageMetres * 0.85))) continue;
+    if (wz < -325) continue;
+    if (streetClearanceAt(wx, wz) < Math.hypot(lot.width, lot.depth) / 2) continue;
     const y = cityHeightAt(wx, wz);
     const building = ring === 'horizon'
       ? createHorizonVolume(lot, materials)
       : createLayeredBuilding(lot, materials, ring === 'active');
     building.position.set(wx, y, wz);
-    building.rotation.y = lot.rotationY;
+    building.rotation.y = lot.rotationY + Math.PI / 2;
     root.add(building);
     if (ring === 'active' && physics) {
       colliders.push(physics.createFixedCuboid(
         { x: wx, y: y + lot.height / 2, z: wz },
         { x: lot.width / 2, y: lot.height / 2, z: lot.depth / 2 },
+        lot.rotationY + Math.PI / 2,
       ));
     }
   }
@@ -63,68 +70,104 @@ export function addChunkDressing(
 }
 
 function createLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, detailed: boolean): THREE.Group {
+  let prototypes = buildingPrototypes.get(materials);
+  if (!prototypes) {
+    prototypes = new Map(); buildingPrototypes.set(materials, prototypes);
+    const owned = new Set<THREE.BufferGeometry>();
+    materials.onDispose(() => { for (const geometry of owned) geometry.dispose(); prototypes!.clear(); buildingPrototypes.delete(materials); });
+    // Each new prototype registers its newly compiled buffers once.
+    prototypeGeometryOwners.set(prototypes, owned);
+  }
+  const key = [lot.style, lot.width, lot.depth, lot.height, lot.balconyCount, detailed].join(':');
+  let prototype = prototypes.get(key);
+  if (!prototype) {
+    const authoring = buildLayeredBuilding(lot, materials, detailed);
+    authoring.traverse(object => {
+      if (!(object instanceof THREE.Mesh)) return;
+      const original = object.geometry;
+      const geometry = original.index ? original.toNonIndexed() : original.clone();
+      if (!geometry.hasAttribute('uv')) {
+        const positions = geometry.getAttribute('position'), normals = geometry.getAttribute('normal');
+        const uv = new Float32Array(positions.count * 2);
+        for (let i = 0; i < positions.count; i += 1) {
+          uv[i * 2] = (Math.abs(normals.getX(i)) > 0.5 ? positions.getZ(i) : positions.getX(i)) / 8;
+          uv[i * 2 + 1] = (Math.abs(normals.getY(i)) > 0.5 ? positions.getZ(i) : positions.getY(i)) / 8;
+        }
+        geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      }
+      object.geometry = geometry;
+      if (!original.userData.togetherShared) original.dispose();
+    });
+    prototype = compileStaticMeshesByMaterial(authoring);
+    const owned = prototypeGeometryOwners.get(prototypes)!;
+    prototype.traverse(object => {
+      if (!(object instanceof THREE.Mesh)) return;
+      if (!object.geometry.userData.togetherShared) owned.add(object.geometry);
+      object.geometry.userData.togetherShared = true;
+    });
+    prototypes.set(key, prototype);
+  }
+  const placement = prototype.clone(true);
+  placement.name = `building:${lot.id}:${lot.style}`;
+  return placement;
+}
+
+const prototypeGeometryOwners = new WeakMap<Map<string, THREE.Group>, Set<THREE.BufferGeometry>>();
+
+function buildLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, detailed: boolean): THREE.Group {
   const group = new THREE.Group();
   group.name = `building:${lot.id}:${lot.style}`;
-  const body = box(lot.width, lot.height, lot.depth, materials.get(STYLE_MATERIALS[lot.style]));
+
+  const wallMaterial = materials.get(STYLE_MATERIALS[lot.style]);
+  const body = box(lot.width, lot.height, lot.depth, wallMaterial);
   body.position.y = lot.height / 2;
   body.castShadow = detailed;
   body.receiveShadow = true;
   group.add(body);
 
-  const plinth = box(lot.width + 0.4, 0.35, lot.depth + 0.45, materials.get('stone'));
-  plinth.position.y = 0.18;
+  const plinth = box(lot.width + 0.5, 0.38, lot.depth + 0.5, materials.get('stone'));
+  plinth.position.y = 0.19;
   group.add(plinth);
-  const parapet = box(lot.width + 0.25, 0.32, lot.depth + 0.25, materials.get('stone'));
-  parapet.position.y = lot.height + 0.16;
+
+  const parapetHeight = lot.style === 'waterfront_hut' || lot.style === 'park_pavilion' ? 0.18 : 0.42;
+  const parapet = box(lot.width + 0.28, parapetHeight, lot.depth + 0.28, materials.get('stone'));
+  parapet.position.y = lot.height + parapetHeight / 2;
   group.add(parapet);
 
-  if (!detailed) return group;
+  if (!detailed) { dressSimpleFacades(group, materials, lot.width, lot.depth, lot.height); return group; }
 
-  const floors = Math.max(1, Math.floor(lot.height / 3.05));
   const faceX = lot.width / 2 + 0.015;
-  const columns = Math.max(2, Math.floor(lot.depth / 4.5));
-  for (let floor = 0; floor < floors; floor += 1) {
-    const y = 1.55 + floor * 3.0;
-    for (let col = 0; col < columns; col += 1) {
-      const z = -lot.depth / 2 + ((col + 0.5) / columns) * lot.depth;
-      const window = box(0.08, 1.25, Math.min(2.2, lot.depth / columns - 0.45), materials.get('glass'));
-      window.position.set(faceX, y, z);
-      window.castShadow = false;
-      group.add(window);
-      const sill = box(0.42, 0.12, Math.min(2.55, lot.depth / columns - 0.2), materials.get('concrete'));
-      sill.position.set(faceX + 0.12, y - 0.7, z);
-      group.add(sill);
-    }
-  }
-
-  for (let i = 0; i < lot.balconyCount; i += 1) {
-    const y = 3.0 + i * 2.9;
-    if (y > lot.height - 0.7) break;
-    const balcony = box(1.0, 0.18, Math.min(4.8, lot.depth * 0.5), materials.get('concrete'));
-    balcony.position.set(faceX + 0.42, y, 0);
-    group.add(balcony);
-    const rail = box(0.08, 0.72, Math.min(4.8, lot.depth * 0.5), materials.get('metalDark'));
-    rail.position.set(faceX + 0.9, y + 0.38, 0);
-    group.add(rail);
-  }
 
   if (lot.style === 'lantern_shopfront' || lot.style === 'lantern_mixed_use') {
-    const shopWindow = box(0.09, 2.25, Math.min(4.8, lot.depth * 0.55), materials.get('glass'));
-    shopWindow.position.set(faceX + 0.03, 1.25, 0);
+    const shopWindow = box(lot.width * 0.62, 2.3, 0.1, materials.get('glass'));
+    shopWindow.position.set(faceX + 0.03, 1.28, -lot.depth * 0.1);
     group.add(shopWindow);
-    const awning = box(1.35, 0.14, Math.min(5.2, lot.depth * 0.6), materials.get(lot.style === 'lantern_shopfront' ? 'sagePlaster' : 'terracottaPlaster'));
-    awning.position.set(faceX + 0.63, 2.65, 0);
-    awning.rotation.z = -0.08;
+    const awning = box(lot.width * 0.74, 0.14, 1.45, materials.get(lot.style === 'lantern_shopfront' ? 'sagePlaster' : 'terracottaPlaster'));
+    awning.rotation.y = Math.PI / 2;
+    awning.position.set(faceX + 0.68, 2.72, -lot.depth * 0.08);
+    awning.rotation.x = -0.08;
     group.add(awning);
+    const sign = box(Math.min(5.8, lot.width * 0.58), 0.55, 0.12, materials.get('curtainWarm'));
+    sign.rotation.y = Math.PI / 2;
+    sign.position.set(faceX + 0.12, 3.35, -lot.depth * 0.06);
+    group.add(sign);
   }
+
+  dressFacade(group, materials, lot.width, lot.depth, lot.height, lot.balconyCount);
+  dressSimpleFacades(group, materials, lot.width, lot.depth, lot.height, 'x+');
 
   // Roof/service silhouette: intentionally small but breaks rectangular massing.
   const service = box(Math.min(2.5, lot.width * 0.3), 1.1, Math.min(2.4, lot.depth * 0.25), materials.get('concrete'));
   service.position.set(-lot.width * 0.18, lot.height + 0.55, lot.depth * 0.16);
   group.add(service);
+  if (lot.style !== 'waterfront_hut' && lot.style !== 'park_pavilion') {
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 1.0, 10), materials.get('metalDark'));
+    tank.position.set(lot.width * 0.22, lot.height + 0.62, -lot.depth * 0.14);
+    group.add(tank);
+  }
+
   return group;
 }
-
 function createHorizonVolume(lot: BuildingLot, materials: MaterialLibrary): THREE.Group {
   const group = new THREE.Group();
   const body = box(lot.width, lot.height * 0.9, lot.depth, materials.get(STYLE_MATERIALS[lot.style]));

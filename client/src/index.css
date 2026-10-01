@@ -18,6 +18,12 @@ h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-weight: 500
 .controls-note { margin: 16px 0 0; color: #777b73; font-size: 12px; }
 .game-shell, .game-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .game-canvas { display: block; outline: none; }
+.first-session-guide{position:absolute;right:18px;bottom:76px;width:290px;padding:20px;border:1px solid #e6e8d2;border-radius:14px;background:rgba(248,244,227,.96);color:#345448;box-shadow:0 12px 38px #183a3526;z-index:18}
+.guide-heading{display:flex;justify-content:space-between;align-items:center;font-size:10px;letter-spacing:.12em;font-weight:750}.guide-heading button{border:0;background:none;color:#60786a;font-size:22px;cursor:pointer;padding:0 4px}
+.guide-progress{display:flex;gap:5px;margin:10px 0 18px}.guide-progress span{height:3px;flex:1;background:#d4dcc6;border-radius:4px}.guide-progress .complete{background:#527d60}
+.first-session-guide h2{font:400 25px/1.15 Georgia,serif;margin:0 0 12px}.first-session-guide p{font-size:12px;line-height:1.65;color:#677869;margin:0 0 14px}.first-session-guide kbd{display:inline-block;border:1px solid #c4d0b9;border-radius:5px;padding:5px 9px;font:600 11px inherit;background:#edf0df}
+.guide-map{display:flex;justify-content:space-between;width:100%;padding:14px 0 0;margin-top:16px;border:0;border-top:1px solid #d9dfcb;background:none;color:#4d705c;font-size:11px;cursor:pointer}.guide-map span{color:#869578}.guide-replay{position:absolute;left:18px;top:60px;padding:6px 10px;border:1px solid #ffffff33;border-radius:8px;background:#304d42bb;color:#f5efd9;font:11px inherit;cursor:pointer;z-index:18}
+@media(max-width:650px){.first-session-guide{right:12px;bottom:70px;width:240px;padding:14px}.first-session-guide h2{font-size:21px}}
 .world-loading, .compatibility-card { position: absolute; left: 50%; top: 50%; translate: -50% -50%; border-radius: 18px; padding: 18px 22px; background: rgba(246,242,230,.88); color: #39443e; box-shadow: 0 18px 54px rgba(0,0,0,.18); backdrop-filter: blur(16px); }
 .compatibility-card { display: grid; gap: 8px; max-width: 430px; }
 .weather-debug { position: absolute; right: 14px; bottom: 14px; display: flex; gap: 6px; padding: 6px; border-radius: 999px; background: rgba(28,35,31,.58); backdrop-filter: blur(10px); }

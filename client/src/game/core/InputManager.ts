@@ -11,13 +11,28 @@ export type InputSnapshot = {
   lookDeltaY: number;
 };
 
+const NEUTRAL_INPUT: InputSnapshot = {
+  moveX: 0,
+  moveZ: 0,
+  jog: false,
+  interactPressed: false,
+  cameraTogglePressed: false,
+  transportDismountPressed: false,
+  lookDeltaX: 0,
+  lookDeltaY: 0,
+};
+
+const NEUTRAL_GAMEPAD_BUTTONS = { interact: false, jog: false, cameraToggle: false, dismount: false };
+
 export class InputManager {
   private readonly keys = new Set<string>();
   private pressed = new Set<string>();
   private lookDeltaX = 0;
   private lookDeltaY = 0;
   private enabled = false;
-  private previousGamepadButtons = { interact: false, jog: false, cameraToggle: false, dismount: false };
+  private focused = true;
+  private dragging = false;
+  private previousGamepadButtons = { ...NEUTRAL_GAMEPAD_BUTTONS };
   private bindings: ControlBindings = { ...DEFAULT_CONTROL_BINDINGS };
 
   constructor(private readonly canvas: HTMLCanvasElement) {}
@@ -28,24 +43,44 @@ export class InputManager {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('mousemove', this.onMouseMove);
+    window.addEventListener('mouseup', this.onMouseUp);
+    window.addEventListener('blur', this.onBlur);
+    window.addEventListener('focus', this.onFocus);
+    this.canvas.addEventListener('mousedown', this.onMouseDown);
     this.canvas.addEventListener('click', this.requestPointerLock);
   }
 
   disable(): void {
-    if (!this.enabled) return;
-    this.enabled = false;
-    window.removeEventListener('keydown', this.onKeyDown);
-    window.removeEventListener('keyup', this.onKeyUp);
-    window.removeEventListener('mousemove', this.onMouseMove);
-    this.canvas.removeEventListener('click', this.requestPointerLock);
+    if (this.enabled) {
+      this.enabled = false;
+      window.removeEventListener('keydown', this.onKeyDown);
+      window.removeEventListener('keyup', this.onKeyUp);
+      window.removeEventListener('mousemove', this.onMouseMove);
+      window.removeEventListener('mouseup', this.onMouseUp);
+      window.removeEventListener('blur', this.onBlur);
+      window.removeEventListener('focus', this.onFocus);
+      this.canvas.removeEventListener('mousedown', this.onMouseDown);
+      this.canvas.removeEventListener('click', this.requestPointerLock);
+    }
     this.keys.clear();
+    this.dragging = false;
     this.pressed.clear();
+    this.lookDeltaX = 0;
+    this.lookDeltaY = 0;
+    this.previousGamepadButtons = { ...NEUTRAL_GAMEPAD_BUTTONS };
   }
-
 
   setBindings(bindings: ControlBindings): void { this.bindings = { ...bindings }; }
 
   consumeSnapshot(): InputSnapshot {
+    if (!this.enabled || !this.focused) {
+      this.pressed.clear();
+      this.lookDeltaX = 0;
+      this.lookDeltaY = 0;
+      this.previousGamepadButtons = { ...NEUTRAL_GAMEPAD_BUTTONS };
+      return { ...NEUTRAL_INPUT };
+    }
+
     const left = this.keys.has(this.bindings.left) ? 1 : 0;
     const right = this.keys.has(this.bindings.right) ? 1 : 0;
     const forward = this.keys.has(this.bindings.forward) ? 1 : 0;
@@ -53,7 +88,7 @@ export class InputManager {
     const gamepad = navigator.getGamepads?.().find((candidate): candidate is Gamepad => Boolean(candidate?.connected)) ?? null;
     const moveStick = gamepad ? normalizeGamepadAxes(gamepad.axes[0] ?? 0, gamepad.axes[1] ?? 0) : { x: 0, y: 0 };
     const lookStick = gamepad ? normalizeGamepadAxes(gamepad.axes[2] ?? 0, gamepad.axes[3] ?? 0, 0.15) : { x: 0, y: 0 };
-    const gamepadButtons = gamepad ? readStandardGamepadButtons(gamepad.buttons.map((button) => button.pressed)) : { interact: false, jog: false, cameraToggle: false, dismount: false };
+    const gamepadButtons = gamepad ? readStandardGamepadButtons(gamepad.buttons.map((button) => button.pressed)) : { ...NEUTRAL_GAMEPAD_BUTTONS };
     const snapshot: InputSnapshot = {
       moveX: Math.abs(moveStick.x) > 0 ? moveStick.x : right - left,
       moveZ: Math.abs(moveStick.y) > 0 ? -moveStick.y : forward - back,
@@ -72,6 +107,12 @@ export class InputManager {
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (!this.focused || (event.target instanceof HTMLElement && event.target.matches('input, textarea, select, [contenteditable=true]'))) return;
+    if (event.code === 'Escape') {
+      if (document.pointerLockElement === this.canvas) document.exitPointerLock?.();
+      this.keys.clear(); this.pressed.clear(); this.dragging = false;
+      this.lookDeltaX = 0; this.lookDeltaY = 0; return;
+    }
     if (!event.repeat) this.pressed.add(event.code);
     this.keys.add(event.code);
   };
@@ -81,12 +122,21 @@ export class InputManager {
   };
 
   private readonly onMouseMove = (event: MouseEvent): void => {
-    if (document.pointerLockElement !== this.canvas) return;
+    if (!this.focused || (document.pointerLockElement !== this.canvas && !this.dragging)) return;
     this.lookDeltaX += event.movementX;
     this.lookDeltaY += event.movementY;
   };
 
+  private readonly onMouseDown = (event: MouseEvent): void => { if (event.button === 0) this.dragging = true; };
+  private readonly onMouseUp = (): void => { this.dragging = false; };
+  private readonly onFocus = (): void => { this.focused = true; };
+  private readonly onBlur = (): void => {
+    this.focused = false; this.dragging = false; this.keys.clear(); this.pressed.clear();
+    this.lookDeltaX = 0; this.lookDeltaY = 0;
+  };
   private readonly requestPointerLock = (): void => {
-    if (document.pointerLockElement !== this.canvas) void this.canvas.requestPointerLock();
+    if (document.pointerLockElement === this.canvas) return;
+    try { void Promise.resolve(this.canvas.requestPointerLock?.()).catch(() => { /* Drag look remains available. */ }); }
+    catch { /* Browsers may deny cursor capture; drag look remains available. */ }
   };
 }

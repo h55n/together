@@ -2,25 +2,34 @@
   "project": "Together",
   "city": "Amaya Bay",
   "prd": "docs/PRD.md",
-  "branch": "build/amaya-bay-v1",
-  "head": "9f355fd6607902c2dbe035102a014c5abc1e9466",
-  "head_note": "This is the implementation commit. Final handoff documentation is committed after it; use git rev-parse HEAD for the documentation-only final HEAD.",
+  "branch": "codex/playtest-polish-2026-09-30",
+  "head": "309a724a84b64b5a405e17a483a979c57779a187",
+  "head_note": "Published game implementation milestone. Documentation-only evidence follows; use git rev-parse HEAD for latest.",
   "last_completed_phase": "Phase 13 — Home Growth + Moving (complete with known limitations)",
-  "active_phase": "Phase 16 — Performance + Accessibility + Release Quality",
+  "active_phase": "World visual production — build first, optimize after completion",
+  "visual_pass_2026_09_30": {
+    "status": "IN PROGRESS; reference art and release performance targets not met",
+    "changes": "Shared and instanced vegetation, nearby/distant crown detail, street-facing facade prototypes and rotated collisions, planted residential terrain, continuous painted sky/light, analytic water normals and distant cadence, bounded retirement and stale queue cancellation, real animation-frame timing",
+    "verification": "Full pnpm verify passed after foliage/cloud changes; subsequent planted-ground change passed 12 targeted world tests and client typecheck",
+    "evidence": ".art-review/current-world/ and docs/superpowers/plans/2026-09-29-amaya-bay-art-and-smoothness-progress.md",
+    "remaining": "Cold chunk construction hitches, excessive scene submissions, foreground/architecture composition, full continuous route and venue matrix, production art/animation/audio, WebGPU and physical 1080p performance, multiplayer/voice/persistence acceptance"
+  },
   "verification": {
-    "sandbox_safe": "PASS",
-    "automated_tests": { "passed": 161, "failed": 0 },
+    "local_environment": "Node 24 and pnpm 12.4.1 in current Windows workspace",
+    "full_pnpm_verify": "PASS (2026-09-30; inspected 2026-10-01)",
+    "automated_tests": "PASS (shared, content, server, client, and 176 pure verification checks)",
     "client_typecheck": "PASS",
     "shared_typecheck": "PASS",
     "content_typecheck": "PASS",
+    "server_typecheck": "PASS",
+    "lint": "PASS with existing warnings",
     "content_validation": "PASS",
     "repository_integrity": "PASS",
-    "clean_pnpm_install": "BLOCKED: registry DNS unavailable and pnpm absent",
-    "server_clean_typecheck": "BLOCKED: copied dependency tree missing declared types/current Drizzle",
-    "lint": "BLOCKED: copied dependency tree missing declared TypeScript ESLint plugin",
-    "production_build": "BLOCKED: copied dependency tree missing Linux Rollup optional package",
-    "playwright": "BLOCKED: clean dependency/browser environment unavailable",
-    "target_hardware_performance": "NOT RUN"
+    "production_build": "PASS",
+    "playwright": "PASS: 3 arrival/guide/recovery tests and 7-district capture with actual 20-second walking sample; complete continuous normal-speed route and full venue acceptance remain",
+    "native_webgpu": "Physical WebGPU UNVERIFIED; ordinary browser recovers to native WebGL2 after local device creation failure",
+    "target_hardware_performance": "NOT RUN",
+    "merged_result": "PENDING re-verification after integration"
   },
   "completed_systems": [
     "data-driven story engine and 36-story V1 library",
@@ -34,7 +43,7 @@
     "quality profile gameplay-invariance rules"
   ],
   "partial_systems": [
-    "WebGPU-first runtime pending clean browser build verification",
+    "WebGPU-first runtime with automatic fresh-canvas native WebGL2 recovery; physical WebGPU and seamless mid-session recovery acceptance remain",
     "Amaya Bay procedural/development art pending production asset replacement",
     "procedural avatar/micro-motion pending production rig, clips and IK",
     "five home shells pending final interior art",
@@ -51,31 +60,88 @@
     "production district/interaction audio library",
     "baked per-chunk NPC navmesh/path batching/door-link system",
     "production observability/rate-limit hardening",
-    "complete PRD developer-debug editor suite",
-    "clean generated pnpm-lock.yaml from connected Node 24 install"
+    "complete PRD developer-debug editor suite"
   ],
   "known_issues": [
-    "sandbox Node is v22.16.0 while project requires Node 24",
-    "sandbox cannot resolve registry.npmjs.org so Corepack cannot fetch pnpm",
-    "uploaded node_modules is platform-stale and must not be reused",
-    "production Vite/server/Playwright verification remains outstanding",
-    "development procedural art does not satisfy final shipping art bar"
+    "The accelerated browser route passes; normal-speed camera/composition and human acceptance remain unverified.",
+    "The visual art pass remains below the attached reference quality bar.",
+    "Local WebGPU device creation fails; ordinary browser now recovers to native WebGL2. Recovery resets transient engine state.",
+    "Latest district samples reach 881 draws and about 2.1M triangles; cold streaming p99 up to 1116.5ms and warm 37-60 FPS at 960x540 leave smoothness targets unmet.",
+    "Production Supabase, TURN, multiplayer soak, and target-hardware performance remain unverified."
   ],
   "external_setup": [
-    "Node 24 LTS + pnpm 12.4.1 clean install",
     "Supabase project, database migrations 001-009, Auth and private Storage bucket",
     "production TURN service for WebRTC",
     "final licensed/original GLB/KTX2/audio asset pipeline"
   ],
   "next_tasks": [
-    "run first connected Node 24 pnpm install, generate and commit pnpm-lock.yaml",
-    "run full pnpm typecheck/lint/test/validate/build and Playwright",
-    "run two-browser Couple and multi-client Friends acceptance/soak tests",
-    "replace procedural avatar with final rig/animations/IK",
-    "replace hero-route procedural art with final Amaya Bay assets and tune LOD/compression",
-    "implement production NPC navmesh/path batching",
-    "production-test Supabase private Memories and TURN voice",
-    "profile Medium/Low on PRD target hardware and tune performance",
-    "execute PRD Quiet Walk, Shared Kitchen, Money, Rain, Moving, Memory and No-HUD acceptance tests"
-  ]
+    "Visually inspect normal-speed Mogra Court to Lantern Street to Bay Steps play, including camera and transitions.",
+    "Polish district architecture, props, vegetation, water and street life to the attached reference quality bar.",
+    "Verify embodied job, leisure, interior, NPC, weather and night presentation in-world.",
+    "Then profile and optimize draw calls, streaming, memory, shadows and water on target hardware.",
+    "Run production Supabase, TURN, multiplayer and device-matrix validation."
+  ],
+  "world_build": {
+    "details": "docs/WORLD_BUILD_2026_09.md",
+    "status": "in_progress",
+    "reference_quality_achieved": false,
+    "native_webgpu_validated": false,
+    "optimization_complete": false
+  },
+  "playtest_entry_2026_10_01": {
+    "status": "Implemented, verified and published; broader game production remains in progress",
+    "changes": "Original coastal onboarding, resumable first-day guide, focus-safe drag/pointer controls, neck gaze, differentiated shared surface maps, automatic native WebGL2 recovery",
+    "verification": "Full pnpm verify PASS; all 3 browser tests PASS (1.1m), including ordinary URL automatic native WebGL2 recovery, guide persistence and menu input gating",
+    "remaining": "Reference art, production rigs/audio/NPC pathing, cold streaming and target-hardware performance, gameplay balancing, production online acceptance and seamless mid-session recovery",
+    "world_capture": "PASS: 7 districts, close surfaces, rain/sunset and 20-second ordinary walk. 960x540 Intel UHD ANGLE D3D11: warm 37.1-60.0 FPS, walk 41.6 FPS; cold loading p99 up to 1116.5 ms. Not 1080p acceptance."
+  },
+  "recovery_branch_baseline": {
+    "project": "Together",
+    "city": "Amaya Bay",
+    "prd": "docs/PRD.md",
+    "branch": "fix/audit-recovery-2026-09-17",
+    "verified_runtime_head": "5c08f8106ab1fa1914afee3ca1bf59aa9b1ea073",
+    "verified_github_actions_run": "35490206098",
+    "head_note": "Documentation may descend from the verified runtime head; use git rev-parse HEAD for the exact current documentation SHA.",
+    "active_phase": "Phase 16 — Performance + Accessibility + Release Quality",
+    "verification": {
+      "connected_ci": "PASS",
+      "node": "24",
+      "frozen_install": "PASS",
+      "typecheck": "PASS",
+      "lint": "PASS",
+      "content_validation": "PASS",
+      "repository_integrity": "PASS: 12 ordered migrations and heuristic committed-secret scan",
+      "production_build": "PASS",
+      "server_tests": "11 files / 25 tests passed",
+      "client_tests": "28 files / 80 tests passed",
+      "pure_verification": "195 tests passed",
+      "browser_e2e": "3/3 passed: solo playable frame + Couple 2-context + Friends 6-context/reconnect",
+      "target_hardware_performance": "NOT RUN",
+      "real_webgpu_matrix": "NOT RUN",
+      "production_supabase_turn": "NOT RUN"
+    },
+    "production_hardening": [
+      "Supabase anonymous client sessions with Bearer REST/Socket.IO auth and token refresh",
+      "split-origin REST routing through VITE_SERVER_URL",
+      "production CORS allow-list and local-auth fail closed",
+      "health/readiness probes, request IDs and structured HTTP completion logs",
+      "production HTTP fixed-window rate limiter",
+      "graceful SIGTERM/SIGINT shutdown",
+      "authenticated short-lived TURN credentials from a server-only shared secret",
+      "private together-memories bucket migration",
+      "12 ordered migrations plus advisory-locked/checksummed migration runner",
+      "six-player Friends movement/reconnect browser acceptance"
+    ],
+    "remaining_release_gates": [
+      "Medium 1080p target-hardware performance and GPU-memory benchmark",
+      "real WebGPU/browser/controller matrix",
+      "real-device network latency/loss/long-duration multiplayer soak",
+      "production hosted Supabase anonymous auth/RLS/migrations/private Memory Storage acceptance",
+      "real TURN traversal and voice-quality tests across different networks",
+      "final world/avatar/NPC/interaction visual and animation quality against PRD acceptance",
+      "final audio/weather/LOD/compression acceptance",
+      "Quiet Walk, Shared Kitchen, Money, Rain, Moving, Memory and No-HUD acceptance tests"
+    ]
+  }
 }

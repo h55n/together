@@ -6,15 +6,20 @@ export type PlayerPhysicsHandle = {
   controller: RAPIER.KinematicCharacterController;
 };
 
+// Rapier owns one WASM module; concurrent React startup must share initialization.
+let initialization: Promise<void> | undefined;
+
 export class PhysicsWorld {
   readonly world: RAPIER.World;
+  private disposed = false;
 
   private constructor(world: RAPIER.World) {
     this.world = world;
   }
 
   static async create(): Promise<PhysicsWorld> {
-    await RAPIER.init();
+    initialization ??= RAPIER.init().catch((error: unknown) => { initialization = undefined; throw error; });
+    await initialization;
     return new PhysicsWorld(new RAPIER.World({ x: 0, y: -9.81, z: 0 }));
   }
 
@@ -41,11 +46,15 @@ export class PhysicsWorld {
     });
   }
 
-  createFixedCuboid(position: { x: number; y: number; z: number }, halfExtents: { x: number; y: number; z: number }): RAPIER.Collider {
-    return this.world.createCollider(
-      RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
-        .setTranslation(position.x, position.y, position.z),
-    );
+  createFixedCuboid(position: { x: number; y: number; z: number }, halfExtents: { x: number; y: number; z: number }, yaw = 0): RAPIER.Collider {
+    const descriptor = RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
+      .setTranslation(position.x, position.y, position.z);
+    if (yaw !== 0) descriptor.setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) });
+    return this.world.createCollider(descriptor);
+  }
+
+  createFixedTrimesh(vertices: Float32Array, indices: Uint32Array): RAPIER.Collider {
+    return this.world.createCollider(RAPIER.ColliderDesc.trimesh(vertices, indices));
   }
 
   removeCollider(collider: RAPIER.Collider): void {
@@ -61,5 +70,11 @@ export class PhysicsWorld {
   disposePlayer(handle: PlayerPhysicsHandle): void {
     this.world.removeCharacterController(handle.controller);
     this.world.removeRigidBody(handle.body);
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.world.free();
   }
 }

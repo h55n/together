@@ -1,14 +1,16 @@
 import * as THREE from 'three';
-import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueGameplayRole, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type Placement2D, type VenueGameplayRole, type RecipeAction } from '@together/shared';
+import { AMAYA_BAY_VENUES, AUTO_DESTINATIONS, KAYAK_LAUNCH_POSITION, KAYAK_RETURN_POSITION, autoRideSeconds, avatarAppearanceFromConfig, cityHeightAt, districtAtPosition, locationAnchor, realSecondsToGameMinutes, subareaAtPosition, venueFrontApproach, venueGameplayRole, worldToChunk, type ActivityId, type AvatarAction, type AvatarConfig, type GameSettings, type HomeAction, type MicroActionStep, type Placement2D, type PlayerSnapshot, type VenueGameplayRole, type RecipeAction } from '@together/shared';
 import { Renderer } from './core/Renderer';
 import { GameLoop } from './core/GameLoop';
 import { InputManager } from './core/InputManager';
 import { PhysicsWorld } from './physics/PhysicsWorld';
 import { MaterialLibrary } from './world/MaterialLibrary';
 import { buildLanternStreetHero } from './world/HeroStreet';
+import { streetCenterline } from './world/StreetNetwork';
 import { AmayaBayEnvironment } from './world/AmayaBayEnvironment';
 import { WorldStreamer } from './world/WorldStreamer';
-import { createAmayaBayChunkFactory } from './world/AmayaBayChunkFactory';
+import { amayaBayBoundaryCuboids, createAmayaBayChunkFactory } from './world/AmayaBayChunkFactory';
+import type { FirstSessionAction } from './core/FirstSession';
 import { PlayerAvatar } from './player/PlayerAvatar';
 import { PlayerController } from './player/PlayerController';
 import { CameraController } from './camera/CameraController';
@@ -21,7 +23,7 @@ import { AdaptiveQualityController, type AdaptiveVisualBudget } from './performa
 import { DebugOverlay } from './debug/DebugOverlay';
 import { AudioZoneManager } from './audio/AudioZoneManager';
 import { RemotePlayerSystem } from './network/RemotePlayerSystem';
-import { GameSocketClient, type NetworkSession } from '../network/GameSocketClient';
+import { GameSocketClient, type NetworkSession, type RemoteProfile } from '../network/GameSocketClient';
 import { VoiceManager } from '../network/voice/VoiceManager';
 import type { VoiceMode } from '@together/shared';
 import { weatherAllowsKayak, type WeatherState } from './weather/weatherModel';
@@ -30,6 +32,7 @@ import { buildPropertyInterior } from './world/PropertyInterior';
 import { MicroActionRuntime } from './interaction/MicroActionRuntime';
 import { HomeDecorationRenderer, type HomeObjectView } from './world/HomeDecorationRenderer';
 import { namedNpcs as namedNpcDefinitions } from '@together/content';
+import { assessMemoryParticipantFraming } from './memory/captureFraming';
 
 export type GameEngineOptions = {
   canvas: HTMLCanvasElement;
@@ -39,11 +42,16 @@ export type GameEngineOptions = {
   networkSession?: NetworkSession;
   onConnectionState?: (state: 'connecting' | 'connected' | 'reconnecting' | 'disconnected') => void;
   onNetworkError?: (message: string) => void;
+  onHomeStateChanged?: () => void;
+  onCookingStateChanged?: () => void;
+  onActivityStateChanged?: () => void;
   onInteractionPrompt?: (prompt: string | null) => void;
   onLocationChange?: (location: string | null) => void;
+  onDomesticStep?: (interactionId: string, step: MicroActionStep) => void;
   onDomesticAction?: (action: HomeAction, interactionId: string) => void;
   onVoiceState?: (state: { mode: VoiceMode; muted: boolean; pushToTalk: boolean }) => void;
   onMoment?: (message: string) => void;
+  onFirstSessionAction?: (action: FirstSessionAction) => void;
   onVenueInteraction?: (venue: { venueId: string; displayName: string; role: VenueGameplayRole }) => void;
   onKitchenInteraction?: () => void;
   onAutoStand?: () => void;
@@ -54,12 +62,15 @@ export type GameEngineOptions = {
   avatarConfig?: AvatarConfig;
   propertyId?: string;
   forceRendererBackend?: 'webgl2';
+  recoverRenderer?: boolean;
+  onRendererDeviceLost?: () => void;
 };
 
 export class GameEngine {
   readonly performance: PerformanceMonitor;
 
   private animationFrame = 0;
+  private previousFrameTimestamp: number | null = null;
   private gameMinutes: number;
   private disposed = false;
   private readonly loop: GameLoop;
@@ -74,6 +85,11 @@ export class GameEngine {
   private locationElapsed = Number.POSITIVE_INFINITY;
   private sceneMetricsElapsed = Number.POSITIVE_INFINITY;
   private lastLocation: string | null = null;
+  private onFirstSessionAction: GameEngineOptions['onFirstSessionAction'];
+  private readonly firstSessionActions = new Set<FirstSessionAction>();
+  private firstSessionLook = 0;
+  private firstSessionWalk = 0;
+  private firstSessionPosition: { x: number; z: number } | null = null;
   private homeCenter = { x: 0, z: 0 };
   private homeReserveRadius = 0;
   private autoRide: { start: THREE.Vector3; end: THREE.Vector3; elapsed: number; duration: number } | null = null;
@@ -102,6 +118,9 @@ export class GameEngine {
     networkSession?: NetworkSession,
     onConnectionState?: GameEngineOptions['onConnectionState'],
     onNetworkError?: GameEngineOptions['onNetworkError'],
+    onHomeStateChanged?: GameEngineOptions['onHomeStateChanged'],
+    onCookingStateChanged?: GameEngineOptions['onCookingStateChanged'],
+    onActivityStateChanged?: GameEngineOptions['onActivityStateChanged'],
     onVoiceState?: GameEngineOptions['onVoiceState'],
     private readonly onLocationChange?: GameEngineOptions['onLocationChange'],
     private readonly onInteractionPrompt?: GameEngineOptions['onInteractionPrompt'],
@@ -125,8 +144,8 @@ export class GameEngine {
     this.scene.add(this.remotePlayers.root);
     if (networkSession) {
       const callbacks = {
-        onPlayerSnapshot: (userId: string, snapshot: import('@together/shared').PlayerSnapshot) => this.remotePlayers.applySnapshot(userId, snapshot),
-        onPlayerProfile: (userId: string, profile: import('../network/GameSocketClient').RemoteProfile) => this.remotePlayers.setProfile(userId, profile.avatarConfig),
+        onPlayerSnapshot: (userId: string, snapshot: PlayerSnapshot) => this.remotePlayers.applySnapshot(userId, snapshot),
+        onPlayerProfile: (userId: string, profile: RemoteProfile) => this.remotePlayers.setProfile(userId, profile.avatarConfig),
         onPlayerLeave: (userId: string) => { this.remotePlayers.remove(userId); this.voice?.handleLeave(userId); },
         onVoiceJoin: (payload: Parameters<VoiceManager['handleJoin']>[0]) => { void this.voice?.handleJoin(payload).catch(reportVoiceError); },
         onVoiceOffer: (payload: Parameters<VoiceManager['handleOffer']>[0]) => { void this.voice?.handleOffer(payload).catch(reportVoiceError); },
@@ -135,6 +154,9 @@ export class GameEngine {
         onVoiceLeave: (userId: string) => this.voice?.handleLeave(userId),
         ...(onConnectionState ? { onConnectionState } : {}),
         ...(onNetworkError ? { onError: onNetworkError } : {}),
+        ...(onHomeStateChanged ? { onHomeStateChanged } : {}),
+        ...(onCookingStateChanged ? { onCookingStateChanged } : {}),
+        ...(onActivityStateChanged ? { onActivityStateChanged } : {}),
       };
       this.network = new GameSocketClient(networkSession, callbacks);
       this.voice = new VoiceManager(networkSession.userId, this.network, onVoiceState);
@@ -142,17 +164,23 @@ export class GameEngine {
   }
 
   static async create(options: GameEngineOptions): Promise<GameEngine> {
-    const renderer = await Renderer.create(options.canvas, options.forceRendererBackend ? { forceBackend: options.forceRendererBackend } : undefined);
+    const renderer = await Renderer.create(options.canvas, {
+      ...(options.forceRendererBackend ? { forceBackend: options.forceRendererBackend } : {}),
+      ...(options.recoverRenderer ? { recoverFromDeviceLoss: true } : {}),
+      ...(options.onRendererDeviceLost ? { onDeviceLost: options.onRendererDeviceLost } : {}),
+    });
     const physics = await PhysicsWorld.create();
     const materials = new MaterialLibrary();
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xaabbb7);
 
-    physics.createFixedCuboid({ x: 0, y: -0.25, z: 0 }, { x: 450, y: 0.6, z: 450 });
+    for (const boundary of amayaBayBoundaryCuboids()) {
+      physics.createFixedCuboid(boundary.center, boundary.halfExtents);
+    }
     const lanternOrigin = { x: -30, y: cityHeightAt(-30, 75), z: 75 };
     const street = buildLanternStreetHero(materials, physics, lanternOrigin);
     scene.add(street.group);
-    const environment = new AmayaBayEnvironment(materials);
+    const environment = new AmayaBayEnvironment(materials, physics);
     scene.add(environment.root);
     const home = buildPropertyInterior(materials, physics, options.propertyId);
     scene.add(home.group);
@@ -176,7 +204,7 @@ export class GameEngine {
     const namedNpcs = new NamedNPCSystem();
     scene.add(namedNpcs.root);
     const enginePerformance = new PerformanceMonitor();
-    const worldStreamer = new WorldStreamer(createAmayaBayChunkFactory(materials, physics), enginePerformance);
+    const worldStreamer = new WorldStreamer(createAmayaBayChunkFactory(materials, physics, enginePerformance), enginePerformance);
     scene.add(worldStreamer.root);
     camera.addCollisionRoot(worldStreamer.root);
     const interactionDefinitions: WorldInteraction[] = [
@@ -184,26 +212,38 @@ export class GameEngine {
       anchorInteraction(street.interactionAnchors, 'street_bench_west', 'Sit on bench', 'sit', 2.4, 2, 2.4),
       { ...anchorInteraction(street.interactionAnchors, 'bicycle_rack', 'Take a bicycle', 'pick_up', 2.5, 2, 1.1), activityId: 'cycling' },
       anchorInteraction(street.interactionAnchors, 'street_planter', 'Water planter', 'water', 2.6, 3, 2.0),
-      locationInteraction('bay_cycle_hut', 'Rent scooter', 'scooter', 3.4, 5, { transportMode: 'scooter' }),
-      locationInteraction('bay_kayak_hut', 'Launch kayak', 'kayak', 4.0, 6, { transportMode: 'kayak', activityId: 'kayak' }),
+      { id: 'sunset_lookout', label: 'Watch the bay from the bench', action: 'sit', x: 69.5, z: -278, radius: 3.2, priority: 4, durationSeconds: 4 },
+      { id: 'bay_cycle_hut', label: 'Rent scooter', action: 'scooter', x: 55, z: -257.5, radius: 3.5, priority: 5, durationSeconds: 0.7, transportMode: 'scooter' },
+      { id: 'bay_kayak_hut', label: 'Launch kayak', action: 'kayak', x: 135, z: -330, radius: 4.0, priority: 6, durationSeconds: 0.7, transportMode: 'kayak', activityId: 'kayak' },
+      { id: 'library_reading', label: 'Read on the library bench', action: 'sit', x: 225.5, z: -63.2, radius: 3.2, priority: 4, durationSeconds: 4 },
       locationInteraction('park_picnic_lawn', 'Lay out a picnic', 'sit', 5.5, 3, { activityId: 'picnic' }),
       locationInteraction('park_badminton', 'Play badminton', 'high_five', 4.8, 4, { activityId: 'badminton' }),
       locationInteraction('hill_minigolf', 'Play a mini-golf hole', 'point', 4.8, 4, { activityId: 'mini_golf' }),
       locationInteraction('lantern_cafe_roshan', 'Sit for coffee', 'sit', 3.5, 3, { activityId: 'cafe_hangout' }),
-      ...namedNpcDefinitions.flatMap((npc): WorldInteraction[] => {
+      ...namedNpcDefinitions.flatMap((npc, index): WorldInteraction[] => {
         const anchor = locationAnchor(npc.homeOrWork);
-        return anchor ? [{ id: `npc-talk:${npc.id}`, label: `Talk to ${npc.displayName}`, action: 'nod', x: anchor.position.x, z: anchor.position.z, radius: 4.0, priority: 7, durationSeconds: 0.7, npcId: npc.id }] : [];
+        const phase = index * 0.83;
+        return anchor ? [{ id: `npc-talk:${npc.id}`, label: `Talk to ${npc.displayName}`, action: 'nod', x: anchor.position.x + Math.sin(phase * 2.2) * 2.4, z: anchor.position.z + Math.cos(phase * 1.7) * 2.4, radius: 3.0, priority: 7, durationSeconds: 0.7, npcId: npc.id }] : [];
       }),
       ...AUTO_DESTINATIONS.map((destination): WorldInteraction => ({ id: `auto-stand:${destination.id}`, label: 'Call auto-rickshaw', action: 'point', x: destination.position.x, z: destination.position.z, radius: 4.6, priority: 4, durationSeconds: 0.6 })),
       ...home.interactions,
-      ...AMAYA_BAY_VENUES.map((venue): WorldInteraction => ({
-        id: `venue:${venue.id}`, label: venueInteractionLabel(venue.category, venue.displayName), action: 'point',
-        x: venue.position.x, z: venue.position.z, radius: Math.max(3.2, venue.frontageMetres * 0.55), priority: venue.hero ? 5 : 3, durationSeconds: 0.7,
-      })),
+      ...AMAYA_BAY_VENUES.map((venue): WorldInteraction => {
+        const approach = venue.id === 'cafe_roshan' ? { x: -39, z: 60 }
+          : venue.id === 'dev_cycle_hut' ? { x: 55, z: -257.5 }
+          : venue.id === 'kayak_cove' ? { x: 135, z: -330 }
+            : venue.id === 'hill_tea_hut' ? { x: 283, z: 265.5 }
+              : venueFrontApproach(venue);
+        return {
+          id: `venue:${venue.id}`, label: venueInteractionLabel(venue.category, venue.displayName), action: 'point',
+          x: approach.x, z: approach.z,
+          radius: Math.max(3.2, venue.frontageMetres * 0.45), priority: venue.hero ? 5 : 3, durationSeconds: 0.7,
+        };
+      }),
     ];
     const interactions = new InteractionSystem(interactionDefinitions, options.onInteractionPrompt);
     const microActions = new MicroActionRuntime(
       options.onInteractionPrompt,
+      (step, interactionId) => options.onDomesticStep?.(interactionId, step),
       options.onDomesticAction,
       () => interactions.setEnabled(true),
     );
@@ -234,6 +274,9 @@ export class GameEngine {
       options.networkSession,
       options.onConnectionState,
       options.onNetworkError,
+      options.onHomeStateChanged,
+      options.onCookingStateChanged,
+      options.onActivityStateChanged,
       options.onVoiceState,
       options.onLocationChange,
       options.onInteractionPrompt,
@@ -248,7 +291,26 @@ export class GameEngine {
     );
     engine.homeCenter = home.center;
     engine.homeReserveRadius = home.reserveRadius;
+    engine.onFirstSessionAction = options.onFirstSessionAction;
     return engine;
+  }
+
+  async prepareFirstPlayable(): Promise<void> {
+    const position = this.player.getPosition();
+    const playerPosition = new THREE.Vector3(position.x, position.y, position.z);
+    this.worldStreamer.prepareInitial(playerPosition, 5);
+
+    // Settle the newly-added static colliders before the player gains control.
+    this.measureSystem('physics-warmup', () => this.physics.step());
+    this.player.syncVisual(this.camera.yaw, 0);
+    this.camera.update(0, false, false);
+    this.lighting.update(this.gameMinutes, this.avatar.root.position);
+    this.weather.update(0, this.avatar.root.position);
+
+    await this.renderer.prewarm(this.scene, this.camera.camera);
+    const info = this.renderer.renderer.info.render;
+    this.performance.recordRenderer(info.calls, info.triangles);
+    this.recordSceneMetrics();
   }
 
   start(): void {
@@ -256,8 +318,19 @@ export class GameEngine {
     this.canvas.addEventListener('pointerdown', this.onFirstGesture, { once: true });
     window.addEventListener('resize', this.onResize);
     this.network?.connect();
+    this.previousFrameTimestamp = null;
     this.loop.reset();
     this.animationFrame = requestAnimationFrame(this.onAnimationFrame);
+  }
+
+  resetFirstSessionProgress(): void {
+    this.firstSessionActions.clear(); this.firstSessionLook = 0; this.firstSessionWalk = 0;
+    this.firstSessionPosition = null;
+  }
+
+  private reportFirstSessionAction(action: FirstSessionAction): void {
+    if (this.firstSessionActions.has(action)) return;
+    this.firstSessionActions.add(action); this.onFirstSessionAction?.(action);
   }
 
   setWeather(state: WeatherState): void {
@@ -300,6 +373,16 @@ export class GameEngine {
     };
   }
 
+  getMemoryParticipantContext(): { onlineUserIds: string[]; visibleUserIds: string[]; composition: number } {
+    const onlineUserIds = this.remotePlayers.userIds();
+    const participants = onlineUserIds.flatMap((userId) => {
+      const position = this.remotePlayers.getPosition(userId);
+      return position ? [{ userId, position: { x: position.x, y: position.y, z: position.z } }] : [];
+    });
+    const framing = assessMemoryParticipantFraming(this.camera.camera, participants);
+    return { onlineUserIds, visibleUserIds: framing.visibleUserIds, composition: framing.composition };
+  }
+
   async captureFrame(quality = 0.86): Promise<Blob> {
     this.measureSystem('render', () => this.renderer.renderer.render(this.scene, this.camera.camera));
     const normalizedQuality = Math.max(0.45, Math.min(0.95, quality));
@@ -328,6 +411,7 @@ export class GameEngine {
     this.interactions.setEnabled(false);
     if (skip) {
       this.player.setWorldPosition({ x: end.x, y: end.y, z: end.z });
+      this.worldStreamer.refreshNow(end);
       this.finishAutoRide();
       return;
     }
@@ -335,19 +419,100 @@ export class GameEngine {
     this.onMoment?.(`Auto ride · ${destination.displayName}`);
   }
 
+  /** Development visual review only; placement never enters production gameplay. */
+  placeForWorldReview(x: number, z: number): void {
+    if (!import.meta.env.DEV || !Number.isFinite(x) || !Number.isFinite(z) || Math.abs(x) > 450 || Math.abs(z) > 450) {
+      throw new Error('World review placement is unavailable');
+    }
+    const position = { x, y: cityHeightAt(x, z) + 1.1, z };
+    this.player.setWorldPosition(position);
+    this.worldStreamer.refreshNow(new THREE.Vector3(position.x, position.y, position.z));
+  }
+  /** Face a review camera toward an authored frontage without changing player movement. */
+  faceForWorldReview(yaw: number): void {
+    if (!import.meta.env.DEV || !Number.isFinite(yaw)) throw new Error('World review facing is unavailable');
+    this.camera.yaw = yaw;
+    this.camera.pitch = 0;
+    this.camera.update(0, false, false);
+  }
+  /** Accelerated, collider-backed route audit available only to the local development review page. */
+  reviewWalkHeroRoute(): { reachedBay: boolean; checkpoints: string[]; blockedAt?: { x: number; y: number; z: number; targetX: number; targetZ: number; distance: number } } {
+    if (!import.meta.env.DEV || new URLSearchParams(window.location.search).get('worldReview') !== '1') {
+      throw new Error('World route review is unavailable');
+    }
+    cancelAnimationFrame(this.animationFrame);
+    this.input.disable();
+    const checkpoints: string[] = [];
+    let currentChunk = '';
+    const ensureGround = (x: number, z: number): void => {
+      const chunk = worldToChunk({ x, z });
+      const key = `${chunk.x},${chunk.z}`;
+      if (key === currentChunk) return;
+      currentChunk = key;
+      this.worldStreamer.refreshNow(new THREE.Vector3(x, cityHeightAt(x, z) + 1.1, z));
+    };
+    const walkTo = (target: { x: number; z: number }): { x: number; y: number; z: number; targetX: number; targetZ: number; distance: number } | undefined => {
+      const initial = this.player.getPosition();
+      const limit = Math.ceil(Math.hypot(target.x - initial.x, target.z - initial.z) / 0.25) + 20;
+      for (let step = 0; step < limit; step += 1) {
+        const position = this.player.getPosition();
+        const dx = target.x - position.x;
+        const dz = target.z - position.z;
+        const distance = Math.hypot(dx, dz);
+        if (distance < 0.13) break;
+        const length = Math.min(distance, 0.25);
+        ensureGround(position.x + dx / distance * length, position.z + dz / distance * length);
+        this.physics.moveCharacter(this.player.physicsHandle, {
+          x: dx / distance * length, y: -0.075, z: dz / distance * length,
+        });
+        this.physics.step();
+      }
+      const actual = this.player.getPosition();
+      const distance = Math.hypot(target.x - actual.x, target.z - actual.z);
+      return distance > 0.55 ? { x: actual.x, y: actual.y, z: actual.z, targetX: target.x, targetZ: target.z, distance } : undefined;
+    };
+    try {
+      const route = streetCenterline('primary-spine');
+      const start = this.player.getPosition();
+      ensureGround(start.x, start.z);
+      let blocked = walkTo({ x: start.x, z: 193.5 }) ?? walkTo({ x: start.x, z: 190 });
+      const entryIndex = route.reduce((best, point, index) => {
+        const distance = Math.hypot(point.x - start.x, point.z - 189);
+        const bestDistance = Math.hypot(route[best]!.x - start.x, route[best]!.z - 189);
+        return distance < bestDistance ? index : best;
+      }, 0);
+      if (!blocked) blocked = walkTo(route[entryIndex]!);
+      for (const target of route.slice(entryIndex + 1)) {
+        if (blocked) break;
+        blocked = walkTo(target);
+        if (!blocked && target.z < 80 && !checkpoints.includes('lantern_street')) checkpoints.push('lantern_street');
+      }
+      const last = this.player.getPosition();
+      this.player.syncVisual(this.camera.yaw, 0);
+      this.worldStreamer.refreshNow(new THREE.Vector3(last.x, last.y, last.z));
+      if (!blocked && last.z < -260) checkpoints.push('bay_steps');
+      return { reachedBay: !blocked && last.x > 90 && last.z < -260, checkpoints, ...(blocked ? { blockedAt: blocked } : {}) };
+    } finally {
+      this.previousFrameTimestamp = null;
+      this.loop.reset();
+      this.input.enable();
+      this.animationFrame = requestAnimationFrame(this.onAnimationFrame);
+    }
+  }
   playContextAction(action: string): void {
     const mapped = jobActionToAvatarAction(action);
     this.player.beginMicroAction(mapped, mapped === 'carry' || mapped === 'cycle' ? 1.8 : 1.25, true);
   }
 
-  playCookingAction(action: RecipeAction): void {
+  async playCookingAction(action: RecipeAction): Promise<void> {
     const mapped = cookingActionToAvatarAction(action);
     this.player.beginMicroAction(mapped, action === 'boil' || action === 'fry' ? 1.8 : 1.35, true);
+    await this.player.waitForMicroActionCompletion();
   }
 
   playActivityAction(action: AvatarAction): void {
     if (action === 'cycle') { this.player.setTransportMode('bicycle'); return; }
-    if (action === 'kayak') { this.player.setTransportMode('kayak'); return; }
+    if (action === 'kayak') { this.launchKayak(); return; }
     if (action === 'walk' || action === 'jog' || action === 'idle') return;
     this.player.beginMicroAction(action, action === 'sit' ? 2.2 : 1.25, true);
   }
@@ -361,6 +526,7 @@ export class GameEngine {
     this.debug.dispose();
     this.audio.dispose();
     this.weather.dispose();
+    this.lighting.dispose();
     this.npcs.dispose();
     this.namedNpcs.dispose();
     this.voice?.dispose();
@@ -372,13 +538,33 @@ export class GameEngine {
     this.worldStreamer.dispose();
     this.homeDecor.dispose();
     this.player.dispose();
+    this.physics.dispose();
     this.avatar.dispose();
     this.materials.dispose();
     this.renderer.dispose();
   }
 
+  private launchKayak(): void {
+    const x = KAYAK_LAUNCH_POSITION.x;
+    const z = KAYAK_LAUNCH_POSITION.z;
+    const position = new THREE.Vector3(x, cityHeightAt(x, z) + 1.1, z);
+    this.player.setWorldPosition(position);
+    this.worldStreamer.refreshNow(position);
+    this.player.setTransportMode('kayak');
+  }
+
+  private returnKayakToHut(): void {
+    const x = KAYAK_RETURN_POSITION.x;
+    const z = KAYAK_RETURN_POSITION.z;
+    const position = new THREE.Vector3(x, cityHeightAt(x, z) + 1.1, z);
+    this.player.setWorldPosition(position);
+    this.worldStreamer.refreshNow(position);
+  }
+
   private readonly onAnimationFrame = (timestamp: number): void => {
     if (this.disposed) return;
+    if (this.previousFrameTimestamp !== null) this.performance.recordFrame(timestamp - this.previousFrameTimestamp);
+    this.previousFrameTimestamp = timestamp;
     this.loop.frame(timestamp);
     this.animationFrame = requestAnimationFrame(this.onAnimationFrame);
   };
@@ -388,13 +574,24 @@ export class GameEngine {
     const input = this.input.consumeSnapshot();
     if (input.cameraTogglePressed) this.camera.toggle();
     this.camera.applyLook(input.lookDeltaX, input.lookDeltaY);
+    this.firstSessionLook += Math.abs(input.lookDeltaX) + Math.abs(input.lookDeltaY);
+    if (this.firstSessionLook >= 30) this.reportFirstSessionAction('look');
     this.player.setInput(input);
     if (this.autoRide) this.updateAutoRide(deltaSeconds);
     this.measureSystem('player', () => this.player.syncVisual(this.camera.yaw, deltaSeconds));
+    this.avatar.updateGaze(this.camera.yaw, this.camera.pitch, deltaSeconds);
     this.measureSystem('camera', () => this.camera.update(deltaSeconds, this.player.isMoving(), this.player.isJogging()));
     const playerPosition = this.player.getPosition();
+    if (this.firstSessionPosition && this.player.isMoving() && this.player.getTransportMode() === 'on_foot') {
+      const distance = Math.hypot(playerPosition.x - this.firstSessionPosition.x, playerPosition.z - this.firstSessionPosition.z);
+      if (distance < 1) this.firstSessionWalk += distance;
+      if (this.firstSessionWalk >= 1.5) this.reportFirstSessionAction('walk');
+    }
+    this.firstSessionPosition = { x: playerPosition.x, z: playerPosition.z };
     if (input.transportDismountPressed && this.player.getTransportMode() !== 'on_foot') {
+      const previousMode = this.player.getTransportMode();
       this.player.setTransportMode('on_foot');
+      if (previousMode === 'kayak') this.returnKayakToHut();
       this.interactions.setEnabled(true);
       this.onInteractionPrompt?.(null);
     }
@@ -403,6 +600,7 @@ export class GameEngine {
     } else {
       const interaction = this.interactions.update({ x: playerPosition.x, z: playerPosition.z, yaw: this.camera.yaw });
       if (input.interactPressed && interaction) {
+        let interactionSucceeded = true;
         if (interaction.id === 'home_cooking' || interaction.id.endsWith(':cooking')) {
           this.player.beginMicroAction('point', 0.5);
           this.onKitchenInteraction?.();
@@ -420,13 +618,15 @@ export class GameEngine {
           if (venue) {
             this.player.beginMicroAction('point', 0.7);
             this.onVenueInteraction?.({ venueId: venue.id, displayName: venue.displayName, role: venueGameplayRole(venue.category) });
-          }
+          } else interactionSucceeded = false;
         } else if (interaction.id === 'bicycle_rack' || interaction.transportMode) {
           const mode = interaction.id === 'bicycle_rack' ? 'bicycle' : interaction.transportMode!;
           if (mode === 'kayak' && !weatherAllowsKayak(this.weather.state)) {
+            interactionSucceeded = false;
             this.onMoment?.('The kayak hut is closed in heavy weather. The bay will be here tomorrow.');
           } else {
-            this.player.setTransportMode(mode);
+            if (mode === 'kayak') this.launchKayak();
+            else this.player.setTransportMode(mode);
             this.interactions.setEnabled(false);
             this.onInteractionPrompt?.(`X · Dismount ${mode === 'bicycle' ? 'bicycle' : mode}`);
             if (interaction.activityId) this.onActivityInteraction?.(interaction.activityId);
@@ -438,6 +638,7 @@ export class GameEngine {
           this.player.beginMicroAction(interaction.action, interaction.durationSeconds ?? 1.25);
           if (interaction.activityId) this.onActivityInteraction?.(interaction.activityId);
         }
+        if (interactionSucceeded) this.reportFirstSessionAction('interact');
       }
     }
     this.locationElapsed += deltaSeconds;
@@ -449,7 +650,8 @@ export class GameEngine {
     }
 
     this.gameMinutes = (this.gameMinutes + realSecondsToGameMinutes(deltaSeconds)) % 1440;
-    this.measureSystem('lighting', () => this.lighting.update(this.gameMinutes, this.avatar.root.position));
+    this.materials.setTime(this.gameMinutes);
+    this.measureSystem('lighting', () => this.lighting.update(this.gameMinutes, this.avatar.root.position, this.weather.wetness));
     this.measureSystem('weather', () => this.weather.update(deltaSeconds, this.avatar.root.position));
     this.measureSystem('ambient-npcs', () => this.npcs.update(deltaSeconds, this.avatar.root.position));
     this.measureSystem('named-npcs', () => this.namedNpcs.update(deltaSeconds, this.gameMinutes, this.avatar.root.position));
@@ -469,7 +671,7 @@ export class GameEngine {
         seq: this.networkSeq++,
         sentAt: performance.now(),
         position,
-        yaw: this.camera.yaw,
+        yaw: this.player.presentationYaw(this.camera.yaw),
         animation: this.player.animationTag(),
         transport: networkTransport(this.player.getTransportMode()),
       });
@@ -482,14 +684,23 @@ export class GameEngine {
     this.measureSystem('render', () => this.renderer.renderer.render(this.scene, this.camera.camera));
     const info = this.renderer.renderer.info.render;
     this.performance.recordRenderer(info.calls, info.triangles);
-    this.performance.recordFrame(performance.now() - start);
+    this.performance.recordCpuFrame(performance.now() - start);
     this.sceneMetricsElapsed += deltaSeconds;
     if (this.sceneMetricsElapsed >= 0.25) {
       this.sceneMetricsElapsed = 0;
       this.recordSceneMetrics();
     }
     this.applyVisualBudget(this.adaptiveQuality.sample(this.performance.read()));
-    this.debug.update(deltaSeconds, { weather: this.weather.state, gameTime: formatGameTime(this.gameMinutes) });
+    this.debug.update(deltaSeconds, {
+      weather: this.weather.state,
+      gameTime: formatGameTime(this.gameMinutes),
+      cameraMode: this.camera.mode,
+      playerPosition,
+      remotePlayers: this.remotePlayers.userIds().flatMap((userId) => {
+        const position = this.remotePlayers.getPosition(userId);
+        return position ? [{ userId, position: { x: position.x, y: position.y, z: position.z } }] : [];
+      }),
+    });
   }
 
   private measureSystem<T>(name: string, operation: () => T): T {
@@ -591,8 +802,8 @@ function venueInteractionLabel(category: (typeof AMAYA_BAY_VENUES)[number]['cate
 }
 
 
-function jobActionToAvatarAction(action: string): Exclude<import('@together/shared').AvatarAction, 'idle' | 'walk' | 'jog'> {
-  const actions: Record<string, Exclude<import('@together/shared').AvatarAction, 'idle' | 'walk' | 'jog'>> = {
+function jobActionToAvatarAction(action: string): Exclude<AvatarAction, 'idle' | 'walk' | 'jog'> {
+  const actions: Record<string, Exclude<AvatarAction, 'idle' | 'walk' | 'jog'>> = {
     take_order: 'point', grind: 'stir', brew: 'pour', heat_milk: 'stir', serve: 'hand_over', wipe: 'wipe',
     carry_crate: 'carry', restock: 'place', bag: 'carry', clean_spill: 'wipe',
     collect: 'pick_up', load_carrier: 'place', ride: 'cycle', handover: 'hand_over',
@@ -602,8 +813,8 @@ function jobActionToAvatarAction(action: string): Exclude<import('@together/shar
   return actions[action] ?? 'point';
 }
 
-function cookingActionToAvatarAction(action: RecipeAction): Exclude<import('@together/shared').AvatarAction, 'idle' | 'walk' | 'jog'> {
-  const actions: Record<RecipeAction, Exclude<import('@together/shared').AvatarAction, 'idle' | 'walk' | 'jog'>> = {
+function cookingActionToAvatarAction(action: RecipeAction): Exclude<AvatarAction, 'idle' | 'walk' | 'jog'> {
+  const actions: Record<RecipeAction, Exclude<AvatarAction, 'idle' | 'walk' | 'jog'>> = {
     wash: 'wash', cut: 'cut', measure: 'place', boil: 'stir', fry: 'stir', stir: 'stir', pour: 'pour', plate: 'place', serve: 'hand_over',
   };
   return actions[action];

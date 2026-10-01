@@ -7,6 +7,8 @@ export * from './socketEvents.js';
 export * from './world/random.js';
 export * from './world/city.js';
 export * from './world/terrain.js';
+export * from './world/surfaces.js';
+export * from './world/navigation.js';
 export * from './household/voting.js';
 export * from './economy/economy.js';
 export * from './home/homeState.js';
@@ -56,3 +58,5 @@ export * from "./cooking/presentation.js";
 export * from './leisure/activity.js';
 
 export * from './settings/gamepad.js';
+
+export * from './home/domesticInteraction.js';

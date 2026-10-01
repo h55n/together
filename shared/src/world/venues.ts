@@ -1,4 +1,4 @@
-import type { CityVenueCategory } from './city.js';
+import type { CityVenueCategory, CityVenueDefinition } from './city.js';
 
 export type VenueVisualFamily = 'market' | 'hospitality' | 'service' | 'retail' | 'civic';
 
@@ -84,4 +84,19 @@ export function venueGameplayRole(category: CityVenueCategory): VenueGameplayRol
       return exhaustive;
     }
   }
+}
+
+/** Geometry and interaction anchors share one street-facing footprint. */
+export function venueDepth(venue: CityVenueDefinition): number {
+  return venue.hero ? 8.5 : venueVisualProfile(venue.category, false).family === 'market' ? 7.2 : 6.4;
+}
+
+export function venueYaw(venue: CityVenueDefinition): number {
+  return venue.id === 'ravi_repairs' ? Math.PI : Math.atan2(-venue.position.x, -venue.position.z);
+}
+
+export function venueFrontApproach(venue: CityVenueDefinition, clearance = 0.8): { x: number; z: number } {
+  const yaw = venueYaw(venue);
+  const distance = venueDepth(venue) / 2 + clearance;
+  return { x: venue.position.x - Math.sin(yaw) * distance, z: venue.position.z - Math.cos(yaw) * distance };
 }

@@ -1,18 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import {
-  eligibleStarterProperties,
-  resolveHouseholdVote,
-  starterPropertyById,
-  type VoteChoice,
-} from '@together/shared';
+import { eligibleStarterProperties, resolveHouseholdVote, starterPropertyById, type VoteChoice } from '@together/shared';
 import type { GameRepository, VoteRecord } from '../db/GameRepository.js';
 import type { HouseholdService } from './HouseholdService.js';
 
 export class PropertySelectionService {
-  constructor(
-    private readonly repository: GameRepository,
-    private readonly households: HouseholdService,
-  ) {}
+  constructor(private readonly repository: GameRepository, private readonly households: HouseholdService) {}
 
   async listEligible(householdId: string, userId: string) {
     const household = await this.households.getHouseholdForMember(householdId, userId);
@@ -30,19 +22,15 @@ export class PropertySelectionService {
     const activeMembers = household.members.filter((member) => member.membershipState === 'active');
     if (activeMembers.length < 2) throw new Error('At least two household members must be present before choosing a home');
     if (household.propertyId) throw new Error('Household already has a starting property');
-
     const property = starterPropertyById(propertyId);
     if (!property) throw new Error('Unknown starter property');
-    const eligible = eligibleStarterProperties(household.type, activeMembers.length).some((candidate) => candidate.id === property.id);
-    if (!eligible) throw new Error('Starter property does not fit this household');
-
+    if (!eligibleStarterProperties(household.type, activeMembers.length).some((candidate) => candidate.id === property.id)) throw new Error('Starter property does not fit this household');
+    const ballots = { [userId]: 'yes' as const };
     const vote: VoteRecord = {
-      id: randomUUID(),
-      householdId,
-      type: 'property',
+      id: randomUUID(), householdId, type: 'property',
       payload: { propertyId: property.recordId, propertyDefinitionId: property.id },
-      ballots: { [userId]: 'yes' },
-      resolution: resolveHouseholdVote(household.type, activeMembers.map((member) => member.userId), { [userId]: 'yes' }),
+      ballots,
+      resolution: resolveHouseholdVote(household.type, activeMembers.map((member) => member.userId), ballots),
       createdAt: new Date().toISOString(),
     };
     await this.repository.saveVote(vote);
@@ -53,17 +41,14 @@ export class PropertySelectionService {
   async castPropertyVote(voteId: string, userId: string, choice: VoteChoice): Promise<VoteRecord> {
     const vote = await this.repository.getVote(voteId);
     if (!vote || vote.type !== 'property') throw new Error('Property vote not found');
-    if (vote.resolution === 'approved' || vote.resolution === 'rejected') return vote;
-
     const household = await this.households.getHouseholdForMember(vote.householdId, userId);
+    if (vote.resolution === 'approved' || vote.resolution === 'rejected') return vote;
     if (household.propertyId) {
       vote.resolution = 'approved';
       await this.repository.saveVote(vote);
       return vote;
     }
-    const activeMemberIds = household.members
-      .filter((member) => member.membershipState === 'active')
-      .map((member) => member.userId);
+    const activeMemberIds = household.members.filter((member) => member.membershipState === 'active').map((member) => member.userId);
     vote.ballots[userId] = choice;
     vote.resolution = resolveHouseholdVote(household.type, activeMemberIds, vote.ballots);
     await this.repository.saveVote(vote);
@@ -76,8 +61,16 @@ export class PropertySelectionService {
     if (!household || household.propertyId) return;
     const propertyId = vote.payload.propertyId;
     if (typeof propertyId !== 'string') throw new Error('Property vote payload is invalid');
+    const currentFlags = household.hiddenState.flags && typeof household.hiddenState.flags === 'object' && !Array.isArray(household.hiddenState.flags)
+      ? household.hiddenState.flags as Record<string, unknown>
+      : {};
     household.propertyId = propertyId;
-    household.hiddenState = { ...household.hiddenState, movedIn: false, propertyVoteId: vote.id };
+    household.hiddenState = {
+      ...household.hiddenState,
+      movedIn: false,
+      propertyVoteId: vote.id,
+      flags: { ...currentFlags, property_assigned: true },
+    };
     await this.repository.saveHousehold(household);
   }
 }

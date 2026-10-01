@@ -6,6 +6,7 @@ export const walletTypeSchema = z.enum(['personal', 'household']);
 export const transportStateSchema = z.enum(['walking', 'bicycle', 'scooter', 'auto', 'kayak']);
 
 const finiteNumber = z.number().finite();
+const boundedYaw = finiteNumber.min(-Math.PI * 4).max(Math.PI * 4);
 export const vector3Schema = z.object({ x: finiteNumber, y: finiteNumber, z: finiteNumber });
 
 export const avatarConfigSchema = z.object({
@@ -35,7 +36,7 @@ export const playerSnapshotSchema = z.object({
   seq: z.number().int().nonnegative(),
   sentAt: z.number().nonnegative(),
   position: vector3Schema,
-  yaw: finiteNumber,
+  yaw: boundedYaw,
   animation: z.string().min(1).max(64),
   transport: transportStateSchema,
 }).strict();

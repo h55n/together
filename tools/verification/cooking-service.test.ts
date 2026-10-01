@@ -55,3 +55,41 @@ test('outsiders cannot join a household cooking session', async () => {
   const session = await cooking.start(household.id, 'a', 'fried_rice', 'cook-session-private-0001');
   await assert.rejects(() => cooking.claimStation(household.id, 'outsider', session.id, 'counter'), /active household member/);
 });
+
+test('concurrent station mutations preserve both players instead of losing one update', async () => {
+  const { household, cooking } = await setup();
+  const session = await cooking.start(household.id, 'a', 'fried_rice', 'cook-session-concurrent-0001');
+
+  await Promise.all([
+    cooking.claimStation(household.id, 'a', session.id, 'sink'),
+    cooking.claimStation(household.id, 'b', session.id, 'counter'),
+  ]);
+
+  let saved = (await cooking.list(household.id, 'a')).find((entry) => entry.id === session.id);
+  assert.equal(saved?.state.stationClaims.sink, 'a');
+  assert.equal(saved?.state.stationClaims.counter, 'b');
+
+  await Promise.all([
+    cooking.completeStep(household.id, 'a', session.id, 'wash', false),
+    cooking.completeStep(household.id, 'b', session.id, 'cut', false),
+  ]);
+
+  saved = (await cooking.list(household.id, 'a')).find((entry) => entry.id === session.id);
+  assert.deepEqual(new Set(saved?.state.completedStepIds), new Set(['wash', 'cut']));
+  assert.deepEqual(new Set(saved?.state.participants), new Set(['a', 'b']));
+});
+
+test('concurrent claims for the same cooking station reject the second owner', async () => {
+  const { household, cooking } = await setup();
+  const session = await cooking.start(household.id, 'a', 'fried_rice', 'cook-session-same-station-0001');
+
+  const results = await Promise.allSettled([
+    cooking.claimStation(household.id, 'a', session.id, 'counter'),
+    cooking.claimStation(household.id, 'b', session.id, 'counter'),
+  ]);
+  assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+  assert.equal(results.filter((result) => result.status === 'rejected').length, 1);
+
+  const saved = (await cooking.list(household.id, 'a')).find((entry) => entry.id === session.id);
+  assert.ok(saved?.state.stationClaims.counter === 'a' || saved?.state.stationClaims.counter === 'b');
+});

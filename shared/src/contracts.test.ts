@@ -30,6 +30,14 @@ test('movement snapshots enforce finite bounded network fields', () => {
     animation: 'idle',
     transport: 'walking',
   }).success, false);
+  assert.equal(playerSnapshotSchema.safeParse({
+    seq: 5,
+    sentAt: 12,
+    position: { x: 0, y: 1.7, z: 0 },
+    yaw: 1e12,
+    animation: 'idle',
+    transport: 'walking',
+  }).success, false);
 });
 
 test('purchase requests never accept a client-supplied price or reward', () => {

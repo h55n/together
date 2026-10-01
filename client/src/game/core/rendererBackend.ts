@@ -8,8 +8,24 @@ export function selectRendererBackend(capabilities: RendererCapabilities, forceB
   return 'unsupported';
 }
 
-export function detectRendererCapabilities(canvas: HTMLCanvasElement): RendererCapabilities {
+export function resolveRendererForceBackend(search: string, requested?: 'webgl2', recoveringFromDeviceLoss = false): 'webgl2' | undefined {
+  if (requested !== 'webgl2') return undefined;
+  return recoveringFromDeviceLoss || new URLSearchParams(search).get('renderer') === 'webgl2' ? 'webgl2' : undefined;
+}
+
+export function detectRendererCapabilities(canvas: HTMLCanvasElement, probeWebgl2 = false): RendererCapabilities {
   const webgpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
-  const webgl2 = Boolean(canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: true }));
+  // A canvas may only be bound to one rendering context family. When WebGPU is
+  // available, do not pre-empt the production canvas by probing WebGL2 first.
+  // Explicit compatibility mode is the only reason to probe WebGL2 up front.
+  const webgl2 = (!webgpu || probeWebgl2)
+    ? Boolean(canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: true }))
+    : false;
   return { webgpu, webgl2 };
+}
+
+/** A navigator.gpu property alone does not guarantee an adapter. */
+export async function hasWebGpuAdapter(gpu: { requestAdapter: () => Promise<unknown> } | undefined): Promise<boolean> {
+  if (!gpu?.requestAdapter) return false;
+  try { return Boolean(await gpu.requestAdapter()); } catch { return false; }
 }

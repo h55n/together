@@ -5,6 +5,7 @@ export type StreamingJob = {
   x: number;
   z: number;
   ring: Exclude<ResidencyRing, 'unloaded'>;
+  vegetationDetail?: 'near' | 'far';
   priority: number;
 };
 
@@ -21,6 +22,10 @@ export class StreamingScheduler {
     const byKey = new Map(this.jobs.map((job) => [job.key, job]));
     for (const job of jobs) byKey.set(job.key, job);
     this.jobs = [...byKey.values()].sort((left, right) => left.priority - right.priority || left.key.localeCompare(right.key));
+  }
+
+  clear(): void {
+    this.jobs = [];
   }
 
   takeFrameBudget(budgetMs: number, commit: (job: StreamingJob) => number, maxJobs = Number.POSITIVE_INFINITY): StreamingJob[] {

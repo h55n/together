@@ -10,7 +10,7 @@ import {
   type MovingPlan,
   type VoteChoice,
 } from '@together/shared';
-import type { GameRepository, HouseholdRecord, TransactionRecord, VoteRecord } from '../db/GameRepository.js';
+import { requireAtomicGameRepository, type GameRepository, type HouseholdRecord, type TransactionRecord, type VoteRecord } from '../db/GameRepository.js';
 import type { HouseholdService } from './HouseholdService.js';
 
 export type MoveCommitResult = { household: HouseholdRecord; transaction: TransactionRecord };
@@ -53,8 +53,8 @@ export class MovingService {
   async castMoveVote(voteId: string, userId: string, choice: VoteChoice): Promise<VoteRecord> {
     const vote = await this.repository.getVote(voteId);
     if (!vote || vote.type !== 'moving') throw new Error('Moving vote not found');
-    if (vote.resolution === 'approved' || vote.resolution === 'rejected') return vote;
     const household = await this.households.getHouseholdForMember(vote.householdId, userId);
+    if (vote.resolution === 'approved' || vote.resolution === 'rejected') return vote;
     const activeIds = household.members.filter((member) => member.membershipState === 'active').map((member) => member.userId);
     vote.ballots[userId] = choice;
     vote.resolution = resolveHouseholdVote(household.type, activeIds, vote.ballots);
@@ -78,12 +78,12 @@ export class MovingService {
 
   async commitMove(householdId: string, userId: string, idempotencyKey: string): Promise<MoveCommitResult> {
     if (idempotencyKey.length < 8) throw new Error('Invalid idempotency key');
+    const household = await this.households.getHouseholdForMember(householdId, userId);
     const existing = await this.repository.getTransactionByIdempotencyKey(idempotencyKey);
     if (existing) {
-      const household = await this.households.getHouseholdForMember(householdId, userId);
+      this.assertExisting(existing, householdId, userId);
       return { household, transaction: existing };
     }
-    const household = await this.households.getHouseholdForMember(householdId, userId);
     const plan = completeMovingPlan(this.plan(household));
     const target = starterPropertyById(plan.targetPropertyId);
     if (!target) throw new Error('Moving target no longer exists');
@@ -101,7 +101,6 @@ export class MovingService {
       home.surfaces = {};
       home.roomStates = { ...home.roomStates, movingBoxes, previousPropertyId: plan.fromPropertyId };
       home.updatedAt = new Date().toISOString();
-      await this.repository.saveHomeState(home);
     }
 
     household.sharedWallet = wallet.balance;
@@ -110,16 +109,21 @@ export class MovingService {
     household.hiddenState = {
       ...household.hiddenState,
       moving: plan,
-      flags: { ...previousFlags, moved_home: true, move_ready: false, first_night_new_place_ready: true },
+      flags: { ...previousFlags, moved_home: true, moved_in: true, move_ready: false, first_night_new_place_ready: true },
     };
-    await this.repository.saveHousehold(household);
     const transaction: TransactionRecord = {
       id: crypto.randomUUID(), idempotencyKey, householdId, userId, walletType: 'household', amount: -movingCost,
       type: 'moving', itemRef: target.id, metadata: { fromPropertyId: plan.fromPropertyId, targetPropertyId: plan.targetPropertyId, movingCost },
       createdAt: new Date().toISOString(),
     };
-    await this.repository.saveTransaction(transaction);
+    await requireAtomicGameRepository(this.repository).commitMoving({ household, home, transaction });
     return { household, transaction };
+  }
+
+  private assertExisting(transaction: TransactionRecord, householdId: string, userId: string): void {
+    if (transaction.householdId !== householdId || transaction.userId !== userId || transaction.type !== 'moving') {
+      throw new Error('Idempotency key belongs to a different moving transaction');
+    }
   }
 
   private async beginPacking(household: HouseholdRecord, vote: VoteRecord): Promise<void> {

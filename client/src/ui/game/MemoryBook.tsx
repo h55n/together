@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { memoryImageIdFromPath } from '@together/shared';
 import type { NetworkSession } from '../../network/GameSocketClient';
+import { authHeadersForIdentity } from '../../auth/clientAuth';
+import { apiFetch } from '../../network/api';
 
 export type MemoryView = {
   id: string;
@@ -40,8 +42,8 @@ export function MemoryBook(props: {
         const imageId = memoryImageIdFromPath(memory.screenshotPath);
         if (!imageId) continue;
         try {
-          const response = await fetch(`/api/households/${networkSession.householdId}/memory-images/${imageId}`, {
-            headers: { 'x-dev-user-id': networkSession.userId },
+          const response = await apiFetch(`/api/households/${networkSession.householdId}/memory-images/${imageId}`, {
+            headers: authHeadersForIdentity(networkSession),
           });
           if (!response.ok) continue;
           const url = URL.createObjectURL(await response.blob());
@@ -60,7 +62,7 @@ export function MemoryBook(props: {
       created.forEach((url) => URL.revokeObjectURL(url));
       setUrls({});
     };
-  }, [networkSession.householdId, networkSession.userId, open, sorted]);
+  }, [networkSession.accessToken, networkSession.householdId, networkSession.userId, open, sorted]);
 
   if (!open) return null;
   return <div className="memory-backdrop" role="dialog" aria-modal="true" aria-label="Household Memory Book">

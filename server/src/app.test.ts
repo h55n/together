@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { items, recipes, storyEvents } from '@together/content';
+import { socketEvents, starterPropertyById } from '@together/shared';
 import { createApp, type AppDependencies } from './app';
 import { LocalGameRepository } from './db/LocalGameRepository';
 import { HouseholdService } from './game/HouseholdService';
@@ -65,6 +66,27 @@ describe('app', () => {
     expect(response.status).toBe(200);
     expect(response.body.city).toBe('amaya_bay');
     expect(response.body.timeScale.gameMinutesPerRealMinute).toBe(12);
+    expect(response.headers['x-request-id']).toBeTruthy();
+  });
+
+  it('exposes deployment health and readiness probes without authentication', async () => {
+    const app = createApp(deps());
+    const health = await request(app).get('/healthz');
+    const ready = await request(app).get('/readyz');
+    expect(health.status).toBe(200);
+    expect(health.body.status).toBe('ok');
+    expect(ready.status).toBe(200);
+    expect(ready.body.status).toBe('ready');
+  });
+
+  it('returns authenticated short-lived voice ICE configuration', async () => {
+    const app = createApp(deps());
+    const response = await request(app)
+      .get('/api/voice/ice-config')
+      .set('x-dev-user-id', 'voice-user');
+    expect(response.status).toBe(200);
+    expect(response.body.iceServers[0].urls).toMatch(/^stun:/);
+    expect(response.headers['cache-control']).toContain('no-store');
   });
 
   it('creates a household without accepting a client wallet balance', async () => {
@@ -87,7 +109,39 @@ describe('app', () => {
       .set('x-dev-user-id', 'user-a')
       .send({ propertyId: 'hostel_floor', sharedWallet: 999999 });
     expect(response.status).toBe(201);
-    expect(response.body).toMatchObject({ type: 'friends', propertyId: 'one_bhk', sharedWallet: 8000, hiddenState: { soloExplorer: true } });
+    expect(response.body).toMatchObject({ type: 'friends', propertyId: starterPropertyById('one_bhk')?.recordId, sharedWallet: 8000, hiddenState: { soloExplorer: true } });
     expect(response.body.members).toHaveLength(1);
+  });
+
+  it('publishes a realtime household invalidation after a successful home mutation', async () => {
+    const publishHouseholdEvent = vi.fn();
+    const dependencies = {
+      ...deps(),
+      publishHouseholdEvent,
+      homeService: {
+        placeFurniture: vi.fn(async () => ({
+          householdId: 'household-1',
+          version: 3,
+          objects: [],
+          surfaces: {},
+          roomStates: {},
+          processedMutations: {},
+          updatedAt: new Date().toISOString(),
+        })),
+      } as unknown as HomeService,
+    };
+    const app = createApp(dependencies);
+
+    const response = await request(app)
+      .post('/api/households/household-1/home/furniture')
+      .set('x-dev-user-id', 'user-a')
+      .send({});
+
+    expect(response.status).toBe(201);
+    expect(publishHouseholdEvent).toHaveBeenCalledWith(
+      'household-1',
+      socketEvents.homeFurniturePlace,
+      { version: 3 },
+    );
   });
 });

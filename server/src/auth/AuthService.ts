@@ -8,7 +8,9 @@ export interface AuthService {
 
 class LocalAuthService implements AuthService {
   async verifyAccessToken(_token: string | undefined, devUserId?: string): Promise<AuthIdentity> {
-    if (process.env.NODE_ENV === 'production') throw new Error('Local auth is disabled in production');
+    if (process.env.NODE_ENV === 'production' || process.env.ALLOW_DEV_AUTH !== 'true') {
+      throw new Error('Local development auth is disabled');
+    }
     if (!devUserId || devUserId.length < 3) throw new Error('Development user identity is required');
     return { userId: devUserId, isAnonymous: true };
   }
@@ -28,6 +30,6 @@ class SupabaseAuthService implements AuthService {
 export function createAuthService(): AuthService {
   const url = process.env.SUPABASE_URL;
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRole) return new LocalAuthService();
-  return new SupabaseAuthService(createClient(url, serviceRole, { auth: { persistSession: false } }));
+  if (url && serviceRole) return new SupabaseAuthService(createClient(url, serviceRole, { auth: { persistSession: false } }));
+  return new LocalAuthService();
 }

@@ -20,7 +20,8 @@ export function LifePanel({ open, data, onClose }: { open: boolean; data: LifePa
     <div className="life-row"><div><span>Personal</span><strong>₹{(data.personalWallet ?? 0).toLocaleString('en-IN')}</strong></div><div><span>Household</span><strong>₹{(data.householdWallet ?? 0).toLocaleString('en-IN')}</strong></div></div>
     {data.activeStory && <div className="life-paper"><span>In our life</span><strong>{data.activeStory}</strong></div>}
     {data.householdNote && <div className="life-paper"><span>On the board</span><strong>{data.householdNote}</strong></div>}
-    <p className="life-hint">No needs bars. Walk outside, work if you want something, cook when it feels right, or do nothing useful at all.</p>
+    <div className="life-paper"><span>A little direction</span><strong>Make today your own</strong><p>Find a shift or an outing on the town map. Your story journal keeps track of the moments you share.</p><div className="life-row"><span>M · Town map</span><span>J · Story journal</span></div></div>
+    <p className="life-hint">Cook something warm, meet a neighbour, or head down to the bay. There is no rush.</p>
   </aside>;
 }
 

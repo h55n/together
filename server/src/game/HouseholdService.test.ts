@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { starterPropertyById } from '@together/shared';
 import { LocalGameRepository } from '../db/LocalGameRepository';
 import { HouseholdService } from './HouseholdService';
 
@@ -26,13 +27,16 @@ describe('HouseholdService', () => {
     await expect(service.joinHousehold('u6', household.inviteCode)).rejects.toThrow('Friends households are limited to 6 members');
   });
 
-  it('creates a solo explorer with a server-assigned home and normal starting funds', async () => {
+  it('creates a solo explorer with the canonical UUID-backed 1BHK and normal starting funds', async () => {
     const service = new HouseholdService(new LocalGameRepository(), () => 0.3);
     const household = await service.createSoloExplorer('user-a');
     expect(household.type).toBe('friends');
-    expect(household.propertyId).toBe('one_bhk');
+    expect(household.propertyId).toBe(starterPropertyById('one_bhk')?.recordId);
     expect(household.sharedWallet).toBe(8000);
-    expect(household.hiddenState).toMatchObject({ soloExplorer: true });
+    expect(household.hiddenState).toMatchObject({
+      soloExplorer: true,
+      flags: { property_assigned: true, moved_in: true },
+    });
     expect(household.members).toHaveLength(1);
   });
 });

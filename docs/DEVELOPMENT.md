@@ -11,20 +11,15 @@ corepack prepare pnpm@12.4.1 --activate
 pnpm --version
 ```
 
-## First connected install
+## Install
 
-This handoff environment had no npm-registry DNS access, so it could not produce a trustworthy `pnpm-lock.yaml`. On the first connected machine:
+The dependency graph and lockfile are committed and exercised by connected GitHub Actions. Use the frozen install path:
 
 ```bash
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 pnpm verify
 pnpm test:e2e
-```
-
-Then commit the generated `pnpm-lock.yaml`. From that point onward CI/local restore should use:
-
-```bash
-pnpm install --frozen-lockfile
 ```
 
 Do not copy `node_modules` between Windows/Linux/macOS. Rollup and other packages use platform-native optional dependencies.
@@ -39,26 +34,27 @@ Local development may leave Supabase values blank. The server then uses the in-m
 
 Production requires:
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- configured Supabase database/migrations
-- private Storage bucket named by `SUPABASE_MEMORY_BUCKET`
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the server;
+- `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the client build;
+- Supabase anonymous sign-in enabled for the V1 frictionless identity flow;
+- `CLIENT_URL` set to the HTTPS client origin;
+- `VITE_SERVER_URL` set to the public game-server origin when client/server are split;
+- the ordered database migrations applied;
+- the private `together-memories` Storage bucket (migration 012 bootstraps it);
+- `TURN_URL` and server-only `TURN_SHARED_SECRET` for production voice.
 
-Client-safe values use the `VITE_` prefix.
-
-TURN is optional for local voice tests but required for reliable production NAT traversal.
+Never place the TURN shared secret in a `VITE_*` variable. The server issues authenticated short-lived TURN credentials to the browser.
 
 ## Database
 
-Apply SQL files in lexical order:
+Build the server, then use the deterministic migration runner:
 
-```text
-server/src/db/migrations/001_initial.sql
-...
-server/src/db/migrations/009_activity_sessions.sql
+```bash
+pnpm --filter @together/server build
+DATABASE_URL=... pnpm --filter @together/server migrate
 ```
 
-`node tools/validate-repository.mjs` validates sequence shape and rejects obvious destructive migration patterns.
+The runner applies `001` through `012` in lexical order under a PostgreSQL advisory lock, records SHA-256 checksums, and refuses edited already-applied migrations. `node tools/validate-repository.mjs` also validates sequence shape and rejects obvious destructive migration patterns.
 
 ## Run
 
@@ -135,7 +131,9 @@ The full PRD calls for a broader debug suite (navmesh/collider/audio/light/state
 
 ## Supabase auth
 
-The production architecture expects Supabase identity. Development uses the auth adapter and local identity fallback where credentials are absent. Never ship production with the in-memory repository or development auth fallback.
+Development can use the explicit local header identity path only when `ALLOW_DEV_AUTH=true`. Production client startup requires Supabase client-safe credentials, restores or creates an anonymous Supabase session, follows token refresh, and sends the Bearer token through REST, Socket.IO and voice configuration requests. The server rejects local-header auth in production.
+
+Never ship production with the in-memory repository, local Memory image store or development auth fallback.
 
 ## Memory images
 
@@ -143,13 +141,15 @@ Local mode stores private images under a local server-controlled directory. Prod
 
 ## Voice
 
-Voice is never stored. Configure:
+Voice is never stored. Configure the server:
 
 ```text
-VITE_STUN_URL=
-VITE_TURN_URL=
-VITE_TURN_USERNAME=
-VITE_TURN_CREDENTIAL=
+STUN_URL=stun:stun.l.google.com:19302
+TURN_URL=turns:turn.example.com:5349
+TURN_SHARED_SECRET=
+TURN_TTL_SECONDS=3600
 ```
 
-Use a real TURN service for production verification.
+`TURN_SHARED_SECRET` is server-only. Authenticated clients fetch short-lived ICE credentials from `/api/voice/ice-config`. Use a real TURN service and different-network devices for final production verification.
+
+The server also exposes `/healthz` and `/readyz`, emits request IDs/structured completion logs, uses production-only API throttling, restricts production CORS to `CLIENT_URL`, and shuts down gracefully on SIGTERM/SIGINT.

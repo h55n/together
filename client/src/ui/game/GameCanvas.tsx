@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import { DEFAULT_GAME_SETTINGS, normalizeGameSettings, resolveStartupGameSettings, scoreMemoryCapture, shouldAutoCapture, type ActivityId, type ActivityStep, type AvatarConfig, type GameSettings, type HomeAction, type JobId, type Placement2D, type RecipeStep, type StoryDefinition, type StoryTaskStateValue, type VoiceMode } from '@together/shared';
+import { DEFAULT_GAME_SETTINGS, normalizeGameSettings, resolveStartupGameSettings, scoreMemoryCapture, shouldAutoCapture, type ActivityId, type ActivityStep, type AvatarConfig, type GameSettings, type HomeAction, type MicroActionStep, type JobId, type Placement2D, type RecipeStep, type StoryDefinition, type StoryTaskStateValue, type VoiceMode } from '@together/shared';
 import { GameEngine } from '../../game/GameEngine';
+import { advanceFirstSession, readFirstSession, type FirstSessionAction } from '../../game/core/FirstSession';
+import { FirstSessionGuide } from './FirstSessionGuide';
 import type { WeatherState } from '../../game/weather/weatherModel';
 import type { NetworkSession } from '../../network/GameSocketClient';
+import { authHeadersForIdentity } from '../../auth/clientAuth';
 import { MemoryBook, type MemoryView } from './MemoryBook';
 import { LifePanel, type LifePanelData } from './LifePanel';
 import { CityMap } from './CityMap';
@@ -17,15 +20,31 @@ import { StoryPanel, type StoryInstanceView } from './StoryPanel';
 import { ActivityPanel, type ActivitySessionView } from './ActivityPanel';
 import { NpcPanel, type NpcRelationshipView } from './NpcPanel';
 import { HomeGrowthPanel, type HomeGrowthHousehold, type MovingStateView, type RenovationStateView } from './HomeGrowthPanel';
+import { apiFetch } from '../../network/api';
 
 export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropertyChanged }: { networkSession?: NetworkSession; avatarConfig?: AvatarConfig; propertyId?: string; onPropertyChanged?: (propertyId: string) => void }): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
+  const engineCreateChainRef = useRef<Promise<void>>(Promise.resolve());
   const homeVersionRef = useRef(0);
+  const homeMutationChainRef = useRef<Promise<void>>(Promise.resolve());
   const lastAutomaticCaptureRef = useRef(-300_000);
+  const captureBusyRef = useRef(false);
+  const [weatherState, setWeatherState] = useState<WeatherState>('clear');
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [compatibilityRenderer, setCompatibilityRenderer] = useState(false);
+  const recoverRenderer = useCallback(() => { setReady(false); setError(null); setCompatibilityRenderer(true); }, []);
+  const guideStorageKey = `together:first-day:v1:${networkSession?.userId ?? 'solo'}`;
+  const [guideCompleted, setGuideCompleted] = useState<FirstSessionAction[]>(() => readFirstSession(localStorage.getItem(guideStorageKey)));
+  const [guideHidden, setGuideHidden] = useState(() => localStorage.getItem(`${guideStorageKey}:hidden`) === 'true');
+  const onFirstSessionAction = useCallback((action: FirstSessionAction) => {
+    setGuideCompleted(current => {
+      const next = advanceFirstSession(current, action);
+      localStorage.setItem(guideStorageKey, JSON.stringify(next)); return next;
+    });
+  }, [guideStorageKey]);
   const [interactionPrompt, setInteractionPrompt] = useState<string | null>(null);
   const [location, setLocation] = useState<string | null>(null);
   const [connection, setConnection] = useState<'connecting' | 'connected' | 'reconnecting' | 'disconnected'>(networkSession ? 'connecting' : 'disconnected');
@@ -73,12 +92,13 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const [homeGrowthMessage, setHomeGrowthMessage] = useState<string | null>(null);
   const [lifeData, setLifeData] = useState<LifePanelData>({});
   const [settings, setSettings] = useState<GameSettings>(() => loadGameSettings());
+  const settingsRef = useRef(settings);
 
-  const authHeaders = useCallback((): Record<string, string> => networkSession ? { 'x-dev-user-id': networkSession.userId } : {}, [networkSession]);
+  const authHeaders = useCallback((): Record<string, string> => networkSession ? authHeadersForIdentity(networkSession) : {}, [networkSession]);
 
   const refreshHomeState = useCallback(async (): Promise<HomeStateView | null> => {
     if (!networkSession) return null;
-    const response = await fetch(`/api/households/${networkSession.householdId}/home`, { headers: authHeaders() });
+    const response = await apiFetch(`/api/households/${networkSession.householdId}/home`, { headers: authHeaders() });
     if (!response.ok) throw new Error(`Home state request failed (${response.status})`);
     const home = await response.json() as HomeStateView;
     homeVersionRef.current = home.version;
@@ -94,7 +114,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
   const refreshMemories = useCallback(async (): Promise<void> => {
     if (!networkSession) return;
-    const response = await fetch(`/api/households/${networkSession.householdId}/memories`, { headers: authHeaders() });
+    const response = await apiFetch(`/api/households/${networkSession.householdId}/memories`, { headers: authHeaders() });
     if (!response.ok) throw new Error(`Memory Book request failed (${response.status})`);
     setMemories(await response.json() as MemoryView[]);
   }, [authHeaders, networkSession]);
@@ -102,9 +122,9 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const refreshLife = useCallback(async (): Promise<void> => {
     if (!networkSession) return;
     const [householdResponse, notesResponse, storiesResponse] = await Promise.all([
-      fetch(`/api/households/${networkSession.householdId}`, { headers: authHeaders() }),
-      fetch(`/api/households/${networkSession.householdId}/notes`, { headers: authHeaders() }),
-      fetch(`/api/households/${networkSession.householdId}/stories`, { headers: authHeaders() }),
+      apiFetch(`/api/households/${networkSession.householdId}`, { headers: authHeaders() }),
+      apiFetch(`/api/households/${networkSession.householdId}/notes`, { headers: authHeaders() }),
+      apiFetch(`/api/households/${networkSession.householdId}/stories`, { headers: authHeaders() }),
     ]);
     if (!householdResponse.ok) throw new Error(`Household request failed (${householdResponse.status})`);
     const household = await householdResponse.json() as { sharedWallet: number; members: Array<{ userId: string; personalWallet: number }> };
@@ -122,26 +142,50 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     });
   }, [authHeaders, location, networkSession]);
 
-  const persistDomesticAction = useCallback(async (action: HomeAction, interactionId: string): Promise<void> => {
-    if (!networkSession) return;
-    const execute = async (expectedVersion: number) => fetch(`/api/households/${networkSession.householdId}/home/domestic-actions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ action, expectedVersion, idempotencyKey: `${interactionId}:${crypto.randomUUID()}` }),
-    });
-    try {
+  const queueVersionedHomeMutation = useCallback((
+    execute: (expectedVersion: number) => Promise<Response>,
+    failureLabel: string,
+  ): void => {
+    const task = homeMutationChainRef.current.then(async () => {
       let response = await execute(homeVersionRef.current);
       if (!response.ok && response.status < 500) {
         const version = await refreshHomeVersion();
         response = await execute(version);
       }
-      if (!response.ok) throw new Error(`Could not save household action (${response.status})`);
+      if (!response.ok) throw new Error(`${failureLabel} (${response.status})`);
       const home = await response.json() as { version: number };
       homeVersionRef.current = home.version;
-    } catch (cause) {
+    });
+    homeMutationChainRef.current = task.catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, [authHeaders, networkSession, refreshHomeVersion]);
+    });
+  }, [refreshHomeVersion]);
+
+  const persistDomesticStep = useCallback((interactionId: string, step: MicroActionStep): void => {
+    if (!networkSession) return;
+    const idempotencyKey = `${interactionId}:${step.id}:${crypto.randomUUID()}`;
+    queueVersionedHomeMutation(
+      async (expectedVersion) => apiFetch(`/api/households/${networkSession.householdId}/home/domestic-steps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ interactionId, stepId: step.id, expectedVersion, idempotencyKey }),
+      }),
+      'Could not save embodied household step',
+    );
+  }, [authHeaders, networkSession, queueVersionedHomeMutation]);
+
+  const persistDomesticAction = useCallback((action: HomeAction, interactionId: string): void => {
+    if (!networkSession) return;
+    const idempotencyKey = `${interactionId}:complete:${crypto.randomUUID()}`;
+    queueVersionedHomeMutation(
+      async (expectedVersion) => apiFetch(`/api/households/${networkSession.householdId}/home/domestic-actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ action, expectedVersion, idempotencyKey }),
+      }),
+      'Could not save household action',
+    );
+  }, [authHeaders, networkSession, queueVersionedHomeMutation]);
 
   const setBookOpen = useCallback((open: boolean): void => {
     setMemoryOpen(open);
@@ -150,13 +194,14 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
   const captureMemory = useCallback(async (): Promise<void> => {
     const engine = engineRef.current;
-    if (!engine || !networkSession || captureBusy) return;
+    if (!engine || !networkSession || captureBusyRef.current) return;
+    captureBusyRef.current = true;
     setCaptureBusy(true);
     try {
       const context = engine.getMemoryContext();
       const blob = await engine.captureFrame();
       const imageId = `photo_${crypto.randomUUID().replaceAll('-', '')}`;
-      const imageResponse = await fetch(`/api/households/${networkSession.householdId}/memory-images/${imageId}`, {
+      const imageResponse = await apiFetch(`/api/households/${networkSession.householdId}/memory-images/${imageId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'image/jpeg', ...authHeaders() },
         body: blob,
@@ -164,7 +209,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       if (!imageResponse.ok) throw new Error(`Memory image upload failed (${imageResponse.status})`);
       const image = await imageResponse.json() as { screenshotPath: string };
       const caption = `${context.locationId} · ${formatGameTime(context.gameMinutes)}`;
-      const memoryResponse = await fetch(`/api/households/${networkSession.householdId}/memories`, {
+      const memoryResponse = await apiFetch(`/api/households/${networkSession.householdId}/memories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
@@ -186,41 +231,55 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
+      captureBusyRef.current = false;
       setCaptureBusy(false);
     }
-  }, [authHeaders, captureBusy, networkSession]);
+  }, [authHeaders, networkSession]);
 
   const captureAutomaticMemory = useCallback(async (tag: string): Promise<void> => {
     const engine = engineRef.current;
-    if (!engine || !networkSession || captureBusy) return;
+    if (!engine || !networkSession || captureBusyRef.current) return;
     const context = engine.getMemoryContext();
+    const participantFrame = engine.getMemoryParticipantContext();
+    const participants = [networkSession.userId, ...participantFrame.visibleUserIds];
+    const participantsExpected = participantFrame.onlineUserIds.length > 0 ? 2 : 1;
+    const participantsVisible = Math.min(participantsExpected, participants.length);
+    const occlusionRatio = participantFrame.onlineUserIds.length > 0 && participantFrame.visibleUserIds.length === 0 ? 0.28 : 0.02;
     const secondsSinceAutomaticCapture = Math.max(0, (performance.now() - lastAutomaticCaptureRef.current) / 1000);
     const scenic = /Bay|Park|Hill|Garden|Cove|Sunset/i.test(context.locationId) ? 0.95 : 0.62;
     const minute = context.gameMinutes % 1440;
     const lighting = (minute >= 16.5 * 60 && minute <= 19.5 * 60) || (minute >= 5.5 * 60 && minute <= 7.5 * 60) ? 0.95 : 0.72;
     const score = scoreMemoryCapture({
-      participantsVisible: 1, participantsExpected: 1, occlusionRatio: 0.02,
-      composition: 0.82, storyRelevance: 0.86, scenicValue: scenic, lightingQuality: lighting,
+      participantsVisible, participantsExpected, occlusionRatio,
+      composition: participantFrame.composition, storyRelevance: 0.86, scenicValue: scenic, lightingQuality: lighting,
       secondsSinceAutomaticCapture,
     });
     if (!shouldAutoCapture(score, secondsSinceAutomaticCapture)) return;
+    captureBusyRef.current = true;
     setCaptureBusy(true);
     try {
       const blob = await engine.captureFrame(0.88);
       const imageId = `auto_${crypto.randomUUID().replaceAll('-', '')}`;
-      const imageResponse = await fetch(`/api/households/${networkSession.householdId}/memory-images/${imageId}`, {
+      const imageResponse = await apiFetch(`/api/households/${networkSession.householdId}/memory-images/${imageId}`, {
         method: 'POST', headers: { 'Content-Type': 'image/jpeg', ...authHeaders() }, body: blob,
       });
       if (!imageResponse.ok) throw new Error(`Automatic Memory image upload failed (${imageResponse.status})`);
       const image = await imageResponse.json() as { screenshotPath: string };
       const caption = automaticCaption(tag, context.locationId, context.weather);
-      const memoryResponse = await fetch(`/api/households/${networkSession.householdId}/memories`, {
+      const memoryResponse = await apiFetch(`/api/households/${networkSession.householdId}/memories`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
           idempotencyKey: `automatic:${tag}:${Math.floor(context.gameMinutes)}:${crypto.randomUUID()}`,
           type: 'automatic', screenshotPath: image.screenshotPath, caption,
-          locationId: context.locationId, weather: context.weather, participants: [networkSession.userId],
-          metadata: { gameMinutes: context.gameMinutes, source: 'smart-capture', tag, score },
+          locationId: context.locationId, weather: context.weather, participants,
+          metadata: {
+            gameMinutes: context.gameMinutes,
+            source: 'smart-capture',
+            tag,
+            score,
+            onlineHouseholdMembers: 1 + participantFrame.onlineUserIds.length,
+            framedHouseholdMembers: participants.length,
+          },
         }),
       });
       if (!memoryResponse.ok) throw new Error(`Automatic Memory creation failed (${memoryResponse.status})`);
@@ -232,14 +291,17 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     } catch (cause) {
       // Automatic Memory failure must never interrupt the activity itself.
       console.warn('[Together Memory]', cause);
-    } finally { setCaptureBusy(false); }
-  }, [authHeaders, captureBusy, networkSession]);
+    } finally {
+      captureBusyRef.current = false;
+      setCaptureBusy(false);
+    }
+  }, [authHeaders, networkSession]);
 
   const exportMemory = useCallback(async (memory: MemoryView): Promise<void> => {
     if (!networkSession) return;
     const imageId = memory.screenshotPath.startsWith('memory-image:') ? memory.screenshotPath.slice('memory-image:'.length) : null;
     if (!imageId) throw new Error('This Memory has no private image to export');
-    const response = await fetch(`/api/households/${networkSession.householdId}/memory-images/${encodeURIComponent(imageId)}`, { headers: authHeaders() });
+    const response = await apiFetch(`/api/households/${networkSession.householdId}/memory-images/${encodeURIComponent(imageId)}`, { headers: authHeaders() });
     if (!response.ok) throw new Error(`Memory image export failed (${response.status})`);
     const bitmap = await createImageBitmap(await response.blob());
     const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = 900;
@@ -263,7 +325,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
   const updateMemoryCaption = useCallback(async (memoryId: string, caption: string): Promise<void> => {
     if (!networkSession) return;
-    const response = await fetch(`/api/households/${networkSession.householdId}/memories/${memoryId}/caption`, {
+    const response = await apiFetch(`/api/households/${networkSession.householdId}/memories/${memoryId}/caption`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ caption }),
@@ -276,8 +338,8 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const refreshKitchen = useCallback(async (): Promise<void> => {
     if (!networkSession) return;
     const [inventoryResponse, sessionsResponse] = await Promise.all([
-      fetch(`/api/households/${networkSession.householdId}/inventory`, { headers: authHeaders() }),
-      fetch(`/api/households/${networkSession.householdId}/cooking`, { headers: authHeaders() }),
+      apiFetch(`/api/households/${networkSession.householdId}/inventory`, { headers: authHeaders() }),
+      apiFetch(`/api/households/${networkSession.householdId}/cooking`, { headers: authHeaders() }),
     ]);
     if (!inventoryResponse.ok) throw new Error(`Kitchen inventory request failed (${inventoryResponse.status})`);
     if (!sessionsResponse.ok) throw new Error(`Cooking session request failed (${sessionsResponse.status})`);
@@ -289,7 +351,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const commitDecoration = useCallback(async (change: DecorationCommit): Promise<void> => {
     if (!networkSession) { setDecorateMessage('Join a household before changing a persistent home.'); return; }
     setDecorateBusy(true); setDecorateMessage(null);
-    const execute = async (expectedVersion: number) => fetch(`/api/households/${networkSession.householdId}/home/furniture`, {
+    const execute = async (expectedVersion: number) => apiFetch(`/api/households/${networkSession.householdId}/home/furniture`, {
       method: change.mode === 'place' ? 'POST' : 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({
@@ -318,11 +380,11 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     setDecorateBusy(true); setDecorateMessage(null);
     try {
       const query = new URLSearchParams({ expectedVersion: String(homeVersionRef.current), idempotencyKey: `decor:remove:${crypto.randomUUID()}` });
-      let response = await fetch(`/api/households/${networkSession.householdId}/home/furniture/${encodeURIComponent(objectId)}?${query}`, { method: 'DELETE', headers: authHeaders() });
+      let response = await apiFetch(`/api/households/${networkSession.householdId}/home/furniture/${encodeURIComponent(objectId)}?${query}`, { method: 'DELETE', headers: authHeaders() });
       if (!response.ok && response.status < 500) {
         const version = await refreshHomeVersion();
         query.set('expectedVersion', String(version)); query.set('idempotencyKey', `decor:remove:${crypto.randomUUID()}`);
-        response = await fetch(`/api/households/${networkSession.householdId}/home/furniture/${encodeURIComponent(objectId)}?${query}`, { method: 'DELETE', headers: authHeaders() });
+        response = await apiFetch(`/api/households/${networkSession.householdId}/home/furniture/${encodeURIComponent(objectId)}?${query}`, { method: 'DELETE', headers: authHeaders() });
       }
       const data = await response.json() as HomeStateView & { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Could not remove furniture');
@@ -335,7 +397,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     if (!networkSession) return;
     setDecorateBusy(true); setDecorateMessage(null);
     try {
-      const response = await fetch(`/api/households/${networkSession.householdId}/home/surfaces/${encodeURIComponent(surfaceId)}`, {
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/home/surfaces/${encodeURIComponent(surfaceId)}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ finishId, expectedVersion: homeVersionRef.current, idempotencyKey: `decor:surface:${crypto.randomUUID()}` }),
       });
@@ -352,7 +414,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     const from = position ? { x: position.x, z: position.z } : autoFrom;
     setAutoBusy(true); setAutoMessage(null);
     try {
-      const response = await fetch(`/api/households/${networkSession.householdId}/transit/auto`, {
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/transit/auto`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ from, destinationId, idempotencyKey: `auto:${crypto.randomUUID()}` }),
       });
@@ -370,7 +432,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     if (!networkSession) { setToast('Connect a household to work a persistent shift.'); return; }
     setJobBusy(true); setJobMessage(null);
     try {
-      const response = await fetch(`/api/households/${networkSession.householdId}/jobs/${jobId}/start`, {
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/jobs/${jobId}/start`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ idempotencyKey: `job-start:${crypto.randomUUID()}` }),
       });
@@ -386,7 +448,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     setJobBusy(true); setJobMessage(null);
     engineRef.current?.playContextAction(action);
     try {
-      const response = await fetch(`/api/job-sessions/${jobSession.id}/advance`, {
+      const response = await apiFetch(`/api/job-sessions/${jobSession.id}/advance`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ action }),
       });
       const data = await response.json() as JobSessionView & { error?: string };
@@ -400,7 +462,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     if (!networkSession || !jobSession) return;
     setJobBusy(true); setJobMessage(null);
     try {
-      const response = await fetch(`/api/job-sessions/${jobSession.id}/complete`, {
+      const response = await apiFetch(`/api/job-sessions/${jobSession.id}/complete`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ idempotencyKey: `job-finish:${jobSession.id}` }),
       });
@@ -414,8 +476,8 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const refreshStories = useCallback(async (): Promise<void> => {
     if (!networkSession) return;
     const [instancesResponse, eligibleResponse] = await Promise.all([
-      fetch(`/api/households/${networkSession.householdId}/stories`, { headers: authHeaders() }),
-      fetch(`/api/households/${networkSession.householdId}/stories/eligible`, { headers: authHeaders() }),
+      apiFetch(`/api/households/${networkSession.householdId}/stories`, { headers: authHeaders() }),
+      apiFetch(`/api/households/${networkSession.householdId}/stories/eligible`, { headers: authHeaders() }),
     ]);
     if (!instancesResponse.ok || !eligibleResponse.ok) throw new Error('Could not read household story state');
     const instances = await instancesResponse.json() as StoryInstanceView[];
@@ -427,7 +489,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     if (!networkSession) return;
     setStoryBusy(true); setStoryMessage(null);
     try {
-      const response = await fetch(`/api/households/${networkSession.householdId}/stories/${encodeURIComponent(eventId)}/start`, { method: 'POST', headers: authHeaders() });
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/stories/${encodeURIComponent(eventId)}/start`, { method: 'POST', headers: authHeaders() });
       const data = await response.json() as StoryInstanceView & { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Story could not begin');
       setStoryActive(data); await refreshStories(); setStoryMessage('This moment has begun. The rest of the city stays open.');
@@ -439,7 +501,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     if (!networkSession) return;
     setStoryBusy(true); setStoryMessage(null);
     try {
-      const response = await fetch(`/api/households/${networkSession.householdId}/stories/instances/${instanceId}/tasks/${encodeURIComponent(taskId)}`, {
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/stories/instances/${instanceId}/tasks/${encodeURIComponent(taskId)}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ state }),
       });
       const data = await response.json() as StoryInstanceView & { error?: string };
@@ -456,10 +518,10 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     const definition = storyEvents.find((event) => event.id === instance.eventId);
     const blob = await engine.captureFrame();
     const imageId = `story_${crypto.randomUUID().replaceAll('-', '')}`;
-    const imageResponse = await fetch(`/api/households/${networkSession.householdId}/memory-images/${imageId}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', ...authHeaders() }, body: blob });
+    const imageResponse = await apiFetch(`/api/households/${networkSession.householdId}/memory-images/${imageId}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', ...authHeaders() }, body: blob });
     if (!imageResponse.ok) return;
     const image = await imageResponse.json() as { screenshotPath: string };
-    await fetch(`/api/households/${networkSession.householdId}/memories`, {
+    await apiFetch(`/api/households/${networkSession.householdId}/memories`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({
         idempotencyKey: `story:${instance.id}`, type: 'story', screenshotPath: image.screenshotPath,
@@ -473,7 +535,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     if (!networkSession) return;
     setStoryBusy(true); setStoryMessage(null);
     try {
-      const response = await fetch(`/api/households/${networkSession.householdId}/stories/instances/${instanceId}/resolve`, { method: 'POST', headers: authHeaders() });
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/stories/instances/${instanceId}/resolve`, { method: 'POST', headers: authHeaders() });
       const data = await response.json() as StoryInstanceView & { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Story could not resolve');
       await createStoryMemory(data); setStoryActive(null); await refreshStories();
@@ -495,7 +557,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     if (!networkSession) return;
     setCookingBusy(true); setCookingMessage(null);
     try {
-      const response = await fetch(`/api/households/${networkSession.householdId}/cooking`, {
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/cooking`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ recipeId, idempotencyKey: `cook:${crypto.randomUUID()}` }),
       });
@@ -511,39 +573,47 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     setCookingBusy(true); setCookingMessage(null);
     try {
       const base = `/api/households/${networkSession.householdId}/cooking/${cookingSession.id}`;
-      const claim = await fetch(`${base}/stations/${encodeURIComponent(step.station)}/claim`, { method: 'POST', headers: authHeaders() });
+      const claim = await apiFetch(`${base}/stations/${encodeURIComponent(step.station)}/claim`, { method: 'POST', headers: authHeaders() });
       const claimed = await claim.json() as CookingSessionView & { error?: string };
       if (!claim.ok) throw new Error(claimed.error ?? `${step.station} is occupied`);
       setCookingSession(claimed);
-      engineRef.current?.playCookingAction(step.action);
-      await new Promise((resolve) => window.setTimeout(resolve, 650));
-      const complete = await fetch(`${base}/steps/${encodeURIComponent(step.id)}`, {
+      const engine = engineRef.current;
+      if (engine) await engine.playCookingAction(step.action);
+      const complete = await apiFetch(`${base}/steps/${encodeURIComponent(step.id)}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ mistake }),
       });
       const completed = await complete.json() as CookingSessionView & { error?: string };
       if (!complete.ok) throw new Error(completed.error ?? 'Cooking step could not be completed');
       setCookingSession(completed);
-      await fetch(`${base}/stations/${encodeURIComponent(step.station)}/release`, { method: 'POST', headers: authHeaders() });
+      await apiFetch(`${base}/stations/${encodeURIComponent(step.station)}/release`, { method: 'POST', headers: authHeaders() });
       if (completed.state.status === 'completed') {
         const quality = completed.state.outcome?.quality ?? 'shared';
         setCookingMessage(quality === 'burnt' ? 'Dinner got a little burnt. It still counts as dinner—and a story.' : quality === 'imperfect' ? 'A little imperfect. Still warm, shared food.' : 'Meal ready. Serve it while it is warm.');
-        engineRef.current?.playCookingAction('serve');
+        void engineRef.current?.playCookingAction('serve');
         void captureAutomaticMemory('shared_meal');
       } else setCookingMessage('Step complete. Another station may have opened up.');
     } catch (cause) { setCookingMessage(cause instanceof Error ? cause.message : String(cause)); }
     finally { setCookingBusy(false); }
   }, [authHeaders, captureAutomaticMemory, cookingSession, networkSession]);
 
+  const refreshActiveActivity = useCallback(async (): Promise<void> => {
+    if (!networkSession) return;
+    const response = await apiFetch(`/api/households/${networkSession.householdId}/activities`, { headers: authHeaders() });
+    if (!response.ok) throw new Error(`Activity list failed (${response.status})`);
+    const sessions = await response.json() as ActivitySessionView[];
+    setActivitySession((current) => current ? (sessions.find((candidate) => candidate.id === current.id) ?? current) : current);
+  }, [authHeaders, networkSession]);
+
   const openActivity = useCallback(async (activityId: ActivityId): Promise<void> => {
     if (!networkSession) { setToast('Join a household to share persistent activities.'); return; }
     setActivityBusy(true); setActivityMessage(null); setVenueSession(null); setJobSession(null); setCookingOpen(false);
     try {
-      const listResponse = await fetch(`/api/households/${networkSession.householdId}/activities`, { headers: authHeaders() });
+      const listResponse = await apiFetch(`/api/households/${networkSession.householdId}/activities`, { headers: authHeaders() });
       if (!listResponse.ok) throw new Error(`Activity list failed (${listResponse.status})`);
       const sessions = await listResponse.json() as ActivitySessionView[];
       let session = sessions.find((candidate) => candidate.activityId === activityId && candidate.state.status === 'active') ?? null;
       if (!session) {
-        const start = await fetch(`/api/households/${networkSession.householdId}/activities/${activityId}`, {
+        const start = await apiFetch(`/api/households/${networkSession.householdId}/activities/${activityId}`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ idempotencyKey: `activity:${activityId}:${crypto.randomUUID()}` }),
         });
@@ -551,7 +621,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
         if (!start.ok) throw new Error(data.error ?? 'Could not begin activity');
         session = data;
       } else if (!session.state.participants.includes(networkSession.userId)) {
-        const join = await fetch(`/api/activities/${session.id}/join`, { method: 'POST', headers: authHeaders() });
+        const join = await apiFetch(`/api/activities/${session.id}/join`, { method: 'POST', headers: authHeaders() });
         const data = await join.json() as ActivitySessionView & { error?: string };
         if (!join.ok) throw new Error(data.error ?? 'Could not join activity');
         session = data;
@@ -566,7 +636,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     setActivityBusy(true); setActivityMessage(null);
     engineRef.current?.playActivityAction(step.animation);
     try {
-      const response = await fetch(`/api/activities/${activitySession.id}/steps/${encodeURIComponent(step.id)}`, { method: 'POST', headers: authHeaders() });
+      const response = await apiFetch(`/api/activities/${activitySession.id}/steps/${encodeURIComponent(step.id)}`, { method: 'POST', headers: authHeaders() });
       const data = await response.json() as ActivitySessionView & { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Activity step could not be saved');
       setActivitySession(data);
@@ -582,12 +652,12 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     if (!networkSession) { setToast('Join a household before residents can remember your visits.'); return; }
     setNpcId(nextNpcId); setNpcBusy(true); setActivitySession(null); setVenueSession(null); setCookingOpen(false);
     try {
-      const response = await fetch(`/api/households/${networkSession.householdId}/npc-memory`, { headers: authHeaders() });
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/npc-memory`, { headers: authHeaders() });
       if (!response.ok) throw new Error(`NPC memory request failed (${response.status})`);
       const records = await response.json() as NpcRelationshipView[];
       let relationship = records.find((record) => record.npcId === nextNpcId) ?? null;
       if (!relationship?.flags.includes('first_meeting')) {
-        const remember = await fetch(`/api/households/${networkSession.householdId}/npc-memory/${encodeURIComponent(nextNpcId)}`, {
+        const remember = await apiFetch(`/api/households/${networkSession.householdId}/npc-memory/${encodeURIComponent(nextNpcId)}`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ flag: 'first_meeting', familiarityDelta: 1 }),
         });
@@ -603,7 +673,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     if (!networkSession || !npcId) return;
     setNpcBusy(true);
     try {
-      const response = await fetch(`/api/households/${networkSession.householdId}/npc-memory/${encodeURIComponent(npcId)}`, {
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/npc-memory/${encodeURIComponent(npcId)}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ flag: 'first_meeting', familiarityDelta: 1 }),
       });
@@ -617,9 +687,9 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const refreshHomeGrowth = useCallback(async (): Promise<void> => {
     if (!networkSession) return;
     const [householdResponse, movingResponse, renovationResponse, home] = await Promise.all([
-      fetch(`/api/households/${networkSession.householdId}`, { headers: authHeaders() }),
-      fetch(`/api/households/${networkSession.householdId}/moving`, { headers: authHeaders() }),
-      fetch(`/api/households/${networkSession.householdId}/renovation`, { headers: authHeaders() }),
+      apiFetch(`/api/households/${networkSession.householdId}`, { headers: authHeaders() }),
+      apiFetch(`/api/households/${networkSession.householdId}/moving`, { headers: authHeaders() }),
+      apiFetch(`/api/households/${networkSession.householdId}/renovation`, { headers: authHeaders() }),
       refreshHomeState(),
     ]);
     if (!householdResponse.ok) throw new Error(`Household planning state failed (${householdResponse.status})`);
@@ -640,7 +710,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const proposeMove = useCallback(async (targetPropertyId: string): Promise<void> => {
     if (!networkSession) return; setHomeGrowthBusy(true); setHomeGrowthMessage(null);
     try {
-      const response = await fetch(`/api/households/${networkSession.householdId}/moving/votes`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ targetPropertyId }) });
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/moving/votes`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ targetPropertyId }) });
       if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Moving vote failed (${response.status})`);
       setHomeGrowthMessage('The household is discussing this move.'); await refreshHomeGrowth();
     } catch (cause) { setHomeGrowthMessage(cause instanceof Error ? cause.message : String(cause)); } finally { setHomeGrowthBusy(false); }
@@ -648,20 +718,20 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
   const castMove = useCallback(async (voteId: string, choice: 'yes' | 'no'): Promise<void> => {
     setHomeGrowthBusy(true); setHomeGrowthMessage(null);
-    try { const response = await fetch(`/api/moving/votes/${voteId}/cast`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ choice }) }); if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Moving vote failed (${response.status})`); await refreshHomeGrowth(); }
+    try { const response = await apiFetch(`/api/moving/votes/${voteId}/cast`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ choice }) }); if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Moving vote failed (${response.status})`); await refreshHomeGrowth(); }
     catch (cause) { setHomeGrowthMessage(cause instanceof Error ? cause.message : String(cause)); } finally { setHomeGrowthBusy(false); }
   }, [authHeaders, refreshHomeGrowth]);
 
   const packMovingObject = useCallback(async (objectId: string, disposition: 'keep' | 'sell' | 'donate'): Promise<void> => {
     if (!networkSession) return; setHomeGrowthBusy(true); setHomeGrowthMessage(null);
-    try { const response = await fetch(`/api/households/${networkSession.householdId}/moving/pack`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ objectId, disposition }) }); if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Packing failed (${response.status})`); await refreshHomeGrowth(); }
+    try { const response = await apiFetch(`/api/households/${networkSession.householdId}/moving/pack`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ objectId, disposition }) }); if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Packing failed (${response.status})`); await refreshHomeGrowth(); }
     catch (cause) { setHomeGrowthMessage(cause instanceof Error ? cause.message : String(cause)); } finally { setHomeGrowthBusy(false); }
   }, [authHeaders, networkSession, refreshHomeGrowth]);
 
   const commitMove = useCallback(async (): Promise<void> => {
     if (!networkSession) return; setHomeGrowthBusy(true); setHomeGrowthMessage(null);
     try {
-      const response = await fetch(`/api/households/${networkSession.householdId}/moving/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ idempotencyKey: `moving:${crypto.randomUUID()}` }) });
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/moving/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ idempotencyKey: `moving:${crypto.randomUUID()}` }) });
       if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Move failed (${response.status})`);
       const result = await response.json() as { household: { propertyId?: string } };
       if (result.household.propertyId) onPropertyChanged?.(result.household.propertyId);
@@ -673,24 +743,25 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
   const proposeRenovation = useCallback(async (renovationId: string): Promise<void> => {
     if (!networkSession) return; setHomeGrowthBusy(true); setHomeGrowthMessage(null);
-    try { const response = await fetch(`/api/households/${networkSession.householdId}/renovation/votes`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ renovationId }) }); if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Renovation vote failed (${response.status})`); setHomeGrowthMessage('The renovation is up for a household decision.'); await refreshHomeGrowth(); }
+    try { const response = await apiFetch(`/api/households/${networkSession.householdId}/renovation/votes`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ renovationId }) }); if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Renovation vote failed (${response.status})`); setHomeGrowthMessage('The renovation is up for a household decision.'); await refreshHomeGrowth(); }
     catch (cause) { setHomeGrowthMessage(cause instanceof Error ? cause.message : String(cause)); } finally { setHomeGrowthBusy(false); }
   }, [authHeaders, networkSession, refreshHomeGrowth]);
 
   const castRenovation = useCallback(async (voteId: string, choice: 'yes' | 'no'): Promise<void> => {
     setHomeGrowthBusy(true); setHomeGrowthMessage(null);
-    try { const response = await fetch(`/api/renovation/votes/${voteId}/cast`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ choice }) }); if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Renovation vote failed (${response.status})`); await refreshHomeGrowth(); }
+    try { const response = await apiFetch(`/api/renovation/votes/${voteId}/cast`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ choice }) }); if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Renovation vote failed (${response.status})`); await refreshHomeGrowth(); }
     catch (cause) { setHomeGrowthMessage(cause instanceof Error ? cause.message : String(cause)); } finally { setHomeGrowthBusy(false); }
   }, [authHeaders, refreshHomeGrowth]);
 
   const commitRenovation = useCallback(async (voteId: string): Promise<void> => {
     setHomeGrowthBusy(true); setHomeGrowthMessage(null);
-    try { const response = await fetch(`/api/renovation/votes/${voteId}/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ idempotencyKey: `renovation:${crypto.randomUUID()}` }) }); if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Renovation failed (${response.status})`); setHomeGrowthMessage('The change is part of your home now.'); await refreshHomeGrowth(); void captureAutomaticMemory('home_renovation'); }
+    try { const response = await apiFetch(`/api/renovation/votes/${voteId}/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ idempotencyKey: `renovation:${crypto.randomUUID()}` }) }); if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? `Renovation failed (${response.status})`); setHomeGrowthMessage('The change is part of your home now.'); await refreshHomeGrowth(); void captureAutomaticMemory('home_renovation'); }
     catch (cause) { setHomeGrowthMessage(cause instanceof Error ? cause.message : String(cause)); } finally { setHomeGrowthBusy(false); }
   }, [authHeaders, captureAutomaticMemory, refreshHomeGrowth]);
 
   useEffect(() => {
     let cancelled = false;
+    let ownedEngine: GameEngine | null = null;
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
@@ -698,42 +769,104 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     void refreshHomeState().catch(() => undefined);
     void refreshMemories().catch(() => undefined);
 
-    const forceRendererBackend = new URLSearchParams(window.location.search).get('renderer') === 'webgpu' ? undefined : 'webgl2' as const;
+    const requestedRenderer = new URLSearchParams(window.location.search).get('renderer');
+    const forceRendererBackend = compatibilityRenderer || requestedRenderer === 'webgl2' ? 'webgl2' as const : undefined;
 
-    void GameEngine.create({
-      canvas,
-      container,
-      initialWeather: 'clear',
-      initialGameMinutes: 17 * 60 + 20,
-      ...(networkSession ? { networkSession } : {}),
-      onConnectionState: setConnection,
-      onNetworkError: setError,
-      onInteractionPrompt: setInteractionPrompt,
-      onLocationChange: setLocation,
-      onDomesticAction: (action, interactionId) => void persistDomesticAction(action, interactionId),
-      onVoiceState: setVoiceState,
-      onMoment: (message) => { setToast(message); window.setTimeout(() => setToast(null), 2600); },
-      onVenueInteraction: (venue) => setVenueSession(venue),
-      onKitchenInteraction: openKitchen,
-      onAutoStand: () => { const position = engineRef.current?.getPlayerPosition(); if (position) setAutoFrom({ x: position.x, z: position.z }); setAutoOpen(true); setAutoMessage(null); },
-      onMemoryOpportunity: (tag) => void captureAutomaticMemory(tag),
-      onActivityInteraction: (activityId) => void openActivity(activityId),
-      onNpcInteraction: (nextNpcId) => void openNpc(nextNpcId),
-      onHomeGrowthInteraction: openHomeGrowth,
-      ...(avatarConfig ? { avatarConfig } : {}),
-      ...(propertyId ? { propertyId } : {}),
-      ...(forceRendererBackend ? { forceRendererBackend } : {}),
-    }).then((engine) => {
-      if (cancelled) { engine.dispose(); return; }
-      engineRef.current = engine;
-      void refreshHomeState().catch(() => undefined);
-      engine.applySettings(settings);
-      engine.start();
-      setReady(true);
-    }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
+    const createTask = engineCreateChainRef.current.then(async () => {
+      // React StrictMode replays effects in development. Deferring creation onto this
+      // serialized chain lets the replay cleanup cancel the stale effect before it
+      // initializes a second Rapier/WASM world.
+      await Promise.resolve();
+      if (cancelled) return;
 
-    return () => { cancelled = true; engineRef.current?.dispose(); engineRef.current = null; };
-  }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, propertyId, refreshHomeState, refreshMemories]);
+      try {
+        const engine = await GameEngine.create({
+          canvas,
+          container,
+          initialWeather: 'clear',
+          initialGameMinutes: 17 * 60 + 20,
+          ...(networkSession ? { networkSession } : {}),
+          onConnectionState: setConnection,
+          onNetworkError: setError,
+          onHomeStateChanged: () => void refreshHomeState().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))),
+          onCookingStateChanged: () => void refreshKitchen().catch((cause: unknown) => setCookingMessage(cause instanceof Error ? cause.message : String(cause))),
+          onActivityStateChanged: () => void refreshActiveActivity().catch((cause: unknown) => setActivityMessage(cause instanceof Error ? cause.message : String(cause))),
+          onInteractionPrompt: setInteractionPrompt,
+          onLocationChange: setLocation,
+          onDomesticStep: persistDomesticStep,
+          onDomesticAction: persistDomesticAction,
+          onVoiceState: setVoiceState,
+          onMoment: (message) => { setToast(message); window.setTimeout(() => setToast(null), 2600); },
+          onVenueInteraction: (venue) => setVenueSession(venue),
+          onKitchenInteraction: openKitchen,
+          onAutoStand: () => { const position = engineRef.current?.getPlayerPosition(); if (position) setAutoFrom({ x: position.x, z: position.z }); setAutoOpen(true); setAutoMessage(null); },
+          onMemoryOpportunity: (tag) => void captureAutomaticMemory(tag),
+          onActivityInteraction: (activityId) => void openActivity(activityId),
+          onNpcInteraction: (nextNpcId) => void openNpc(nextNpcId),
+          onHomeGrowthInteraction: openHomeGrowth,
+          onFirstSessionAction,
+          recoverRenderer: compatibilityRenderer,
+          onRendererDeviceLost: () => { if (!cancelled) recoverRenderer(); },
+          ...(avatarConfig ? { avatarConfig } : {}),
+          ...(propertyId ? { propertyId } : {}),
+          ...(forceRendererBackend ? { forceRendererBackend } : {}),
+        });
+
+        if (cancelled) {
+          engine.dispose();
+          return;
+        }
+
+        ownedEngine = engine;
+        engine.applySettings(settingsRef.current);
+        await engine.prepareFirstPlayable();
+        if (cancelled) {
+          if (ownedEngine === engine) { engine.dispose(); ownedEngine = null; }
+          return;
+        }
+
+        ownedEngine = engine;
+        engineRef.current = engine;
+        void refreshHomeState().catch(() => undefined);
+        engine.start();
+      if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('worldReview') === '1') {
+        (window as Window & { __amayaReviewTravel?: (destinationId: string) => void }).__amayaReviewTravel =
+          (destinationId) => engine.startAutoRide(destinationId, true);
+        (window as Window & { __amayaReviewPlace?: (x: number, z: number) => void }).__amayaReviewPlace =
+          (x, z) => engine.placeForWorldReview(x, z);
+        (window as Window & { __amayaReviewFace?: (yaw: number) => void }).__amayaReviewFace =
+          (yaw) => engine.faceForWorldReview(yaw);
+        (window as Window & { __amayaReviewWeather?: (weather: WeatherState) => void }).__amayaReviewWeather =
+          (weather) => { engine.setWeather(weather); setWeatherState(weather); };
+        (window as Window & { __amayaReviewTime?: (minutes: number) => void }).__amayaReviewTime =
+          (minutes) => engine.setGameTime(minutes);
+        (window as Window & { __amayaReviewWalkRoute?: () => unknown }).__amayaReviewWalkRoute =
+          () => engine.reviewWalkHeroRoute();
+        (window as Window & { __amayaReviewMetrics?: (reset?: boolean) => unknown }).__amayaReviewMetrics =
+          (reset) => { if (reset) engine.performance.resetFrameSamples(); return structuredClone(engine.performance.read()); };
+      }
+        setReady(true);
+      } catch (cause) {
+        if (ownedEngine) {
+          ownedEngine.dispose();
+          if (engineRef.current === ownedEngine) engineRef.current = null;
+          ownedEngine = null;
+        }
+        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    });
+
+    engineCreateChainRef.current = createTask.catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+delete (window as Window & { __amayaReviewTravel?: (destinationId: string) => void }).__amayaReviewTravel; delete (window as Window & { __amayaReviewPlace?: (x: number, z: number) => void }).__amayaReviewPlace; delete (window as Window & { __amayaReviewFace?: (yaw: number) => void }).__amayaReviewFace; delete (window as Window & { __amayaReviewWeather?: (weather: WeatherState) => void }).__amayaReviewWeather; delete (window as Window & { __amayaReviewTime?: (minutes: number) => void }).__amayaReviewTime; delete (window as Window & { __amayaReviewWalkRoute?: () => unknown }).__amayaReviewWalkRoute; delete (window as Window & { __amayaReviewMetrics?: (reset?: boolean) => unknown }).__amayaReviewMetrics;
+      if (!ownedEngine) return;
+      ownedEngine.dispose();
+      if (engineRef.current === ownedEngine) engineRef.current = null;
+      ownedEngine = null;
+    };
+  }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, persistDomesticStep, propertyId, refreshActiveActivity, refreshHomeState, refreshKitchen, refreshMemories, onFirstSessionAction, compatibilityRenderer, recoverRenderer]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -759,19 +892,20 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   useEffect(() => {
     engineRef.current?.setInputEnabled(!anyPanelOpen);
     if (anyPanelOpen && document.pointerLockElement) void document.exitPointerLock();
-  }, [anyPanelOpen]);
+  }, [anyPanelOpen, ready]);
 
   useEffect(() => {
     const normalized = normalizeGameSettings(settings);
+    settingsRef.current = normalized;
     localStorage.setItem('together:game-settings', JSON.stringify(normalized));
     document.documentElement.style.setProperty('--ui-scale', String(normalized.uiScale));
     document.documentElement.classList.toggle('high-contrast-prompts', normalized.highContrastPrompt);
     engineRef.current?.applySettings(normalized);
   }, [settings]);
 
-  const setWeather = (weather: WeatherState) => engineRef.current?.setWeather(weather);
+  const setWeather = (weather: WeatherState) => { engineRef.current?.setWeather(weather); setWeatherState(weather); };
   return <div ref={containerRef} className="game-shell">
-    <canvas ref={canvasRef} className="game-canvas" aria-label="Amaya Bay 3D world" />
+    <canvas key={compatibilityRenderer ? 'compatibility' : 'preferred'} ref={canvasRef} className="game-canvas" aria-label="Amaya Bay 3D world" />
     {!ready && !error && <div className="world-loading">Preparing Amaya Bay…</div>}
     {error && <div className="compatibility-card"><strong>Amaya Bay notice</strong><span>{error}</span><button className="quiet-action" onClick={() => setError(null)}>Dismiss</button></div>}
     {location && !anyPanelOpen && <div className="location-chip">{location}</div>}
@@ -779,6 +913,8 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     {networkSession && !anyPanelOpen && <div className={`connection-pill ${connection}`}>{connection === 'connected' ? 'household connected' : connection}</div>}
     {toast && <div className="memory-toast">{toast}</div>}
     {ready && !anyPanelOpen && <div className="quick-keys"><span>P · Photo</span><span>B · Memories</span><span>Tab · Life</span><span>M · Map</span><span>O · Settings</span><span>C · Decorate</span><span>J · Story</span><span>V · Camera</span></div>}
+    {ready && !anyPanelOpen && !guideHidden && <FirstSessionGuide completed={guideCompleted} onMap={() => setMapOpen(true)} onSkip={() => { setGuideHidden(true); localStorage.setItem(`${guideStorageKey}:hidden`, 'true'); }}/ >}
+    {ready && !anyPanelOpen && guideHidden && <button className="guide-replay" onClick={() => { setGuideCompleted([]); setGuideHidden(false); localStorage.removeItem(guideStorageKey); localStorage.removeItem(`${guideStorageKey}:hidden`); engineRef.current?.resetFirstSessionProgress(); }}>First day guide ↗</button>}
     {ready && !anyPanelOpen && networkSession && <div className="voice-controls" aria-label="household voice controls">
       {voiceState.mode === 'off' ? <>
         <button onClick={() => void engineRef.current?.enableVoice('household').catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))}>Voice · Household</button>
@@ -790,7 +926,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
         <button onClick={() => engineRef.current?.disableVoice()}>Off</button>
       </>}
     </div>}
-    {ready && !anyPanelOpen && <div className="weather-debug" aria-label="development weather controls"><span>DEV</span><button onClick={() => setWeather('clear')}>Clear</button><button onClick={() => setWeather('light_rain')}>Rain</button><button onClick={() => setWeather('monsoon_rain')}>Monsoon</button></div>}
+    {ready && !anyPanelOpen && import.meta.env.DEV && new URLSearchParams(window.location.search).get('worldReview') === '1' && <div className="weather-debug" aria-label="development weather controls"><span>DEV</span><button onClick={() => setWeather('clear')}>Clear</button><button onClick={() => setWeather('light_rain')}>Rain</button><button onClick={() => setWeather('monsoon_rain')}>Monsoon</button></div>}
     {captureBusy && <div className="capture-flash" aria-hidden="true" />}
     {networkSession && <MemoryBook open={memoryOpen} memories={memories} networkSession={networkSession} onClose={() => setBookOpen(false)} onCaptionChange={updateMemoryCaption} onExport={exportMemory} />}
     <LifePanel open={lifeOpen} data={lifeData} onClose={() => setLifeOpen(false)} />
@@ -804,7 +940,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       onClose={() => { setDecorateOpen(false); engineRef.current?.clearHomeDecorationPreview(); }} />}
     <StoryPanel open={storyOpen} active={storyActive} eligible={storyEligible} definitions={storyEvents} busy={storyBusy} message={storyMessage} onStart={startStory} onTask={updateStoryTask} onResolve={resolveStory} onClose={() => setStoryOpen(false)} />
     <CookingPanel open={cookingOpen} recipes={recipes} inventory={kitchenInventory} session={cookingSession} busy={cookingBusy} message={cookingMessage} onStart={startCooking} onStep={performCookingStep} onClose={() => setCookingOpen(false)} />
-    <NpcPanel npcId={npcId} relationship={npcRelationship} weather={engineRef.current?.getMemoryContext().weather ?? 'clear'} busy={npcBusy} onTalk={talkToNpc} onClose={() => setNpcId(null)} />
+    <NpcPanel npcId={npcId} relationship={npcRelationship} weather={weatherState} busy={npcBusy} onTalk={talkToNpc} onClose={() => setNpcId(null)} />
     {propertyId && <HomeGrowthPanel open={homeGrowthOpen} currentPropertyId={propertyId} household={homeGrowthHousehold} homeObjects={homeState?.objects ?? []} moving={movingState} renovation={renovationState} userId={networkSession?.userId} busy={homeGrowthBusy} message={homeGrowthMessage} onProposeMove={proposeMove} onCastMove={castMove} onPack={packMovingObject} onCommitMove={commitMove} onProposeRenovation={proposeRenovation} onCastRenovation={castRenovation} onCommitRenovation={commitRenovation} onClose={() => setHomeGrowthOpen(false)} />}
     <ActivityPanel session={activitySession} {...(networkSession ? { userId: networkSession.userId } : {})} busy={activityBusy} message={activityMessage} onStep={advanceActivity} onClose={() => setActivitySession(null)} />
     <VenuePanel venue={venueSession} {...(networkSession ? { networkSession } : {})} onClose={() => setVenueSession(null)} onStartJob={(jobId) => void startJob(jobId)} onMoment={(message) => { setToast(message); window.setTimeout(() => setToast(null), 2600); }} />

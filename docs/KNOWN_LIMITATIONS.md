@@ -2,23 +2,21 @@
 
 This file is intentionally explicit. The current build is a large coherent implementation/handoff, but it is not honest to call it finished release-quality V1.
 
-## Environment verification blockers
+## Verification coverage that is still missing
 
-The supplied execution environment has:
+Connected GitHub Actions now performs the authoritative Node 24 + frozen pnpm install, full typecheck/lint/test/content/repository/build gate, Chromium installation, and a real client+server playable-frame Playwright test. The verified baseline is recorded in `docs/VERIFICATION.md`.
 
-- Node 22.16.0, while the project requires Node 24 LTS;
-- no installed pnpm executable;
-- Corepack but no npm-registry DNS access, so it cannot fetch pnpm 12.4.1;
-- a copied Windows-era `node_modules` tree missing Linux Rollup native optional dependencies;
-- an older dependency set missing the declared ESLint TypeScript plugins, Express/Supertest declarations and current Drizzle package shape.
+Current verification limitations are therefore no longer dependency-install blockers. What remains unverified is primarily real-device/release acceptance:
 
-Consequences:
+- real WebGPU E2E across the supported desktop browser/GPU matrix;
+- Medium 1080p performance on target hardware;
+- full controller/UI matrix;
+- real-device Couple/Friends latency/loss/long-duration soak beyond the automated two-context Couple and six-context Friends Chromium acceptance;
+- production Supabase/RLS/private Memory storage against a real hosted project;
+- production TURN voice traversal across different networks;
+- final production-art/audio/LOD/compression behavior.
 
-- `pnpm install`, `pnpm verify`, full Vite production build, full server TypeScript and Playwright cannot be honestly completed here;
-- no trustworthy `pnpm-lock.yaml` can be generated offline;
-- the first connected Node 24 machine must run `pnpm install`, commit the generated lockfile, then run the complete quality gate.
-
-The independent sandbox-safe suite is green; see `docs/VERIFICATION.md`.
+The CI browser gate intentionally uses explicit WebGL2 compatibility mode because GitHub's headless virtual GPU is not a trustworthy WebGPU target. Normal application startup remains WebGPU-first and has automated renderer-selection coverage.
 
 ## Visual/asset quality
 
@@ -31,8 +29,8 @@ The independent sandbox-safe suite is green; see `docs/VERIFICATION.md`.
 
 ## World/NPC simulation
 
-- Amaya Bay has the full semantic 900m-class layout, seven districts, 28 subareas and streamed chunk architecture, but final hand-authored road/terrain meshes are still development-level.
-- Ambient NPCs use deterministic local movement/update tiers; a fully baked per-chunk navmesh, batched path service and authored door/interior traversal network are not finished.
+- Amaya Bay has the full semantic 900m-class layout, seven districts, 28 subareas, streamed chunk architecture and a shared world-space road/path/promenade network, but final production-grade road/terrain art is still development-level.
+- Ambient NPCs use deterministic local movement/update tiers and two dynamic instanced render batches; a fully baked per-chunk navmesh, batched path service and authored door/interior traversal network are not finished.
 - Named NPC schedule/memory/dialogue state is implemented; animation/facial/gaze production polish is not.
 - Public other-household street presence is intentionally not V1-critical and is not implemented.
 
@@ -59,12 +57,13 @@ The independent sandbox-safe suite is green; see `docs/VERIFICATION.md`.
 ## Voice
 
 - WebRTC peer signaling, modes, mute/PTT and proximity-distance hooks are implemented.
-- No TURN credentials were available, so production NAT traversal has not been verified.
-- 2–6 person peer mesh needs real-device soak testing before release.
+- Production credentials are now server-issued: the browser never receives the long-lived TURN shared secret.
+- Real TURN/NAT traversal has still not been verified across different networks.
+- The six-browser Friends acceptance proves core household peer presence/reconnect, not real-device voice quality or long-duration peer-mesh stability.
 
 ## Performance
 
-- Frame/draw-call/triangle/chunk metrics exist, streaming is implemented and quality tiers now change pixel ratio/shadows/far residency without changing gameplay collision.
+- Frame/draw-call/triangle/chunk metrics exist, streaming is implemented, structural dressing/vegetation are statically batched, ambient walkers are instanced, and quality tiers change pixel ratio/shadows/far residency without changing gameplay collision.
 - The PRD's 60fps Medium target on Iris Xe-class hardware has **not** been measured in this environment.
 - No authoritative GPU-memory benchmark has been run.
 - Final asset compression/LOD tuning cannot be completed until production assets exist.
@@ -73,14 +72,16 @@ The independent sandbox-safe suite is green; see `docs/VERIFICATION.md`.
 
 - FOV, head bob, reduced motion, UI scale, high-contrast prompts, subtitles, master volume, keyboard remapping and controller foundations exist.
 - Full controller usability across every UI panel needs real-device testing.
-- Browser/WebGPU/WebGL2 matrix testing remains outstanding.
+- The WebGL2 Chromium playable-frame CI gate is green, but the real WebGPU/WebGL2/browser matrix remains outstanding.
 
 ## Authentication/security/production infrastructure
 
-- Supabase-oriented adapters and server-authoritative permission boundaries exist.
-- Production Supabase RLS/storage configuration must be verified against a real project.
-- No production Redis adapter is required for single-instance V1 and none is wired; horizontal scaling would require Socket.IO coordination.
-- Rate-limiting/production observability coverage is not yet at the full PRD release target.
+- Production client auth now uses Supabase anonymous sessions with Bearer tokens across REST, Socket.IO and voice ICE configuration; local header auth fails closed in production.
+- Production startup validates required Supabase/origin/TURN configuration, exposes health/readiness probes, emits request IDs and structured completion logs, restricts production CORS, uses a fixed-window HTTP abuse guard and performs graceful shutdown.
+- Twelve ordered migrations are validated; a deterministic advisory-locked/checksummed migration runner and private Memory Storage bucket bootstrap are present.
+- Production Supabase credentials, RLS behavior, migration execution and private Storage must still be verified against a real hosted project.
+- No Redis adapter is required for the intentional single-instance V1 deployment; horizontal scaling would require shared Socket.IO/rate-limit coordination.
+- Per-socket join/movement/WebRTC signaling flood budgets are implemented. Real production monitoring/alerting, distributed abuse controls and latency/loss soak remain release-operations work.
 
 ## Debug tooling
 
@@ -89,3 +90,14 @@ The build includes performance/debug foundations but not every PRD-requested edi
 ## V3.1 technical-direction supersession
 
 As of 2026-09-15, `docs/PRD.md` V3.1 is the authoritative product and technical direction. Together V1 remains a browser-only TypeScript/Three.js product: WebGPU-first via `three/webgpu`, with WebGL2 compatibility fallback, Rapier, React for application UI only, Socket.IO, and the existing server/shared/content architecture. Core Amaya Bay art is code-authored, compiled once into shared immutable runtime assets, then rendered through measured merging, instancing, LOD, and streaming. Blender/Maya/hand-authored GLB/KTX2 exports are optional future inputs only and are not a V1 production dependency. Medium is the normal supported-desktop baseline; Low is a complete fallback. Hardware FPS claims remain unverified until a real browser profile is recorded.
+
+
+## Current world-building pass — 2026-09-22
+
+See [World build status](WORLD_BUILD_2026_09.md) for implemented visuals, actual verification, and outstanding work. This pass is **in progress**; finished-reference quality, full route validation and optimization are not claimed. Headless default WebGPU lost its graphics device, while explicit WebGL2 rendered and passed the home-exit E2E. Earlier status entries below/above are historical.
+
+
+
+## World route checkpoint — 2026-09-23
+
+The accelerated browser player/Rapier route audit now passes from the 1BHK through Lantern Street to Bay Steps after removal of a conflicting flat road collider. This does not certify human-paced camera/composition review or final reference-quality art. The old Linux dependency blockers above describe a historical environment; the current Windows workspace passes `pnpm verify`.
