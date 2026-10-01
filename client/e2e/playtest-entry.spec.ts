@@ -7,7 +7,7 @@ test('custom arrival leads into a playable, resumable first day', async ({ page 
   test.setTimeout(180_000);
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   const output = path.resolve('../.art-review/playtest-entry'); await mkdir(output, { recursive: true });
-  await page.goto('http://127.0.0.1:5188/?renderer=webgl2&worldReview=1');
+  await page.goto('/?renderer=webgl2&worldReview=1');
   await expect(page.getByRole('heading', { name: 'Make yourself at home.' })).toBeVisible();
   expect(await page.locator('.arrival-landscape').evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThan(400);
   expect(await page.locator('.arrival-card').evaluate(element => getComputedStyle(element).borderTopLeftRadius)).toBe('0px');
@@ -62,7 +62,7 @@ test('custom arrival leads into a playable, resumable first day', async ({ page 
 
 test('arrival remains usable in a small browser window', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('http://127.0.0.1:5188/');
+  await page.goto('/');
   await expect(page.getByLabel('Display name')).toBeVisible();
   await page.getByRole('button', { name: 'Continue', exact: true }).scrollIntoViewIfNeeded();
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeInViewport();
@@ -72,7 +72,7 @@ test('arrival remains usable in a small browser window', async ({ page }) => {
 test('the ordinary browser URL selects a working renderer', async ({ page }) => {
   test.setTimeout(120_000);
   page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') console.log('Browser graphics:', message.text().slice(0, 600)); });
-  await page.goto('http://127.0.0.1:5188/?worldReview=1');
+  await page.goto('/?worldReview=1');
   await page.getByLabel('Display name').fill('Browser playtest');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByRole('button', { name: 'Explore Amaya Bay solo', exact: true }).click();

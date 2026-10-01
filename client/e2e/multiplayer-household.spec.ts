@@ -83,7 +83,7 @@ async function enterIdentity(page: Page, displayName: string): Promise<void> {
   await page.goto('/?renderer=webgl2&worldReview=1', { waitUntil: 'networkidle' });
   await page.getByLabel('Display name').fill(displayName);
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByRole('heading', { name: 'Create a household' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'How will you arrive?' })).toBeVisible();
 }
 
 function captureRuntimeErrors(page: Page, label: string, errors: string[]): void {

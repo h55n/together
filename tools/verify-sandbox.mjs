@@ -5,7 +5,6 @@ const require = createRequire(import.meta.url);
 const tscBin = require.resolve('typescript/bin/tsc');
 const tscCommand = [process.execPath, [tscBin]];
 
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const commands = [
   [process.execPath, ['tools/verify-pure.mjs'], 'pure domain/integration tests'],
   [tscCommand[0], [...tscCommand[1], '-p', 'client/tsconfig.json', '--noEmit'], 'client TypeScript'],

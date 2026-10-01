@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-test('sandbox verification resolves TypeScript through pnpm on every platform', async () => {
+test('sandbox verification uses a local compiler instead of requiring a global tsc executable', async () => {
   const source = await readFile(path.join(process.cwd(), 'tools/verify-sandbox.mjs'), 'utf8');
-  assert.match(source, /const pnpm = process\.platform === 'win32' \? 'pnpm\.cmd' : 'pnpm'/);
-  assert.match(source, /\[pnpm, \['exec', 'tsc', '-p', 'client\/tsconfig\.json'/);
-  assert.match(source, /\[pnpm, \['exec', 'tsc', '-p', 'shared\/tsconfig\.json'/);
-  assert.match(source, /\[pnpm, \['exec', 'tsc', '-p', 'content\/tsconfig\.json'/);
   assert.equal(source.includes("['tsc', ['-p'"), false);
+  assert.ok(source.includes("require.resolve('typescript/bin/tsc')"), 'resolve the workspace compiler');
+  assert.ok(source.includes('process.execPath'), 'execute the compiler with the current Node runtime');
+  for (const workspace of ['client', 'shared', 'content']) {
+    assert.ok(source.includes(`${workspace}/tsconfig.json`), `retain ${workspace} type checking`);
+  }
 });
