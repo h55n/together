@@ -16,13 +16,16 @@ export const PAINTERLY_GRADE_SHADER = {
     highlightTint: { value: new THREE.Color(0xffd9a8) },
     splitStrength: { value: 0.09 },
     vignette: { value: 0.22 },
+    canvas: { value: 0.045 },
+    resolution: { value: new THREE.Vector2(1280, 720) },
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */`
     uniform sampler2D tDiffuse;
-    uniform float vibrance, contrast, splitStrength, vignette;
+    uniform float vibrance, contrast, splitStrength, vignette, canvas;
+    uniform vec2 resolution;
     uniform vec3 shadowTint, highlightTint;
     varying vec2 vUv;
     void main() {
@@ -35,6 +38,11 @@ export const PAINTERLY_GRADE_SHADER = {
       color = (color - 0.5) * contrast + 0.5;
       vec3 split = mix(shadowTint, highlightTint, smoothstep(0.15, 0.85, luma));
       color = mix(color, color * split * 1.6, splitStrength);
+      // Painted-canvas finish: directional brush grain plus fine weave, stronger in midtones.
+      vec2 px = vUv * resolution;
+      float grain = sin(px.x * 0.9 + sin(px.y * 0.37) * 2.0) * sin(px.y * 0.7 + sin(px.x * 0.21) * 2.0);
+      float weave = sin(px.x * 2.1) * sin(px.y * 2.1);
+      color += (grain * 0.6 + weave * 0.4) * canvas * (1.0 - abs(luma - 0.5) * 1.4);
       float edge = smoothstep(0.35, 0.95, length(vUv - 0.5) * 1.35);
       color *= 1.0 - edge * vignette;
       gl_FragColor = vec4(clamp(color, 0.0, 1.0), source.a);
@@ -49,6 +57,7 @@ export class PostPipeline {
   private readonly composer: EffectComposer;
   private readonly bloom: UnrealBloomPass;
   private readonly renderPass: RenderPass;
+  private readonly grade: ShaderPass;
 
   constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
     const size = renderer.getSize(new THREE.Vector2());
@@ -59,7 +68,9 @@ export class PostPipeline {
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
-    this.composer.addPass(new ShaderPass(PAINTERLY_GRADE_SHADER));
+    this.grade = new ShaderPass(PAINTERLY_GRADE_SHADER);
+    this.grade.uniforms.resolution!.value.set(size.x, size.y);
+    this.composer.addPass(this.grade);
   }
 
   setCamera(camera: THREE.Camera): void { this.renderPass.camera = camera; }
@@ -67,6 +78,7 @@ export class PostPipeline {
   setSize(width: number, height: number, pixelRatio: number): void {
     this.composer.setPixelRatio(pixelRatio);
     this.composer.setSize(width, height);
+    this.grade.uniforms.resolution!.value.set(width * pixelRatio, height * pixelRatio);
     this.bloom.resolution.set(width * pixelRatio / 2, height * pixelRatio / 2);
   }
 
