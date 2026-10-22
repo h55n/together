@@ -50,3 +50,4 @@ server/.runtime/
 runtime-temp/
 server/server/
 test-results/
+tools/blender/__pycache__/
