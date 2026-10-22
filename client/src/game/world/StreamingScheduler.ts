@@ -10,6 +10,7 @@ export type StreamingJob = {
 };
 
 export type StreamingSchedulerMetrics = { pendingJobs: number };
+export type StreamingStep = { costMs: number; complete: boolean };
 
 export class StreamingScheduler {
   private jobs: StreamingJob[] = [];
@@ -28,13 +29,18 @@ export class StreamingScheduler {
     this.jobs = [];
   }
 
-  takeFrameBudget(budgetMs: number, commit: (job: StreamingJob) => number, maxJobs = Number.POSITIVE_INFINITY): StreamingJob[] {
+  takeFrameBudget(budgetMs: number, commit: (job: StreamingJob) => number | StreamingStep, maxJobs = Number.POSITIVE_INFINITY): StreamingJob[] {
     const committed: StreamingJob[] = [];
     let elapsedMs = 0;
-    while (this.jobs.length > 0 && elapsedMs < budgetMs && committed.length < maxJobs) {
-      const job = this.jobs.shift()!;
-      const costMs = Math.max(0, commit(job));
-      committed.push(job);
+    let steps = 0;
+    while (this.jobs.length > 0 && elapsedMs < budgetMs && committed.length < maxJobs && steps++ < 1024) {
+      const job = this.jobs[0]!;
+      const result = commit(job);
+      const costMs = Math.max(0, typeof result === 'number' ? result : result.costMs);
+      if (typeof result === 'number' || result.complete) {
+        this.jobs.shift();
+        committed.push(job);
+      }
       elapsedMs += costMs;
     }
     return committed;

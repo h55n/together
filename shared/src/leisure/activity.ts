@@ -1,17 +1,33 @@
+import type { BoardGameState } from './boardGame.js';
 import type { AvatarAction } from '../animation/avatarMotion.js';
+import type { GolfRound } from './miniGolf.js';
+import type { BadmintonMatch } from './badminton.js';
+import type { PicnicState } from './picnic.js';
+import type { CafeState } from './cafe.js';
+import type { TransportRentalState } from '../transport/rental.js';
 
-export type ActivityId = 'picnic' | 'cycling' | 'kayak' | 'badminton' | 'mini_golf' | 'cafe_hangout' | 'board_game' | 'photography';
+export type ActivityId = 'picnic' | 'cycling' | 'kayak' | 'scooter_ride' | 'badminton' | 'mini_golf' | 'cafe_hangout' | 'board_game' | 'photography';
 export type ActivityStep = { id: string; label: string; animation: AvatarAction };
+export type PhotographyCommand = { key: string; expectedRevision: number; memoryId: string };
 export type ActivityState = {
   activityId: ActivityId;
   participants: string[];
   completedStepIds: string[];
   status: 'active' | 'complete';
   score?: number;
+  revision?: number;
+  boardGame?: BoardGameState;
+  picnic?: PicnicState;
+  cafe?: CafeState;
+  transportRental?: TransportRentalState;
+  photographyMemoryId?: string;
+  golf?: GolfRound;
+  badminton?: BadmintonMatch;
+  receipts?: Record<string, { actor: string; fingerprint: string }>;
 };
 
 const PARTICIPANTS: Record<ActivityId, readonly [number, number]> = {
-  picnic: [1, 6], cycling: [1, 6], kayak: [1, 2], badminton: [2, 4], mini_golf: [1, 6], cafe_hangout: [1, 6], board_game: [2, 6], photography: [1, 6],
+  picnic: [1, 6], cycling: [1, 6], kayak: [1, 2], scooter_ride: [1, 2], badminton: [1, 2], mini_golf: [1, 6], cafe_hangout: [1, 6], board_game: [1, 6], photography: [1, 6],
 };
 
 export function activityParticipantLimit(activityId: ActivityId): readonly [number, number] { return PARTICIPANTS[activityId]; }
@@ -33,6 +49,11 @@ const ACTIONS: Record<ActivityId, readonly ActivityStep[]> = {
     { id: 'launch', label: 'Launch the kayak', animation: 'carry' },
     { id: 'paddle', label: 'Paddle through the bay', animation: 'kayak' },
     { id: 'return', label: 'Return the kayak', animation: 'place' },
+  ],
+  scooter_ride: [
+    { id: 'helmet_on', label: 'Put on the helmet', animation: 'point' },
+    { id: 'ride', label: 'Ride through the city', animation: 'scooter' },
+    { id: 'park_scooter', label: 'Park the scooter', animation: 'place' },
   ],
   badminton: [
     { id: 'serve', label: 'Serve the shuttle', animation: 'point' },

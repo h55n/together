@@ -102,7 +102,7 @@ export function DecoratePanel(props: {
     }
   };
 
-  return <section className="game-panel decorate-panel" aria-label="Decorate home">
+  return <section className="game-panel decorate-panel" role="dialog" aria-modal="true" aria-label="Decorate home">
     <header className="panel-header"><div><p className="eyebrow">Home · real room</p><h2>Decorate</h2></div><button className="panel-close" onClick={props.onClose}>Close</button></header>
     <p className="panel-copy">Place objects in the room you are standing in. The preview is local; the household save only changes after server validation.</p>
 

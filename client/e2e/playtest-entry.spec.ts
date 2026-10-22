@@ -43,11 +43,18 @@ test('custom arrival leads into a playable, resumable first day', async ({ page 
   await expect.poll(() => page.evaluate(() => document.pointerLockElement === null)).toBe(true);
   await guide.getByRole('button', { name: /Open the town map/ }).click();
   await expect(page.getByRole('heading', { name: /Amaya Bay/ }).last()).toBeVisible();
+  const mapDialog = page.getByRole('dialog', { name: 'Map of Amaya Bay' });
+  await expect.poll(() => mapDialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Tab');
+  await expect(mapDialog).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Life panel' })).toHaveCount(0);
+  await expect.poll(() => mapDialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
   expect(await page.evaluate(() => document.pointerLockElement === null)).toBe(true);
   const beforeMenuWalk = (await page.getByTestId('debug-overlay').innerText()).match(/position [-\d.]+, [-\d.]+/)?.[0];
   await page.keyboard.down('KeyW'); await page.waitForTimeout(400); await page.keyboard.up('KeyW');
   expect((await page.getByTestId('debug-overlay').innerText()).match(/position [-\d.]+, [-\d.]+/)?.[0]).toBe(beforeMenuWalk);
   await page.keyboard.press('Escape');
+  await expect.poll(() => page.evaluate(() => document.activeElement === document.querySelector('.game-canvas'))).toBe(true);
   await page.screenshot({ path: path.join(output, 'first-day-world.png') });
   await page.getByRole('button', { name: 'Dismiss first day guide' }).click();
   await expect(guide).not.toBeVisible();

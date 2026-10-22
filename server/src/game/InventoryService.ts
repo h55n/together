@@ -1,4 +1,4 @@
-import { addInventoryQuantity, applyWalletTransaction, consumeInventoryRequirements, type InventoryStack, type RecipeDefinition } from '@together/shared';
+import { addInventoryQuantity, applyWalletTransaction, consumeInventoryRequirements, type InventoryRequirement, type InventoryStack, type RecipeDefinition } from '@together/shared';
 import type { GameRepository, HouseholdRecord, InventoryRecord, TransactionRecord } from '../db/GameRepository.js';
 
 type MarketItem = { id: string; price: number };
@@ -64,15 +64,20 @@ export class InventoryService {
   }
 
   async consumeRecipeIngredients(householdId: string, userId: string, recipeId: string, idempotencyKey: string): Promise<InventorySnapshot> {
-    if (idempotencyKey.length < 8) throw new Error('Invalid idempotency key');
     const recipe = this.catalog.recipes.find((candidate) => candidate.id === recipeId);
     if (!recipe) throw new Error('Unknown recipe');
+    return this.consumeProvisions(householdId, userId, recipe.ingredients, idempotencyKey, { recipeId }, recipeId);
+  }
+
+  /** Spends household items once per idempotency key; an exact retry returns the original receipt without spending again. */
+  async consumeProvisions(householdId: string, userId: string, requirements: readonly InventoryRequirement[], idempotencyKey: string, metadata: Record<string, unknown>, itemRef: string): Promise<InventorySnapshot> {
+    if (idempotencyKey.length < 8) throw new Error('Invalid idempotency key');
     const existing = await this.repository.getTransactionByIdempotencyKey(idempotencyKey);
     if (existing) return this.snapshot(householdId, userId, existing);
     await this.authorize(householdId, userId);
     const current = await this.repository.listInventory('household', householdId);
     const stacks: InventoryStack[] = current.map((record) => ({ itemId: record.itemId, quantity: record.quantity, metadata: record.metadata }));
-    const result = consumeInventoryRequirements(stacks, recipe.ingredients);
+    const result = consumeInventoryRequirements(stacks, requirements);
     if (!result.ok) {
       const description = result.missing.map((entry) => `${entry.itemId} ${entry.available}/${entry.required}`).join(', ');
       throw new Error(`Missing ingredients: ${description}`);
@@ -80,7 +85,25 @@ export class InventoryService {
     await this.persistHouseholdInventory(householdId, current, result.inventory);
     const transaction: TransactionRecord = {
       id: crypto.randomUUID(), idempotencyKey, householdId, userId, walletType: 'household', amount: 0,
-      type: 'inventory_consumption', itemRef: recipeId, metadata: { recipeId }, createdAt: new Date().toISOString(),
+      type: 'inventory_consumption', itemRef, metadata, createdAt: new Date().toISOString(),
+    };
+    await this.repository.saveTransaction(transaction);
+    return this.snapshot(householdId, userId, transaction);
+  }
+
+  /** Adds household items once per idempotency key (for example a finished dish); an exact retry adds nothing. */
+  async addProvisions(householdId: string, userId: string, additions: readonly { itemId: string; quantity: number }[], idempotencyKey: string, metadata: Record<string, unknown>, itemRef: string): Promise<InventorySnapshot> {
+    if (idempotencyKey.length < 8) throw new Error('Invalid idempotency key');
+    const existing = await this.repository.getTransactionByIdempotencyKey(idempotencyKey);
+    if (existing) return this.snapshot(householdId, userId, existing);
+    await this.authorize(householdId, userId);
+    const current = await this.repository.listInventory('household', householdId);
+    let stacks: InventoryStack[] = current.map((record) => ({ itemId: record.itemId, quantity: record.quantity, metadata: record.metadata }));
+    for (const addition of additions) stacks = addInventoryQuantity(stacks, addition.itemId, addition.quantity);
+    await this.persistHouseholdInventory(householdId, current, stacks);
+    const transaction: TransactionRecord = {
+      id: crypto.randomUUID(), idempotencyKey, householdId, userId, walletType: 'household', amount: 0,
+      type: 'inventory_consumption', itemRef, metadata: { ...metadata, added: true }, createdAt: new Date().toISOString(),
     };
     await this.repository.saveTransaction(transaction);
     return this.snapshot(householdId, userId, transaction);

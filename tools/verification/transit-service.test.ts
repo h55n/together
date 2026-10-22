@@ -28,3 +28,16 @@ test('unknown destinations and outsiders cannot book a household ride', async ()
   await assert.rejects(() => transit.bookAuto(household.id, 'user-a', { x: 0, z: 0 }, 'not_real', 'auto:test:0002'));
   await assert.rejects(() => transit.bookAuto(household.id, 'outsider', { x: 0, z: 0 }, 'auto_bay_steps', 'auto:test:0003'));
 });
+
+test('independent transit services charge two concurrent trips without losing either debit', async () => {
+  const { repository, household, transit } = await setup();
+  const other = new TransitService(repository);
+  const results = await Promise.all([
+    transit.bookAuto(household.id, 'user-a', { x: -200, z: 150 }, 'auto_bay_steps', 'auto:parallel:1'),
+    other.bookAuto(household.id, 'user-a', { x: -200, z: 150 }, 'auto_bay_steps', 'auto:parallel:2'),
+  ]);
+  const saved = await repository.getHousehold(household.id);
+  assert.equal(saved!.members[0]!.personalWallet, household.members[0]!.personalWallet - results[0]!.fare - results[1]!.fare);
+  assert.equal((await repository.listTransactions(household.id)).length, 2);
+  await assert.rejects(() => transit.bookAuto(household.id, 'user-a', { x: -199, z: 150 }, 'auto_bay_steps', 'auto:parallel:1'), /different transit/);
+});

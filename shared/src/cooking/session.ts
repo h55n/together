@@ -68,7 +68,7 @@ export function completeCookingStep(
   if (!step) throw new Error('Unknown recipe step');
   if (state.stationClaims[step.station] !== playerId) throw new Error(`Station ${step.station} must be claimed by this player`);
   const next = {
-    ...state,
+    ...releaseCookingStation(state, playerId, step.station),
     completedStepIds: [...state.completedStepIds, stepId],
     mistakes: state.mistakes + (mistake ? 1 : 0),
     participants: state.participants.includes(playerId) ? [...state.participants] : [...state.participants, playerId],

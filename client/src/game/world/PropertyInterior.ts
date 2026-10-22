@@ -42,7 +42,7 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
       starter.group,
       [roof.width, roof.thickness, roof.depth],
       [STARTER_HOME_CENTER.x, terrainY + roof.centerY, STARTER_HOME_CENTER.z],
-      materials.get('warmPlaster'),
+      materials.get('interiorPlaster'),
     );
     roofMesh.name = 'home:couple_studio:roof';
     return {
@@ -88,7 +88,7 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
   addWall(group, physics, [halfW - 1.3, 3, 0.18], [center.x - (halfW + 1.3) / 2, 1.5, center.z - halfD], materials);
   addWall(group, physics, [halfW - 1.3, 3, 0.18], [center.x + (halfW + 1.3) / 2, 1.5, center.z - halfD], materials);
   const roof = propertyRoofSpec(size.width, size.depth, 3);
-  const roofMesh = addBox(group, [roof.width, roof.thickness, roof.depth], [center.x, roof.centerY, center.z], materials.get('warmPlaster'));
+  const roofMesh = addBox(group, [roof.width, roof.thickness, roof.depth], [center.x, roof.centerY, center.z], materials.get('interiorPlaster'));
   roofMesh.name = `home:${property.id}:roof`;
 
   // Interior partitions vary with household capacity: more rooms without creating a CAD-style floor plan.
@@ -100,8 +100,9 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
   dressHome(group, materials, center.x, 0, center.z, size.width, size.depth);
 
   // Shared kitchen.
-  addFurniture(group, physics, [4.2, 0.9, 0.72], [center.x - halfW + 2.5, 0.45, center.z + halfD - 0.72], materials.get('concrete'));
-  addFurniture(group, physics, [1.05, 1.85, 0.82], [center.x + halfW - 0.72, 0.925, center.z + halfD - 0.72], materials.get('warmPlaster'));
+  addFurniture(group, physics, [4.2, 0.9, 0.72], [center.x - halfW + 2.5, 0.45, center.z + halfD - 0.72], materials.get('mintPlaster'));
+  addBox(group, [4.28, 0.05, 0.78], [center.x - halfW + 2.5, 0.925, center.z + halfD - 0.72], materials.get('wood'));
+  addFurniture(group, physics, [1.05, 1.85, 0.82], [center.x + halfW - 0.72, 0.925, center.z + halfD - 0.72], materials.get('pastelBlue'));
   const table = addFurniture(group, physics, [1.7, 0.12, 1.1], [center.x - 0.4, 0.76, center.z - 0.4], materials.get('wood'));
   table.name = 'home:shared-table';
 
@@ -112,11 +113,12 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
     const bx = center.x + halfW - 2.3 - col * 3.1;
     const bz = center.z + halfD - 2.5 - row * 3.35;
     addFurniture(group, physics, [1.55, 0.42, 2.45], [bx, 0.21, bz], materials.get('wood'));
-    addBox(group, [1.44, 0.18, 2.32], [bx, 0.51, bz], materials.get(index % 2 ? 'curtainWarm' : 'sagePlaster'));
+    addBox(group, [1.44, 0.18, 2.32], [bx, 0.51, bz], materials.get(index % 2 ? 'pastelPink' : 'mintPlaster'));
   }
 
   // Common-room lived-in detail.
-  addFurniture(group, physics, [2.2, 0.65, 0.88], [center.x - 1.6, 0.325, center.z + 1.2], materials.get('sagePlaster'));
+  addFurniture(group, physics, [2.2, 0.65, 0.88], [center.x - 1.6, 0.325, center.z + 1.2], materials.get('pastelYellow'));
+  addBox(group, [2.6, 0.022, 1.9], [center.x - 0.4, 0.19, center.z - 0.4], materials.get('terracottaPlaster')).name = 'decor:rug';
   addBox(group, [0.72, 0.68, 0.72], [center.x - halfW + 1.1, 0.34, center.z - halfD + 1.3], materials.get('wood')).name = 'moving-box:shared';
   addPlant(group, center.x + halfW - 1.0, center.z - 0.8, materials);
 
@@ -133,7 +135,7 @@ export function buildPropertyInterior(materials: MaterialLibrary, physics: Physi
     simpleInteraction(`${property.id}:cooking`, 'Cook a meal', 'point', interactionX, kitchenZ, 2.1, 8, 0.5),
     interaction(`${property.id}:repair`, 'Tighten loose fitting', 'point', center.x + halfW - 1.3, center.z + 0.2, 2.1, 5, repairSequence, { type: 'repair', repairId: `${property.id}_fitting` }),
     { ...simpleInteraction(`${property.id}:table`, 'Play a board/card game', 'sit', center.x - 0.4, center.z - 0.4, 2.2, 3, 2.4), activityId: 'board_game' },
-    simpleInteraction(`${property.id}:plans`, 'Talk about this home', 'point', center.x - 0.4, center.z - 0.4, 2.2, 8, 0.6),
+    simpleInteraction(`${property.id}:plans`, 'Talk about this home', 'point', center.x - halfW + 1.0, center.z + halfD - 1.0, 1.5, 8, 0.6),
     simpleInteraction(`${property.id}:bed`, 'Rest in your room', 'sleep', center.x + halfW - 2.3, center.z + halfD - 2.5, 2.2, 3, 3),
   ];
 
@@ -154,7 +156,7 @@ function simpleInteraction(id: string, label: string, action: Exclude<AvatarActi
   return { id, label, action, x, z, radius, priority, durationSeconds };
 }
 function addWall(group: THREE.Group, physics: PhysicsWorld, size: [number, number, number], position: [number, number, number], materials: MaterialLibrary): void {
-  addBox(group, size, position, materials.get('warmPlaster'));
+  addBox(group, size, position, materials.get('interiorPlaster'));
   physics.createFixedCuboid({ x: position[0], y: position[1] + group.position.y, z: position[2] }, { x: size[0] / 2, y: size[1] / 2, z: size[2] / 2 });
 }
 function addFurniture(group: THREE.Group, physics: PhysicsWorld, size: [number, number, number], position: [number, number, number], material: THREE.Material): THREE.Mesh {

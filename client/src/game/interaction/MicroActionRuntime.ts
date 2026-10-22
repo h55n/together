@@ -18,7 +18,7 @@ export type SequencedInteraction = {
 export class MicroActionRuntime {
   private session: MicroActionSession | null = null;
   private source: SequencedInteraction | null = null;
-  private cooldown = 0;
+  private pending: { completion: Promise<boolean>; result: boolean | null } | null = null;
   private promptShownForStep: string | null = null;
 
   constructor(
@@ -44,10 +44,20 @@ export class MicroActionRuntime {
     this.performCurrent(player);
   }
 
-  update(deltaSeconds: number, interactPressed: boolean, player: PlayerController): void {
+  update(_deltaSeconds: number, interactPressed: boolean, player: PlayerController): void {
     if (!this.session) return;
-    this.cooldown = Math.max(0, this.cooldown - Math.max(0, deltaSeconds));
-    if (this.cooldown > 0) return;
+    if (this.pending) {
+      if (this.pending.result === null) return;
+      const completed = this.pending.result;
+      this.pending = null;
+      if (!completed) { this.cancel(player); return; }
+      const current = this.session.currentStep;
+      if (!current) { this.cancel(player); return; }
+      this.onStep?.(current, this.source?.id ?? this.session.id);
+      this.session = advanceMicroAction(this.session, current.primitive);
+      if (this.session.status === 'completed') this.finish(player);
+      return;
+    }
     if (this.session.status === 'completed') {
       this.finish(player);
       return;
@@ -66,9 +76,11 @@ export class MicroActionRuntime {
 
   cancel(player: PlayerController): void {
     if (!this.session) return;
+    const pending = this.pending;
+    this.pending = null;
+    if (pending && player.waitForMicroActionCompletion() === pending.completion) player.cancelMicroAction();
     this.session = null;
     this.source = null;
-    this.cooldown = 0;
     this.promptShownForStep = null;
     player.setInteractionLock(false);
     this.onPrompt?.(null);
@@ -80,10 +92,13 @@ export class MicroActionRuntime {
     if (!current || !this.session) return;
     const action = avatarActionForPrimitive(current.primitive);
     const duration = durationForStep(current);
-    player.beginMicroAction(action, duration, true);
-    this.onStep?.(current, this.source?.id ?? this.session.id);
-    this.session = advanceMicroAction(this.session, current.primitive);
-    this.cooldown = duration;
+    if (!player.beginMicroAction(action, duration, true)) { this.cancel(player); return; }
+    const pending = { completion: player.waitForMicroActionCompletion(), result: null as boolean | null };
+    this.pending = pending;
+    void pending.completion.then(
+      completed => { if (this.pending === pending) pending.result = completed; },
+      () => { if (this.pending === pending) pending.result = false; },
+    );
     this.promptShownForStep = null;
     this.onPrompt?.(null);
   }
@@ -93,7 +108,7 @@ export class MicroActionRuntime {
     if (source?.completionAction) this.onComplete?.(source.completionAction, source.id);
     this.session = null;
     this.source = null;
-    this.cooldown = 0;
+    this.pending = null;
     this.promptShownForStep = null;
     player.setInteractionLock(false);
     this.onPrompt?.(null);

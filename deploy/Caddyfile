@@ -1,0 +1,29 @@
+{
+  email {$TLS_EMAIL}
+}
+
+{$SITE_DOMAIN} {
+  encode zstd gzip
+  @backend path /api/* /socket.io/* /healthz /readyz
+  handle @backend {
+    reverse_proxy server:3001
+  }
+  handle /assets/* {
+    root * /srv
+    header Cache-Control "public, max-age=31536000, immutable"
+    file_server
+  }
+  handle {
+    root * /srv
+    header Cache-Control "no-cache"
+    try_files {path} /index.html
+    file_server
+  }
+  header {
+    X-Content-Type-Options nosniff
+    Referrer-Policy strict-origin-when-cross-origin
+    Permissions-Policy "camera=(), microphone=(self)"
+    Strict-Transport-Security "max-age=31536000"
+    -Server
+  }
+}

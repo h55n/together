@@ -23,10 +23,15 @@ export function addVenueDressing(
   ring: Exclude<ResidencyRing, 'unloaded'>,
   materials: MaterialLibrary,
   physics?: PhysicsWorld,
+  deferCollider?: (activate: () => void) => void,
 ): void {
   if (ring === 'horizon') return;
   const colliders: unknown[] = [];
   const previousDispose = root.userData.disposeChunk as (() => void) | undefined;
+  root.userData.disposeChunk = () => {
+    previousDispose?.();
+    for (const collider of colliders.splice(0)) physics?.removeCollider(collider as never);
+  };
 
   for (const venue of venues) {
     if (venue.id === 'cafe_roshan' || venue.id === 'dev_cycle_hut' || venue.id === 'kayak_cove' || venue.id === 'hill_tea_hut') continue;
@@ -41,13 +46,17 @@ export function addVenueDressing(
     // Keep fronts loosely oriented toward the city centre so they address streets rather than look random.
     group.rotation.y = venueYaw(venue);
 
-    const bodyMaterial = profile.family === 'service'
-      ? materials.get('concrete')
+    // Family sets the palette; the venue id picks a pastel within it so shopfronts differ along a street.
+    const palette: readonly WorldMaterialKey[] = profile.family === 'service'
+      ? ['concrete', 'pastelBlue', 'creamPlaster']
       : profile.family === 'hospitality'
-        ? materials.get('warmPlaster')
+        ? ['pastelYellow', 'pastelPink', 'creamPlaster', 'terracottaPlaster']
         : profile.family === 'market'
-          ? materials.get('sagePlaster')
-          : materials.get('warmPlaster');
+          ? ['mintPlaster', 'sagePlaster', 'pastelYellow']
+          : ['creamPlaster', 'warmPlaster', 'pastelBlue'];
+    let venueHash = 0;
+    for (let i = 0; i < venue.id.length; i += 1) venueHash = (venueHash * 31 + venue.id.charCodeAt(i)) >>> 0;
+    const bodyMaterial = materials.get(palette[venueHash % palette.length]!);
 
     const body = box(width, height, depth, bodyMaterial);
     body.position.y = height / 2;
@@ -101,20 +110,15 @@ export function addVenueDressing(
     root.add(group);
     if (ring === 'active' && physics) {
       // Leave the front threshold navigable; the collider is pulled slightly backward.
-      colliders.push(physics.createFixedCuboid(
+      const activate = () => colliders.push(physics.createFixedCuboid(
         { x: venue.position.x, y: y + height / 2, z: venue.position.z },
         { x: width / 2, y: height / 2, z: Math.max(1.7, depth / 2 - 0.72) },
         group.rotation.y,
       ));
+      if (deferCollider) deferCollider(activate); else activate();
     }
   }
 
-  if (physics && colliders.length > 0) {
-    root.userData.disposeChunk = () => {
-      previousDispose?.();
-      for (const collider of colliders) physics.removeCollider(collider as never);
-    };
-  }
 }
 
 function addActiveDetail(

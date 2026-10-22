@@ -13,6 +13,7 @@ export function VenuePanel(props: {
   onClose: () => void;
   onMoment: (message: string) => void;
   onStartJob: (jobId: JobId) => void;
+  jobBusy?: boolean;
 }): ReactElement | null {
   const [wallet, setWallet] = useState<'household' | 'personal'>('household');
   const [busyItem, setBusyItem] = useState<string | null>(null);
@@ -61,7 +62,7 @@ export function VenuePanel(props: {
 
   return <section className="venue-panel panel-surface" role="dialog" aria-modal="true" aria-label={props.venue.displayName}>
     <header className="panel-header"><div><p className="eyebrow">You are here</p><h2>{props.venue.displayName}</h2></div><button className="quiet-action" onClick={props.onClose}>Close</button></header>
-    {localJob && <div className="venue-job-callout"><p className="panel-copy">{localJob.displayName} shifts happen at this location through embodied tasks.</p><button className="primary-action" onClick={() => props.onStartJob(localJob.id)}>Start shift</button></div>}
+    {localJob && <div className="venue-job-callout"><p className="panel-copy">{localJob.displayName} shifts happen at this location through embodied tasks.</p><button className="primary-action" disabled={props.jobBusy} onClick={() => props.onStartJob(localJob.id)}>{props.jobBusy ? 'Opening shift…' : 'Start shift'}</button></div>}
     {props.venue.role === 'grocery_shop' ? <>
       <p className="panel-copy">Pick up what you need while you are physically at this shop. Prices come from the server-owned Amaya Bay catalog.</p>
       <div className="segmented compact"><button className={wallet === 'household' ? 'active' : ''} onClick={() => setWallet('household')}>Household wallet</button><button className={wallet === 'personal' ? 'active' : ''} onClick={() => setWallet('personal')}>Personal wallet</button></div>

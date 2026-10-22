@@ -5,7 +5,7 @@ test('all seven districts render from reachable arrival points', async ({ page }
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  await page.goto(process.env.TOGETHER_E2E_URL ?? 'http://127.0.0.1:5173/?renderer=webgl2&worldReview=1', { waitUntil: 'networkidle' });
+  await page.goto('/?renderer=webgl2&worldReview=1', { waitUntil: 'networkidle' });
   await page.getByLabel('Display name').fill('District reviewer');
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Explore Amaya Bay solo' }).click();

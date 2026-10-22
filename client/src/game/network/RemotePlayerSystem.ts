@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { avatarAppearanceFromConfig, interpolationAlpha, lerpAngle, type AvatarAction, type AvatarConfig, type PlayerSnapshot } from '@together/shared';
 import { PlayerAvatar } from '../player/PlayerAvatar';
+import { displacementLocomotion, type LocomotionSample } from '../player/movementMath';
 
 type RemoteState = {
   avatar: PlayerAvatar;
@@ -16,6 +17,7 @@ export class RemotePlayerSystem {
   readonly root = new THREE.Group();
   private readonly players = new Map<string, RemoteState>();
   private readonly profiles = new Map<string, AvatarConfig>();
+  private readonly previousPosition = new THREE.Vector3();
 
   constructor() {
     this.root.name = 'remote-household-members';
@@ -64,10 +66,12 @@ export class RemotePlayerSystem {
   update(deltaSeconds: number): void {
     const alpha = interpolationAlpha(12, deltaSeconds);
     for (const state of this.players.values()) {
+      this.previousPosition.copy(state.currentPosition);
       state.currentPosition.lerp(state.targetPosition, alpha);
       state.currentYaw = lerpAngle(state.currentYaw, state.targetYaw, alpha);
       state.avatar.setTransform(state.currentPosition, state.currentYaw);
-      animateProceduralBody(state.avatar, state.animation, state.transport, deltaSeconds);
+      const locomotion = displacementLocomotion(this.previousPosition, state.currentPosition, deltaSeconds, state.currentYaw);
+      animateProceduralBody(state.avatar, state.animation, state.transport, deltaSeconds, locomotion);
     }
   }
 
@@ -89,6 +93,12 @@ export class RemotePlayerSystem {
       shirtColor: appearance.shirtColor,
       trouserColor: appearance.trouserColor,
       hairColor: appearance.hairColor,
+      faceBase: appearance.faceBase,
+      hair: appearance.hair,
+      outfitId: appearance.outfitId,
+      outfitContext: appearance.outfitContext,
+      ...(appearance.facialHair ? { facialHair: appearance.facialHair } : {}),
+      ...(appearance.glasses ? { glasses: appearance.glasses } : {}),
     };
   }
 
@@ -120,8 +130,9 @@ const AVATAR_ACTIONS = new Set<AvatarAction>([
   'hand_over','receive','sit','sleep','cycle','scooter','kayak','type','wave','point','laugh','nod','high_five',
 ]);
 
-function animateProceduralBody(avatar: PlayerAvatar, animation: string, transport: PlayerSnapshot['transport'], deltaSeconds: number): void {
-  const action: AvatarAction = AVATAR_ACTIONS.has(animation as AvatarAction) ? animation as AvatarAction : 'idle';
+function animateProceduralBody(avatar: PlayerAvatar, animation: string, transport: PlayerSnapshot['transport'], deltaSeconds: number, locomotion: LocomotionSample): void {
+  let action: AvatarAction = AVATAR_ACTIONS.has(animation as AvatarAction) ? animation as AvatarAction : 'idle';
+  if ((action === 'walk' || action === 'jog') && locomotion.speed === 0) action = 'idle';
   avatar.setTransportMode(transport === 'auto' ? 'auto_rickshaw' : action === 'cycle' ? 'bicycle' : action === 'scooter' ? 'scooter' : action === 'kayak' ? 'kayak' : 'on_foot');
-  avatar.updateMotion(deltaSeconds, action);
+  avatar.updateMotion(deltaSeconds, action, locomotion);
 }

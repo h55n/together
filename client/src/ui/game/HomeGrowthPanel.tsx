@@ -57,7 +57,7 @@ export function HomeGrowthPanel(props: {
     ? eligibleStarterProperties(props.household.type, props.household.memberCount).filter((candidate) => candidate.recordId !== property.recordId)
     : [];
 
-  return <section className="home-growth-panel" aria-label="Home growth and moving">
+  return <section className="home-growth-panel" role="dialog" aria-modal="true" aria-label="Home growth and moving">
     <header className="panel-header"><div><p className="eyebrow">Our home · long-term plans</p><h2>{property.displayName}</h2></div><button className="panel-close" onClick={props.onClose}>Close</button></header>
     <p className="panel-copy">Improve what you have, or slowly prepare for somewhere new. Major changes wait for the household rather than happening while someone is away.</p>
     {props.household && <p className="growth-wallet">Shared savings · <strong>₹{props.household.sharedWallet.toLocaleString('en-IN')}</strong></p>}

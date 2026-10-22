@@ -27,6 +27,16 @@ export class AssetRegistry {
     return asset;
   }
 
+  *prepare(assetId: string, compile: Generator<void, CompiledAsset, void>): Generator<void, CompiledAsset, void> {
+    const cached = this.compiled.get(assetId);
+    if (cached) return cached;
+    const asset = yield* compile;
+    if (asset.assetId !== assetId) throw new Error(`Compiled asset id mismatch: expected ${assetId}, received ${asset.assetId}`);
+    markShared(asset.root);
+    this.compiled.set(assetId, asset);
+    return asset;
+  }
+
   trackPlacement(placementId: string, assetId: string): void {
     if (!this.compiled.has(assetId)) throw new Error(`Cannot place an uncompiled asset: ${assetId}`);
     this.placementAssets.set(placementId, assetId);

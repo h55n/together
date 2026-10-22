@@ -6,6 +6,18 @@ function state(action: AvatarMotionState['action'], elapsed = 0.25): AvatarMotio
   return { action, elapsedSeconds: elapsed, speed: action === 'jog' ? 3.2 : action === 'walk' ? 1.6 : 0 };
 }
 
+test('stationary kayak rests its paddle while measured movement produces strokes', () => {
+  const restingA = sampleAvatarMotion({ action: 'kayak', elapsedSeconds: 0.1, speed: 0 });
+  const restingB = sampleAvatarMotion({ action: 'kayak', elapsedSeconds: 0.6, speed: 0 });
+  assert.equal(restingA.leftArmPitch, restingB.leftArmPitch);
+  assert.equal(restingA.rightArmPitch, restingB.rightArmPitch);
+  assert.equal(restingA.torsoYaw, 0);
+  const paddlingA = sampleAvatarMotion({ action: 'kayak', elapsedSeconds: 0.1, speed: 2.4 });
+  const paddlingB = sampleAvatarMotion({ action: 'kayak', elapsedSeconds: 0.6, speed: 2.4 });
+  assert.ok(Math.abs(paddlingA.leftArmPitch - paddlingB.leftArmPitch) > 0.03);
+  assert.ok(restingA.leftLegPitch > 1, 'Resting posture remains seated');
+});
+
 test('walk and jog produce opposing arm/leg gait instead of a rigid sliding body', () => {
   const walk = sampleAvatarMotion(state('walk', 0.31));
   assert.ok(Math.abs(walk.leftArmPitch) > 0.1);
@@ -55,4 +67,24 @@ test('social and quiet-life animation hooks are distinct', () => {
   assert.ok(wave.rightHandY > 0.2);
   assert.ok(highFive.rightHandY > 0.35);
   assert.ok(Math.abs(typing.leftHandX - typing.rightHandX) > 0.2);
+});
+
+test('blocked walking has no stepping swing and slow walking scales its stride', () => {
+  const stopped = sampleAvatarMotion({ action: 'walk', elapsedSeconds: 0.31, speed: 0 });
+  assert.equal(stopped.leftLegPitch, 0);
+  assert.equal(stopped.rightLegPitch, 0);
+  const slow = sampleAvatarMotion({ action: 'walk', elapsedSeconds: 0.31, speed: 0.4 });
+  const normal = sampleAvatarMotion(state('walk', 0.31));
+  assert.ok(Math.abs(slow.leftLegPitch) < Math.abs(normal.leftLegPitch) * 0.5);
+});
+
+test('backward walking reverses gait and strafing steps laterally', () => {
+  const forward = sampleAvatarMotion({ ...state('walk', 0.2), directionX: 0, directionZ: 1 });
+  const backward = sampleAvatarMotion({ ...state('walk', 0.2), directionX: 0, directionZ: -1 });
+  assert.ok(forward.leftLegPitch * backward.leftLegPitch < 0);
+  const right = sampleAvatarMotion({ ...state('walk', 0.2), directionX: 1, directionZ: 0 });
+  const left = sampleAvatarMotion({ ...state('walk', 0.2), directionX: -1, directionZ: 0 });
+  assert.ok(Math.abs(right.leftLegPitch) < 0.01);
+  assert.ok(Math.abs(right.leftLegRoll) > 0.1);
+  assert.ok(right.leftLegRoll * left.leftLegRoll < 0);
 });

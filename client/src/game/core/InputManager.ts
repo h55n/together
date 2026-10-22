@@ -5,6 +5,7 @@ export type InputSnapshot = {
   moveZ: number;
   jog: boolean;
   interactPressed: boolean;
+  bellPressed?: boolean;
   cameraTogglePressed: boolean;
   transportDismountPressed: boolean;
   lookDeltaX: number;
@@ -46,6 +47,7 @@ export class InputManager {
     window.addEventListener('mouseup', this.onMouseUp);
     window.addEventListener('blur', this.onBlur);
     window.addEventListener('focus', this.onFocus);
+    document.addEventListener('pointerlockchange', this.onPointerLockChange);
     this.canvas.addEventListener('mousedown', this.onMouseDown);
     this.canvas.addEventListener('click', this.requestPointerLock);
   }
@@ -59,6 +61,7 @@ export class InputManager {
       window.removeEventListener('mouseup', this.onMouseUp);
       window.removeEventListener('blur', this.onBlur);
       window.removeEventListener('focus', this.onFocus);
+      document.removeEventListener('pointerlockchange', this.onPointerLockChange);
       this.canvas.removeEventListener('mousedown', this.onMouseDown);
       this.canvas.removeEventListener('click', this.requestPointerLock);
     }
@@ -68,11 +71,12 @@ export class InputManager {
     this.lookDeltaX = 0;
     this.lookDeltaY = 0;
     this.previousGamepadButtons = { ...NEUTRAL_GAMEPAD_BUTTONS };
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock?.();
   }
 
   setBindings(bindings: ControlBindings): void { this.bindings = { ...bindings }; }
 
-  consumeSnapshot(): InputSnapshot {
+  consumeSnapshot(deltaSeconds = 1 / 60): InputSnapshot {
     if (!this.enabled || !this.focused) {
       this.pressed.clear();
       this.lookDeltaX = 0;
@@ -89,6 +93,7 @@ export class InputManager {
     const moveStick = gamepad ? normalizeGamepadAxes(gamepad.axes[0] ?? 0, gamepad.axes[1] ?? 0) : { x: 0, y: 0 };
     const lookStick = gamepad ? normalizeGamepadAxes(gamepad.axes[2] ?? 0, gamepad.axes[3] ?? 0, 0.15) : { x: 0, y: 0 };
     const gamepadButtons = gamepad ? readStandardGamepadButtons(gamepad.buttons.map((button) => button.pressed)) : { ...NEUTRAL_GAMEPAD_BUTTONS };
+    const lookSeconds = Number.isFinite(deltaSeconds) ? Math.max(0, Math.min(0.1, deltaSeconds)) : 0;
     const snapshot: InputSnapshot = {
       moveX: Math.abs(moveStick.x) > 0 ? moveStick.x : right - left,
       moveZ: Math.abs(moveStick.y) > 0 ? -moveStick.y : forward - back,
@@ -96,8 +101,9 @@ export class InputManager {
       interactPressed: this.pressed.has(this.bindings.interact) || (gamepadButtons.interact && !this.previousGamepadButtons.interact),
       cameraTogglePressed: this.pressed.has(this.bindings.cameraToggle) || (gamepadButtons.cameraToggle && !this.previousGamepadButtons.cameraToggle),
       transportDismountPressed: this.pressed.has(this.bindings.dismount) || (gamepadButtons.dismount && !this.previousGamepadButtons.dismount),
-      lookDeltaX: this.lookDeltaX + lookStick.x * 10,
-      lookDeltaY: this.lookDeltaY + lookStick.y * 10,
+      bellPressed: this.pressed.has(this.bindings.bell),
+      lookDeltaX: this.lookDeltaX + lookStick.x * 600 * lookSeconds,
+      lookDeltaY: this.lookDeltaY + lookStick.y * 600 * lookSeconds,
     };
     this.previousGamepadButtons = gamepadButtons;
     this.pressed = new Set();
@@ -129,6 +135,10 @@ export class InputManager {
 
   private readonly onMouseDown = (event: MouseEvent): void => { if (event.button === 0) this.dragging = true; };
   private readonly onMouseUp = (): void => { this.dragging = false; };
+  private readonly onPointerLockChange = (): void => {
+    this.lookDeltaX = 0; this.lookDeltaY = 0; this.dragging = false;
+    if (document.pointerLockElement !== this.canvas) { this.keys.clear(); this.pressed.clear(); }
+  };
   private readonly onFocus = (): void => { this.focused = true; };
   private readonly onBlur = (): void => {
     this.focused = false; this.dragging = false; this.keys.clear(); this.pressed.clear();

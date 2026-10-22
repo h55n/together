@@ -13,7 +13,7 @@ export type LifePanelData = {
 
 export function LifePanel({ open, data, onClose }: { open: boolean; data: LifePanelData; onClose: () => void }): ReactElement | null {
   if (!open) return null;
-  return <aside className="life-panel" role="dialog" aria-label="Life panel">
+  return <aside className="life-panel" role="dialog" aria-modal="true" aria-label="Life panel">
     <header><div><p className="eyebrow">Right now</p><h2>Life</h2></div><button className="paper-button" onClick={onClose}>Close · Tab</button></header>
     <div className="life-block"><span>Place</span><strong>{data.location ?? 'Amaya Bay'}</strong></div>
     <div className="life-row"><div><span>Time</span><strong>{data.time ?? '—'}</strong></div><div><span>Weather</span><strong>{friendly(data.weather ?? 'clear')}</strong></div></div>

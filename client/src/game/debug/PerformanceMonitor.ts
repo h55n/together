@@ -6,6 +6,11 @@ export type PerformanceSnapshot = {
   framesOver33ms: number;
   framesOver50ms: number;
   frameSampleCount: number;
+  intervalFrameCount: number;
+  intervalElapsedMs: number;
+  intervalFramesOver33ms: number;
+  intervalFramesOver50ms: number;
+  intervalMaxFrameMs: number;
   drawCalls: number;
   triangles: number;
   meshes: number;
@@ -39,6 +44,11 @@ export class PerformanceMonitor {
     framesOver33ms: 0,
     framesOver50ms: 0,
     frameSampleCount: 0,
+    intervalFrameCount: 0,
+    intervalElapsedMs: 0,
+    intervalFramesOver33ms: 0,
+    intervalFramesOver50ms: 0,
+    intervalMaxFrameMs: 0,
     drawCalls: 0,
     triangles: 0,
     meshes: 0,
@@ -61,6 +71,11 @@ export class PerformanceMonitor {
   recordFrame(frameMs: number): void {
     if (!Number.isFinite(frameMs)) return;
     const normalized = Math.max(0, frameMs);
+    this.snapshot.intervalFrameCount++;
+    this.snapshot.intervalElapsedMs += normalized;
+    this.snapshot.intervalFramesOver33ms += normalized > 33 ? 1 : 0;
+    this.snapshot.intervalFramesOver50ms += normalized > 50 ? 1 : 0;
+    this.snapshot.intervalMaxFrameMs = Math.max(this.snapshot.intervalMaxFrameMs, normalized);
     this.smoothedFrameMs = this.smoothedFrameMs * 0.9 + normalized * 0.1;
     this.frameSamples.push(normalized);
     if (this.frameSamples.length > MAX_FRAME_SAMPLES) this.frameSamples.shift();
@@ -77,6 +92,11 @@ export class PerformanceMonitor {
     this.frameSamples.length = 0;
     this.smoothedFrameMs = 16.67;
     this.snapshot.fps = 60;
+    this.snapshot.intervalFrameCount = 0;
+    this.snapshot.intervalElapsedMs = 0;
+    this.snapshot.intervalFramesOver33ms = 0;
+    this.snapshot.intervalFramesOver50ms = 0;
+    this.snapshot.intervalMaxFrameMs = 0;
     this.sampleMetricsDirty = true;
   }
 

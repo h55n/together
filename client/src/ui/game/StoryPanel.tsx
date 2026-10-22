@@ -26,7 +26,7 @@ export function StoryPanel(props: {
   const definition = props.active ? props.definitions.find((item) => item.id === props.active?.eventId) : undefined;
   const tasks = definition?.tasks ?? [];
   const ready = props.active && tasks.every((task) => task.optional || (props.active?.taskState[task.id] ?? 'pending') !== 'pending');
-  return <section className="game-panel story-panel" aria-label="Current life story">
+  return <section className="game-panel story-panel" role="dialog" aria-modal="true" aria-label="Current life story">
     <header className="panel-header"><div><p className="eyebrow">Life · quiet stories</p><h2>{definition?.title ?? 'What is happening lately'}</h2></div><button className="panel-close" onClick={props.onClose}>Close</button></header>
     {props.active && definition ? <>
       <p className="panel-copy">This is a situation in your household, not a quest timer. Do these things naturally in the world; use the buttons only to acknowledge the outcome when the physical system cannot infer it yet.</p>

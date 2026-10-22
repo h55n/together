@@ -4,6 +4,31 @@ import { InputManager } from './InputManager';
 describe('InputManager disabled state', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('keeps controller look speed constant across 30 and 120 FPS', () => {
+    vi.stubGlobal('navigator', { getGamepads: () => [{ connected: true, axes: [0, 0, 1, 0], buttons: [] }] });
+    const manager = new InputManager(document.createElement('canvas'));
+    manager.enable();
+    const slow = Array.from({ length: 30 }, () => manager.consumeSnapshot(1 / 30).lookDeltaX).reduce((a, b) => a + b, 0);
+    const fast = Array.from({ length: 120 }, () => manager.consumeSnapshot(1 / 120).lookDeltaX).reduce((a, b) => a + b, 0);
+    expect(slow).toBeCloseTo(fast, 5);
+    manager.disable();
+  });
+
+  it('clears movement and accumulated look when pointer capture is released', () => {
+    const canvas = document.createElement('canvas');
+    const manager = new InputManager(canvas);
+    manager.enable();
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+    canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0 }));
+    document.dispatchEvent(new Event('pointerlockchange'));
+    expect(manager.consumeSnapshot().moveZ).toBe(0);
+    const motion = new MouseEvent('mousemove');
+    Object.defineProperty(motion, 'movementX', { value: 100 });
+    window.dispatchEvent(motion);
+    expect(manager.consumeSnapshot().lookDeltaX).toBe(0);
+    manager.disable();
+  });
+
   it('clears held movement when the browser loses focus', () => {
     const manager = new InputManager(document.createElement('canvas'));
     manager.enable();
@@ -11,6 +36,15 @@ describe('InputManager disabled state', () => {
     expect(manager.consumeSnapshot().moveZ).toBe(1);
     window.dispatchEvent(new Event('blur'));
     expect(manager.consumeSnapshot().moveZ).toBe(0);
+    manager.disable();
+  });
+
+  it('reports the bicycle bell once per press of its binding', () => {
+    const manager = new InputManager(document.createElement('canvas'));
+    manager.enable();
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyR' }));
+    expect(manager.consumeSnapshot().bellPressed).toBe(true);
+    expect(manager.consumeSnapshot().bellPressed).toBe(false);
     manager.disable();
   });
 

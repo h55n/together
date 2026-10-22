@@ -22,8 +22,7 @@ export class JobSessionService {
       id: crypto.randomUUID(), startIdempotencyKey: idempotencyKey, householdId, userId, jobId,
       state: 'active', completedActions: [], mistakes: 0, startedAt: now, updatedAt: now,
     };
-    await this.repository.saveJobSession(session);
-    return this.view(session);
+    return this.view(await this.repository.startOrResumeJobSession(session));
   }
 
   async advance(sessionId: string, userId: string, action: string): Promise<JobSessionView> {

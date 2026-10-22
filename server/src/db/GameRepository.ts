@@ -20,6 +20,11 @@ export type PurchaseCommit = { household: HouseholdRecord; inventory: InventoryR
 export type JobPayoutCommit = { household: HouseholdRecord; transaction: TransactionRecord; session?: JobSessionRecord };
 export type MovingCommit = { household: HouseholdRecord; home: HomeStateRecord | null; transaction: TransactionRecord };
 export type RenovationCommit = { household: HouseholdRecord; home: HomeStateRecord; transaction: TransactionRecord };
+export type TransitCommit = {
+  householdId: string; userId: string; from: { x: number; z: number };
+  destinationId: string; destinationName: string; fare: number; idempotencyKey: string;
+};
+export type TransitCommitResult = { personalWallet: number; transaction: TransactionRecord };
 
 export interface GameRepository {
   saveUserProfile(profile: UserProfileRecord): Promise<void>;
@@ -33,9 +38,11 @@ export interface GameRepository {
   saveHomeState(home: HomeStateRecord): Promise<void>;
   getHomeState(householdId: string): Promise<HomeStateRecord | null>;
   saveTransaction(transaction: TransactionRecord): Promise<void>;
+  commitTransit(input: TransitCommit): Promise<TransitCommitResult>;
   getTransactionByIdempotencyKey(key: string): Promise<TransactionRecord | null>;
   listTransactions(householdId: string): Promise<TransactionRecord[]>;
   saveJobSession(session: JobSessionRecord): Promise<void>;
+  startOrResumeJobSession(session: JobSessionRecord): Promise<JobSessionRecord>;
   getJobSession(id: string): Promise<JobSessionRecord | null>;
   getJobSessionByStartKey(key: string): Promise<JobSessionRecord | null>;
   listJobSessions(householdId: string, userId?: string): Promise<JobSessionRecord[]>;
@@ -55,6 +62,8 @@ export interface GameRepository {
   getStoryInstanceByEvent(householdId: string, eventId: string): Promise<StoryInstanceRecord | null>;
   listStoryInstances(householdId: string): Promise<StoryInstanceRecord[]>;
   saveActivitySession(session: ActivitySessionRecord): Promise<void>;
+  insertActivitySession(session: ActivitySessionRecord): Promise<ActivitySessionRecord>;
+  compareAndSwapActivitySession(session: ActivitySessionRecord, expectedRevision: number): Promise<boolean>;
   getActivitySession(id: string): Promise<ActivitySessionRecord | null>;
   getActivitySessionByIdempotencyKey(key: string): Promise<ActivitySessionRecord | null>;
   listActivitySessions(householdId: string): Promise<ActivitySessionRecord[]>;

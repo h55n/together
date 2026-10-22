@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import { CHUNK_SIZE_METRES, chunkDistance, chunkKey, residencyRing, worldToChunk, type ResidencyRing } from '@together/shared';
 import type { PerformanceMonitor } from '../debug/PerformanceMonitor';
-import { StreamingScheduler, type StreamingJob } from './StreamingScheduler';
+import { StreamingScheduler, type StreamingJob, type StreamingStep } from './StreamingScheduler';
 
-export type ChunkVisualFactory = (chunkX: number, chunkZ: number, ring: Exclude<ResidencyRing, 'unloaded'>, vegetationDetail?: 'near' | 'far') => THREE.Group;
+export type ChunkPreparation = Iterator<void, THREE.Group | undefined, void>;
+export type ChunkVisualFactory = {
+  (chunkX: number, chunkZ: number, ring: Exclude<ResidencyRing, 'unloaded'>, vegetationDetail?: 'near' | 'far'): THREE.Group;
+  prepare?: (chunkX: number, chunkZ: number, ring: Exclude<ResidencyRing, 'unloaded'>, vegetationDetail?: 'near' | 'far') => ChunkPreparation;
+};
 
 type ResidentChunk = {
   key: string;
@@ -24,6 +28,8 @@ export class WorldStreamer {
   private readonly retired: THREE.Group[] = [];
   private updateElapsed = Number.POSITIVE_INFINITY;
   private residencyRadiusChunks = 5;
+  private nearVegetationRadiusChunks = 1;
+  private preparing: { job: StreamingJob; iterator: ChunkPreparation } | undefined;
 
   constructor(private readonly createVisual: ChunkVisualFactory, private readonly performance?: PerformanceMonitor) {
     this.root.name = 'amaya-bay-streamed-chunks';
@@ -53,7 +59,8 @@ export class WorldStreamer {
     this.queueResidency(playerPosition);
     const generationMs = performance.now() - generationStarted;
     const commitStarted = performance.now();
-    this.scheduler.takeFrameBudget(Number.POSITIVE_INFINITY, (job) => this.commitJob(job), Math.max(1, Math.floor(maxJobs)));
+    this.cancelPreparation();
+    this.scheduler.takeFrameBudget(Number.POSITIVE_INFINITY, (job) => this.commitJob(job, true), Math.max(1, Math.floor(maxJobs)));
     const commitMs = performance.now() - commitStarted;
     this.updateElapsed = 0;
     this.recordMetrics(generationMs, commitMs);
@@ -64,6 +71,7 @@ export class WorldStreamer {
   }
 
   refreshNow(playerPosition: THREE.Vector3): void {
+    this.cancelPreparation();
     this.scheduler.clear();
     this.queued.clear();
     this.updateElapsed = Number.POSITIVE_INFINITY;
@@ -74,7 +82,8 @@ export class WorldStreamer {
     const key = chunkKey(center);
     if (this.residents.get(key)?.ring !== 'active' || this.residents.get(key)?.vegetationDetail !== 'near') {
       this.queued.set(key, 'active');
-      this.commitJob({ key, x: center.x, z: center.z, ring: 'active', vegetationDetail: 'near', priority: -1 });
+      this.cancelPreparation();
+      this.commitJob({ key, x: center.x, z: center.z, ring: 'active', vegetationDetail: 'near', priority: -1 }, true);
       this.recordMetrics(0, 0);
     }
   }
@@ -86,7 +95,15 @@ export class WorldStreamer {
     this.updateElapsed = Number.POSITIVE_INFINITY;
   }
 
+  setVegetationScale(scale: number): void {
+    const radius = scale < 0.9 ? 0 : 1;
+    if (radius === this.nearVegetationRadiusChunks) return;
+    this.nearVegetationRadiusChunks = radius;
+    this.updateElapsed = Number.POSITIVE_INFINITY;
+  }
+
   dispose(): void {
+    this.cancelPreparation();
     for (const resident of this.residents.values()) disposeGroup(resident.group);
     for (const retired of this.retired) disposeGroup(retired);
     this.retired.length = 0;
@@ -109,7 +126,7 @@ export class WorldStreamer {
         if (Math.abs(centerX) > 520 || Math.abs(centerZ) > 520) continue;
         const ring = residencyRing(chunkDistance(playerChunk, { x, z }));
         if (ring === 'unloaded') continue;
-        const vegetationDetail = ring === 'active' && chunkDistance(playerChunk, { x, z }) <= 1 ? 'near' : 'far';
+        const vegetationDetail = ring === 'active' && chunkDistance(playerChunk, { x, z }) <= this.nearVegetationRadiusChunks ? 'near' : 'far';
         required.set(chunkKey({ x, z }), { key: chunkKey({ x, z }), x, z, ring, vegetationDetail });
       }
     }
@@ -136,18 +153,46 @@ export class WorldStreamer {
       jobs.push({ ...desired, priority: priorityFor(desired.ring, distance, playerChunk, desired) });
     }
     this.scheduler.reconcile(jobs);
+    const pending = this.preparing;
+    const desired = pending && required.get(pending.job.key);
+    if (pending && (!desired || desired.ring !== pending.job.ring || desired.vegetationDetail !== pending.job.vegetationDetail)) this.cancelPreparation();
   }
 
-  private commitJob(job: StreamingJob): number {
+  private cancelPreparation(): void {
+    const pending = this.preparing;
+    this.preparing = undefined;
+    pending?.iterator.return?.();
+  }
+
+  private commitJob(job: StreamingJob, immediate = false): number | StreamingStep {
     const started = performance.now();
     const expectedRing = this.queued.get(job.key);
     if (expectedRing !== job.ring) return performance.now() - started;
-    const group = this.createVisual(job.x, job.z, job.ring, job.vegetationDetail);
+    let group: THREE.Group;
+    if (!immediate && this.createVisual.prepare) {
+      if (this.preparing?.job.key !== job.key) {
+        this.cancelPreparation();
+        this.preparing = { job, iterator: this.createVisual.prepare(job.x, job.z, job.ring, job.vegetationDetail) };
+      }
+      let result: IteratorResult<void, THREE.Group | undefined>;
+      try { result = this.preparing.iterator.next(); }
+      catch (cause) { this.cancelPreparation(); throw cause; }
+      if (!result.done) return { costMs: performance.now() - started, complete: false };
+      this.preparing = undefined;
+      if (!result.value) throw new Error(`Chunk preparation did not produce ${job.key}`);
+      group = result.value;
+    } else group = this.createVisual(job.x, job.z, job.ring, job.vegetationDetail);
+    try { (group.userData.activateChunk as (() => void) | undefined)?.(); }
+    catch (cause) { disposeGroup(group); throw cause; }
+    delete group.userData.activateChunk;
     group.name = `chunk:${job.key}:${job.ring}`;
     const current = this.residents.get(job.key);
     if (current) {
       this.root.remove(current.group);
-      disposeGroup(current.group);
+      const release = current.group.userData.disposeChunk;
+      if (typeof release === 'function') release();
+      delete current.group.userData.disposeChunk;
+      this.retired.push(current.group);
     }
     this.root.add(group);
     this.residents.set(job.key, { key: job.key, x: job.x, z: job.z, ring: job.ring, vegetationDetail: job.vegetationDetail, group });
@@ -173,10 +218,14 @@ function priorityFor(ring: Exclude<ResidencyRing, 'unloaded'>, distance: number,
   return ringWeight + distance * 10 - directionBias * 0.01;
 }
 
-function disposeGroup(root: THREE.Object3D): void {
+export function disposeGroup(root: THREE.Object3D): void {
   const disposeChunk = root.userData.disposeChunk;
   if (typeof disposeChunk === 'function') disposeChunk();
   root.traverse((object) => {
+    if (object !== root) {
+      const disposeNested = object.userData.disposeChunk;
+      if (typeof disposeNested === 'function') disposeNested();
+    }
     if (!(object instanceof THREE.Mesh || object instanceof THREE.Points)) return;
     if (object instanceof THREE.InstancedMesh) object.dispose();
     if (!object.geometry.userData.togetherShared) object.geometry.dispose();

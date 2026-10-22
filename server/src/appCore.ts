@@ -213,7 +213,7 @@ export function createApp(dependencies: AppDependencies) {
 
   app.post('/api/households/:id/activities/:activityId', authenticate, async (request: AuthenticatedRequest, response, next) => {
     try {
-      const activityId = z.enum(['picnic','cycling','kayak','badminton','mini_golf','cafe_hangout','board_game','photography']).parse(routeParam(request, 'activityId'));
+      const activityId = z.enum(['picnic','cycling','kayak','scooter_ride','badminton','mini_golf','cafe_hangout','board_game','photography']).parse(routeParam(request, 'activityId'));
       const { idempotencyKey } = z.object({ idempotencyKey: z.string().min(8).max(128) }).parse(request.body);
       response.status(201).json(await dependencies.activityService.start(routeParam(request, 'id'), request.identity!.userId, activityId, idempotencyKey));
     } catch (error) { next(error); }
@@ -229,6 +229,88 @@ export function createApp(dependencies: AppDependencies) {
     catch (error) { next(error); }
   });
 
+  app.get('/api/activities/:sessionId/sports', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try { response.json(await dependencies.activityService.sportsSnapshot(routeParam(request, 'sessionId'), request.identity!.userId)); }
+    catch (error) { next(error); }
+  });
+  app.post('/api/activities/:sessionId/sports/start', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try { response.json(await dependencies.activityService.startSports(routeParam(request, 'sessionId'), request.identity!.userId)); }
+    catch (error) { next(error); }
+  });
+  app.post('/api/activities/:sessionId/photography/capture', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const input = z.object({ key: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/), expectedRevision: z.number().int().nonnegative(), memoryId: z.string().uuid() }).strict().parse(request.body);
+      response.json(await dependencies.activityService.photographyCapture(routeParam(request, 'sessionId'), request.identity!.userId, input,
+        async (householdId, imageId) => { await dependencies.memoryImageStore.get(householdId, imageId); }));
+    } catch (error) { next(error); }
+  });
+  app.post('/api/activities/:sessionId/board-game/commands', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const input = z.object({ key: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/), expectedRevision: z.number().int().nonnegative(), kind: z.enum(['flip', 'continue']), index: z.number().int().min(0).max(11).optional() }).strict().parse(request.body);
+      response.json(await dependencies.activityService.boardGameCommand(routeParam(request, 'sessionId'), request.identity!.userId, { key: input.key, expectedRevision: input.expectedRevision, kind: input.kind, ...(input.index === undefined ? {} : { index: input.index }) }));
+    } catch (error) { next(error); }
+  });
+  app.post('/api/activities/:sessionId/picnic/commands', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const base = { key: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/), expectedRevision: z.number().int().nonnegative() };
+      const point = { x: z.number().finite().min(-3).max(3), z: z.number().finite().min(-3).max(3) };
+      const input = z.discriminatedUnion('kind', [
+        z.object({ ...base, kind: z.literal('place_mat'), ...point }).strict(),
+        z.object({ ...base, kind: z.literal('place_item'), item: z.enum(['basket', 'cups', 'flowers', 'lantern']), ...point }).strict(),
+        z.object({ ...base, kind: z.literal('bring_food'), food: z.enum(['mangoes', 'sandwiches', 'samosas', 'idli', 'chai', 'lemon_soda']) }).strict(),
+        z.object({ ...base, kind: z.literal('serve_food'), portionId: z.string().min(1).max(128), recipientId: z.string().min(1).max(128) }).strict(),
+        z.object({ ...base, kind: z.literal('eat_food'), portionId: z.string().min(1).max(128) }).strict(),
+        z.object({ ...base, kind: z.literal('finish') }).strict(),
+      ]).parse(request.body);
+      response.json(await dependencies.activityService.picnicCommand(routeParam(request, 'sessionId'), request.identity!.userId, input));
+    } catch (error) { next(error); }
+  });
+  app.post('/api/activities/:sessionId/cafe/commands', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const base = { key: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/), expectedRevision: z.number().int().nonnegative() };
+      const input = z.discriminatedUnion('kind', [
+        z.object({ ...base, kind: z.literal('choose_seat'), seat: z.number().int().min(1).max(6) }).strict(),
+        z.object({ ...base, kind: z.literal('order_drink'), drink: z.enum(['chai', 'filter_coffee', 'cold_coffee', 'lemon_soda']) }).strict(),
+        z.object({ ...base, kind: z.literal('serve_drink'), orderId: z.string().min(1).max(128), recipientId: z.string().min(1).max(128) }).strict(),
+        z.object({ ...base, kind: z.literal('sip_drink'), orderId: z.string().min(1).max(128) }).strict(),
+        z.object({ ...base, kind: z.literal('finish') }).strict(),
+      ]).parse(request.body);
+      response.json(await dependencies.activityService.cafeCommand(routeParam(request, 'sessionId'), request.identity!.userId, input));
+    } catch (error) { next(error); }
+  });
+  app.post('/api/activities/:sessionId/rental/commands', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const base = { key: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/), expectedRevision: z.number().int().nonnegative() };
+      const rentalId = z.string().min(1).max(128);
+      const input = z.discriminatedUnion('kind', [
+        z.object({ ...base, kind: z.literal('rent') }).strict(),
+        z.object({ ...base, kind: z.literal('acknowledge_safety'), rentalId }).strict(),
+        z.object({ ...base, kind: z.literal('depart'), rentalId }).strict(),
+        z.object({ ...base, kind: z.literal('return'), rentalId }).strict(),
+      ]).parse(request.body);
+      response.json(await dependencies.activityService.rentalCommand(routeParam(request, 'sessionId'), request.identity!.userId, input));
+    } catch (error) { next(error); }
+  });
+  app.post('/api/activities/:sessionId/golf/shots', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const input = z.object({ key: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/), expectedRevision: z.number().int().nonnegative(),
+        angle: z.number().finite().min(-Math.PI).max(Math.PI), power: z.number().finite().gt(0).max(1) }).strict().parse(request.body);
+      response.json(await dependencies.activityService.golfShot(routeParam(request, 'sessionId'), request.identity!.userId, input));
+    } catch (error) { next(error); }
+  });
+  app.post('/api/activities/:sessionId/badminton/commands', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const input = z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/), expectedRevision: z.number().int().nonnegative(),
+        kind: z.enum(['serve', 'hit', 'finish', 'cancel']), aimZ: z.number().finite().min(-4).max(4).optional(),
+        depth: z.number().finite().min(2).max(7.5).optional(), loft: z.number().finite().min(.1).max(4).optional() }).strict().parse(request.body);
+      response.json(await dependencies.activityService.badmintonCommand(routeParam(request, 'sessionId'), request.identity!.userId, {
+        id: input.id, expectedRevision: input.expectedRevision, kind: input.kind,
+        ...(input.aimZ === undefined ? {} : { aimZ: input.aimZ }), ...(input.depth === undefined ? {} : { depth: input.depth }),
+        ...(input.loft === undefined ? {} : { loft: input.loft }),
+      }));
+    } catch (error) { next(error); }
+  });
+
   app.post('/api/households/:id/transit/auto', authenticate, async (request: AuthenticatedRequest, response, next) => {
     try {
       const input = z.object({
@@ -237,6 +319,13 @@ export function createApp(dependencies: AppDependencies) {
         idempotencyKey: z.string().min(8).max(128),
       }).parse(request.body);
       response.status(201).json(await dependencies.transitService.bookAuto(routeParam(request, 'id'), request.identity!.userId, input.from, input.destinationId, input.idempotencyKey));
+    } catch (error) { next(error); }
+  });
+
+  app.get('/api/households/:id/jobs', authenticate, async (request: AuthenticatedRequest, response, next) => {
+    try {
+      response.setHeader('Cache-Control', 'private, no-store');
+      response.json(await dependencies.jobSessionService.list(routeParam(request, 'id'), request.identity!.userId));
     } catch (error) { next(error); }
   });
 

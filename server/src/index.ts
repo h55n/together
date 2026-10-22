@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
-import { rooms } from '@together/shared';
+import { rooms, socketEvents, weatherStateSchema } from '@together/shared';
 import { createApp } from './app.js';
 import { createAuthService } from './auth/AuthService.js';
 import { createGameRepository } from './db/createGameRepository.js';
@@ -23,6 +23,7 @@ import { ActivityService } from './game/ActivityService.js';
 import { items, recipes, storyEvents } from '@together/content';
 import { PropertySelectionService } from './game/PropertySelectionService.js';
 import { TimeService } from './game/TimeService.js';
+import { WorldWeatherService } from './game/WorldWeatherService.js';
 import { logger } from './logging/logger.js';
 import { registerSocketServer } from './socket/registerSocketServer.js';
 import { createMemoryImageStore } from './storage/createMemoryImageStore.js';
@@ -52,9 +53,11 @@ const noteService = new NoteService(repository);
 const profileService = new ProfileService(repository);
 const jobSessionService = new JobSessionService(repository, economyService);
 const transitService = new TransitService(repository);
-const activityService = new ActivityService(repository);
 const memoryImageStore = createMemoryImageStore();
 const timeService = await TimeService.create();
+const worldWeatherService = new WorldWeatherService(process.env.WORLD_WEATHER_FIXED ? weatherStateSchema.parse(process.env.WORLD_WEATHER_FIXED) : null);
+worldWeatherService.advance(timeService.snapshot());
+const activityService = new ActivityService(repository, { environment: () => ({ gameMinute: timeService.snapshot().gameMinute, weather: worldWeatherService.weather() }) }, inventoryService);
 let publishHouseholdEvent: ((householdId: string, event: string, payload: unknown) => void) | undefined;
 const app = createApp({
   authService,
@@ -85,10 +88,13 @@ const io = new Server(httpServer, {
 publishHouseholdEvent = (householdId, event, payload) => {
   io.to(rooms.household(householdId)).emit(event, payload);
 };
-const onlinePresence = registerSocketServer(io, { authService, householdService, timeService, profileService });
+const onlinePresence = registerSocketServer(io, { authService, householdService, timeService, profileService, activityService, worldWeatherService });
 
 const timeTimer = setInterval(() => {
-  io.emit('time:sync', timeService.snapshot());
+  const cityTime = timeService.snapshot();
+  io.emit('time:sync', cityTime);
+  worldWeatherService.advance(cityTime);
+  io.emit(socketEvents.weatherSync, worldWeatherService.snapshot());
   void timeService.persist().catch((error) => logger.warn('Could not persist city time', { error: error instanceof Error ? error.message : String(error) }));
 }, 5_000);
 timeTimer.unref();

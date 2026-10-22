@@ -7,6 +7,7 @@ export type AdaptiveQualitySnapshot = {
 
 export type AdaptiveVisualBudget = {
   pixelRatioCap: number;
+  resolutionScale: number;
   shadowScale: number;
   vegetationScale: number;
   shadowsEnabled: boolean;
@@ -15,7 +16,9 @@ export type AdaptiveVisualBudget = {
 };
 
 const HITCH_SAMPLE_COUNT = 30;
-const STABLE_SAMPLE_COUNT = 240;
+// Avoid re-enabling expensive work after only four seconds of a lighter
+// workload. At 60Hz each recovery step needs about thirty stable seconds.
+const STABLE_SAMPLE_COUNT = 1800;
 
 export class AdaptiveQualityController {
   private reductionStep = 0;
@@ -65,9 +68,14 @@ function maxReductionFor(quality: QualityTier): number {
 
 function toBudget(quality: QualityTier, reductionStep: number): AdaptiveVisualBudget {
   const profile = QUALITY_PROFILES[quality];
+  if ((quality === 'medium' || quality === 'high') && reductionStep >= maxReductionFor(quality)) {
+    // The measured Low workload is the final fallback, retaining the user's
+    // selected quality so sustained recovery can restore it gradually.
+    return { ...QUALITY_PROFILES.low, resolutionScale: 0.85 };
+  }
   const streamRadiusChunks = Math.max(3, profile.streamRadiusChunks - (reductionStep >= 1 ? 1 : 0));
   const vegetationScale = profile.vegetationScale * (reductionStep >= 2 ? 0.82 : 1);
   const shadowScale = profile.shadowScale * (reductionStep >= 3 ? 0.7 : 1);
-  const pixelRatioCap = profile.pixelRatioCap * (reductionStep >= 4 ? 0.85 : 1);
-  return { pixelRatioCap, shadowScale, vegetationScale, shadowsEnabled: profile.shadowsEnabled, streamRadiusChunks, gameplayScale: 1 };
+  const pixelRatioCap = profile.pixelRatioCap;
+  return { pixelRatioCap, resolutionScale: 1, shadowScale, vegetationScale, shadowsEnabled: profile.shadowsEnabled, streamRadiusChunks, gameplayScale: 1 };
 }

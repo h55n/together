@@ -1,12 +1,13 @@
 import * as THREE from 'three';
-import { dressFacade, dressSimpleFacades } from './FacadeDetails';
+import { pointAllowsLandDressing, terrainHeightAt } from './CoastalShoreline';
+import { dressFacade, dressSimpleFacades, hipRoofGeometry } from './FacadeDetails';
 import { streetClearanceAt } from './StreetNetwork';
-import { AMAYA_BAY_VENUES, cityHeightAt, type BuildingLot, type ChunkDressing, type DressingProp, type ResidencyRing } from '@together/shared';
+import { AMAYA_BAY_VENUES, cityHeightAt, nearestAmayaBaySurfaceRoute, type BuildingLot, type ChunkDressing, type DressingProp, type ResidencyRing } from '@together/shared';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
 import type { MaterialLibrary, WorldMaterialKey } from './MaterialLibrary';
 import { PROPERTY_WORLD_RESERVATIONS } from './PropertyLocations';
 import { StaticGeometryCache } from '../assets/runtime/StaticGeometryCache';
-import { compileStaticMeshesByMaterial } from '../assets/runtime/StaticBatchCompiler';
+import { prepareStaticMeshesByMaterial } from '../assets/runtime/StaticBatchCompiler';
 
 const STYLE_MATERIALS: Record<BuildingLot['style'], WorldMaterialKey> = {
   mogra_balcony: 'warmPlaster',
@@ -20,6 +21,34 @@ const STYLE_MATERIALS: Record<BuildingLot['style'], WorldMaterialKey> = {
   park_pavilion: 'warmPlaster',
 };
 
+// Each style keeps its character while neighbouring lots vary like a lived-in anime street.
+const STYLE_WALL_VARIANTS: Partial<Record<BuildingLot['style'], readonly WorldMaterialKey[]>> = {
+  mogra_balcony: ['pastelYellow', 'pastelBlue', 'creamPlaster', 'pastelPink', 'warmPlaster'],
+  pg_veranda: ['mintPlaster', 'pastelBlue', 'creamPlaster', 'pastelYellow'],
+  lantern_shopfront: ['terracottaPlaster', 'pastelYellow', 'pastelPink', 'mintPlaster'],
+  lantern_mixed_use: ['creamPlaster', 'pastelYellow', 'terracottaPlaster', 'pastelBlue'],
+  rain_tree_old_home: ['mintPlaster', 'creamPlaster', 'pastelYellow', 'sagePlaster', 'pastelPink'],
+  civic_modern: ['concrete', 'creamPlaster', 'pastelBlue'],
+  hill_terrace: ['creamPlaster', 'pastelPink', 'pastelBlue', 'pastelYellow'],
+  waterfront_hut: ['wood', 'pastelBlue', 'mintPlaster'],
+  park_pavilion: ['creamPlaster', 'warmPlaster'],
+};
+const PITCHED_STYLES = new Set<BuildingLot['style']>(['rain_tree_old_home', 'pg_veranda', 'hill_terrace', 'park_pavilion', 'waterfront_hut']);
+const ROOFS: readonly WorldMaterialKey[] = ['roofTile', 'roofTile', 'roofSlate', 'roofTeal'];
+// Building prototypes are authored with these keys only on walls and roofs, then recoloured per lot.
+const WALL_STAND_IN: WorldMaterialKey = 'pastelYellow', ROOF_STAND_IN: WorldMaterialKey = 'roofTile';
+
+function lotHash(id: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i += 1) hash = Math.imul(hash ^ id.charCodeAt(i), 16777619);
+  return hash >>> 0;
+}
+
+function lotFinish(lot: BuildingLot): { wall: WorldMaterialKey; roof: WorldMaterialKey } {
+  const hash = lotHash(lot.id), walls = STYLE_WALL_VARIANTS[lot.style] ?? [STYLE_MATERIALS[lot.style]];
+  return { wall: walls[hash % walls.length]!, roof: ROOFS[(hash >>> 8) % ROOFS.length]! };
+}
+
 const staticGeometries = new StaticGeometryCache();
 const buildingPrototypes = new WeakMap<MaterialLibrary, Map<string, THREE.Group>>();
 
@@ -32,7 +61,21 @@ export function addChunkDressing(
   materials: MaterialLibrary,
   physics?: PhysicsWorld,
 ): void {
+  const preparation = prepareChunkDressing(root, dressing, chunkOriginX, chunkOriginZ, ring, materials, physics);
+  while (!preparation.next().done) { /* Initial synchronous construction. */ }
+}
+
+export function* prepareChunkDressing(
+  root: THREE.Group, dressing: ChunkDressing, chunkOriginX: number, chunkOriginZ: number,
+  ring: Exclude<ResidencyRing, 'unloaded'>, materials: MaterialLibrary, physics?: PhysicsWorld,
+  deferCollider?: (activate: () => void) => void,
+): Generator<void, void, void> {
   const colliders: unknown[] = [];
+  const previousDispose = root.userData.disposeChunk as (() => void) | undefined;
+  root.userData.disposeChunk = () => {
+    previousDispose?.();
+    for (const collider of colliders.splice(0)) physics?.removeCollider(collider as never);
+  };
   const buildingLimit = ring === 'horizon' ? Math.min(4, dressing.buildings.length) : dressing.buildings.length;
   for (const lot of dressing.buildings.slice(0, buildingLimit)) {
     const wx = chunkOriginX + lot.x;
@@ -45,31 +88,27 @@ export function addChunkDressing(
     const y = cityHeightAt(wx, wz);
     const building = ring === 'horizon'
       ? createHorizonVolume(lot, materials)
-      : createLayeredBuilding(lot, materials, ring === 'active');
+      : yield* prepareLayeredBuilding(lot, materials, ring === 'active');
     building.position.set(wx, y, wz);
     building.rotation.y = lot.rotationY + Math.PI / 2;
     root.add(building);
     if (ring === 'active' && physics) {
-      colliders.push(physics.createFixedCuboid(
+      const activate = () => colliders.push(physics.createFixedCuboid(
         { x: wx, y: y + lot.height / 2, z: wz },
         { x: lot.width / 2, y: lot.height / 2, z: lot.depth / 2 },
         lot.rotationY + Math.PI / 2,
       ));
+      if (deferCollider) deferCollider(activate); else activate();
     }
+    yield;
   }
 
   if (ring !== 'horizon') {
-    for (const prop of dressing.props) addProp(root, prop, chunkOriginX, chunkOriginZ, materials, ring === 'active');
-  }
-
-  if (physics && colliders.length > 0) {
-    root.userData.disposeChunk = () => {
-      for (const collider of colliders) physics.removeCollider(collider as never);
-    };
+    for (const prop of dressing.props) { addProp(root, prop, chunkOriginX, chunkOriginZ, materials, ring === 'active'); yield; }
   }
 }
 
-function createLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, detailed: boolean): THREE.Group {
+function* prepareLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, detailed: boolean): Generator<void, THREE.Group, void> {
   let prototypes = buildingPrototypes.get(materials);
   if (!prototypes) {
     prototypes = new Map(); buildingPrototypes.set(materials, prototypes);
@@ -82,10 +121,17 @@ function createLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, det
   let prototype = prototypes.get(key);
   if (!prototype) {
     const authoring = buildLayeredBuilding(lot, materials, detailed);
-    authoring.traverse(object => {
-      if (!(object instanceof THREE.Mesh)) return;
+    const converted = new Set<THREE.BufferGeometry>();
+    const meshes: THREE.Mesh[] = [];
+    authoring.traverse(object => { if (object instanceof THREE.Mesh) meshes.push(object); });
+    try {
+    yield;
+    for (const object of meshes) {
       const original = object.geometry;
       const geometry = original.index ? original.toNonIndexed() : original.clone();
+      // These are owned conversion buffers, even when cloned from the shared cache.
+      delete geometry.userData.togetherShared;
+      converted.add(geometry);
       if (!geometry.hasAttribute('uv')) {
         const positions = geometry.getAttribute('position'), normals = geometry.getAttribute('normal');
         const uv = new Float32Array(positions.count * 2);
@@ -97,8 +143,9 @@ function createLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, det
       }
       object.geometry = geometry;
       if (!original.userData.togetherShared) original.dispose();
-    });
-    prototype = compileStaticMeshesByMaterial(authoring);
+      yield;
+    }
+    prototype = yield* prepareStaticMeshesByMaterial(authoring);
     const owned = prototypeGeometryOwners.get(prototypes)!;
     prototype.traverse(object => {
       if (!(object instanceof THREE.Mesh)) return;
@@ -106,9 +153,20 @@ function createLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, det
       object.geometry.userData.togetherShared = true;
     });
     prototypes.set(key, prototype);
+    } finally {
+      authoring.traverse(object => { if (object instanceof THREE.Mesh && !object.geometry.userData.togetherShared) converted.add(object.geometry); });
+      for (const geometry of converted) if (!geometry.userData.togetherShared) geometry.dispose();
+    }
   }
   const placement = prototype.clone(true);
   placement.name = `building:${lot.id}:${lot.style}`;
+  // Prototypes share geometry; each placement swaps the stand-in wall/roof colours for its own finish.
+  const finish = lotFinish(lot), wallStandIn = materials.get(WALL_STAND_IN), roofStandIn = materials.get(ROOF_STAND_IN);
+  placement.traverse(object => {
+    if (!(object instanceof THREE.Mesh)) return;
+    if (object.material === wallStandIn) object.material = materials.get(finish.wall);
+    else if (object.material === roofStandIn) object.material = materials.get(finish.roof);
+  });
   return placement;
 }
 
@@ -118,7 +176,8 @@ function buildLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, deta
   const group = new THREE.Group();
   group.name = `building:${lot.id}:${lot.style}`;
 
-  const wallMaterial = materials.get(STYLE_MATERIALS[lot.style]);
+  const pitched = PITCHED_STYLES.has(lot.style);
+  const wallMaterial = materials.get(WALL_STAND_IN);
   const body = box(lot.width, lot.height, lot.depth, wallMaterial);
   body.position.y = lot.height / 2;
   body.castShadow = detailed;
@@ -129,10 +188,28 @@ function buildLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, deta
   plinth.position.y = 0.19;
   group.add(plinth);
 
-  const parapetHeight = lot.style === 'waterfront_hut' || lot.style === 'park_pavilion' ? 0.18 : 0.42;
-  const parapet = box(lot.width + 0.28, parapetHeight, lot.depth + 0.28, materials.get('stone'));
-  parapet.position.y = lot.height + parapetHeight / 2;
-  group.add(parapet);
+  if (pitched) {
+    // Deep eaves with a light soffit band, then a saturated tiled hip roof.
+    const overhang = 0.75, rise = Math.min(3.2, Math.max(1.4, Math.min(lot.width, lot.depth) * 0.36));
+    const soffit = box(lot.width + overhang * 2, 0.16, lot.depth + overhang * 2, materials.get('warmPlaster'));
+    soffit.position.y = lot.height + 0.08;
+    group.add(soffit);
+    const roof = new THREE.Mesh(hipRoofGeometry(lot.width + overhang * 2, lot.depth + overhang * 2, rise), materials.get(ROOF_STAND_IN));
+    roof.name = 'pitched-roof';
+    roof.position.y = lot.height + 0.16;
+    roof.castShadow = detailed;
+    roof.receiveShadow = true;
+    group.add(roof);
+  } else {
+    const parapetHeight = lot.style === 'waterfront_hut' || lot.style === 'park_pavilion' ? 0.18 : 0.42;
+    const parapet = box(lot.width + 0.28, parapetHeight, lot.depth + 0.28, materials.get('creamPlaster'));
+    parapet.position.y = lot.height + parapetHeight / 2;
+    group.add(parapet);
+    // A coloured cornice band gives flat roofs a crisp painted edge.
+    const cornice = box(lot.width + 0.4, 0.16, lot.depth + 0.4, materials.get(ROOF_STAND_IN));
+    cornice.position.y = lot.height - 0.05;
+    group.add(cornice);
+  }
 
   if (!detailed) { dressSimpleFacades(group, materials, lot.width, lot.depth, lot.height); return group; }
 
@@ -153,9 +230,11 @@ function buildLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, deta
     group.add(sign);
   }
 
-  dressFacade(group, materials, lot.width, lot.depth, lot.height, lot.balconyCount);
+  dressFacade(group, materials, lot.width, lot.depth, lot.height, lot.balconyCount, !pitched);
+  if (pitched && lot.style !== 'park_pavilion' && lot.style !== 'waterfront_hut') addFrontYard(group, materials, lot);
   dressSimpleFacades(group, materials, lot.width, lot.depth, lot.height, 'x+');
 
+  if (pitched) return group;
   // Roof/service silhouette: intentionally small but breaks rectangular massing.
   const service = box(Math.min(2.5, lot.width * 0.3), 1.1, Math.min(2.4, lot.depth * 0.25), materials.get('concrete'));
   service.position.set(-lot.width * 0.18, lot.height + 0.55, lot.depth * 0.16);
@@ -168,9 +247,37 @@ function buildLayeredBuilding(lot: BuildingLot, materials: MaterialLibrary, deta
 
   return group;
 }
+/**
+ * A low painted picket fence across the street side with a gate gap at the door, and hedge
+ * bushes at its ends. Visual only; built from trim and foliage materials the facade already uses.
+ */
+function addFrontYard(group: THREE.Group, materials: MaterialLibrary, lot: BuildingLot): void {
+  const fenceX = lot.width / 2 + 0.95, half = lot.depth / 2, doorZ = -lot.depth * 0.29;
+  const paint = materials.get('warmPlaster'), hedge = materials.get('foliageMid');
+  for (let z = -half; z <= half; z += 0.2) {
+    if (Math.abs(z - doorZ) < 0.75) continue;
+    const picket = box(0.06, 0.82, 0.08, paint);
+    picket.position.set(fenceX, 0.41, z);
+    group.add(picket);
+  }
+  for (const [from, to] of [[-half, doorZ - 0.75], [doorZ + 0.75, half]] as const) {
+    if (to - from < 0.2) continue;
+    for (const y of [0.28, 0.62]) {
+      const rail = box(0.05, 0.06, to - from, paint);
+      rail.position.set(fenceX - 0.04, y, (from + to) / 2);
+      group.add(rail);
+    }
+  }
+  for (const z of [-half + 0.5, half - 0.5]) {
+    const bush = box(0.8, 0.75, 1.1, hedge);
+    bush.position.set(fenceX - 0.55, 0.38, z);
+    group.add(bush);
+  }
+}
+
 function createHorizonVolume(lot: BuildingLot, materials: MaterialLibrary): THREE.Group {
   const group = new THREE.Group();
-  const body = box(lot.width, lot.height * 0.9, lot.depth, materials.get(STYLE_MATERIALS[lot.style]));
+  const body = box(lot.width, lot.height * 0.9, lot.depth, materials.get(lotFinish(lot).wall));
   body.position.y = lot.height * 0.45;
   body.castShadow = false;
   body.receiveShadow = false;
@@ -188,7 +295,13 @@ function addProp(
 ): void {
   const wx = originX + prop.x;
   const wz = originZ + prop.z;
-  const y = cityHeightAt(wx, wz);
+  if (!pointAllowsLandDressing(wx, wz, 1.2 * prop.scale)) return;
+  const nearest = nearestAmayaBaySurfaceRoute(wx, wz);
+  // Generation clears route centres, but road sidewalks extend beyond the
+  // default setback. Only wholly off-surface props use the lower grass level.
+  const surfaceMargin = nearest?.route.kind === 'road' ? 1.7 : nearest?.route.kind === 'promenade' ? 0.8 : 0.55;
+  const offSurface = !nearest || nearest.distance > nearest.route.width / 2 + surfaceMargin + 1.2 * prop.scale;
+  const y = offSurface ? terrainHeightAt(wx, wz) : cityHeightAt(wx, wz);
   const group = new THREE.Group();
   group.position.set(wx, y, wz);
   group.rotation.y = prop.rotationY;
@@ -198,7 +311,13 @@ function addProp(
   switch (prop.kind) {
     case 'bench': {
       const seat = box(1.7, 0.12, 0.5, materials.get('wood')); seat.position.y = 0.5; group.add(seat);
-      const back = box(1.7, 0.12, 0.5, materials.get('wood')); back.position.set(0, 0.85, 0.38); group.add(back);
+      const back = box(1.7, 0.12, 0.5, materials.get('wood')); back.rotation.x = Math.PI / 2; back.position.set(0, 0.85, 0.38); group.add(back);
+      for (const side of [-0.62, 0.62]) {
+        const leg = box(0.12, 0.44, 0.6, materials.get('metalDark'));
+        leg.position.set(side, 0.22, 0.06); group.add(leg);
+        const upright = box(0.08, 0.85, 0.08, materials.get('metalDark'));
+        upright.position.set(side, 0.425, 0.38); group.add(upright);
+      }
       break;
     }
     case 'lamp': {

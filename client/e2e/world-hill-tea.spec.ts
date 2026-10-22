@@ -4,7 +4,7 @@ test('hill tea hut has a visible front and a reachable visit prompt', async ({ p
   test.setTimeout(240_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(process.env.TOGETHER_E2E_URL ?? 'http://127.0.0.1:5173/?renderer=webgl2&worldReview=1', { waitUntil: 'networkidle' });
+  await page.goto('/?renderer=webgl2&worldReview=1', { waitUntil: 'networkidle' });
   await page.getByLabel('Display name').fill('Hill reviewer');
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Explore Amaya Bay solo' }).click();

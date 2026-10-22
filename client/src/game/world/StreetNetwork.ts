@@ -109,9 +109,9 @@ export function buildStreetChunk(cx: number, cz: number, ring: Exclude<Residency
     for(const side of [-1,1]){
       strip(a,b,side*half,side*(half+0.22),0.055,'stone');
       strip(a,b,side*(half+0.22),side*(half+2.7),0.045,'concrete');
-      if(ring==='active')strip(a,b,side*(half-0.15),side*(half-0.06),0.023,'curtainWarm');
+      if(ring==='active')strip(a,b,side*(half-0.2),side*(half-0.08),0.023,'roadLine');
     }
-    if(ring==='active' && i%4<2)strip(a,b,-0.045,0.045,0.025,'curtainWarm');
+    if(ring==='active' && i%4<2)strip(a,b,-0.07,0.07,0.025,'roadPaint');
   }
   for(const [key,vertices] of batches){
     const geometry=new THREE.BufferGeometry();

@@ -64,6 +64,10 @@ export const KAYAK_WATER_BOUNDS = {
 
 export const KAYAK_LAUNCH_POSITION = { x: 135, z: -350 } as const;
 export const KAYAK_RETURN_POSITION = { x: 135, z: -325 } as const;
+/** Mean coastal surface; waves are visual displacement around this height. */
+export const COASTAL_WATERLINE_Y = -0.05;
+/** Authored hull centre is 0.70 metres below the player body's origin. */
+export const KAYAK_PLAYER_SUPPORT_Y = COASTAL_WATERLINE_Y + 0.70;
 
 export function constrainKayakMovement(
   current: { x: number; z: number },

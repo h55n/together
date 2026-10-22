@@ -1,7 +1,7 @@
 export type QualityTier = 'low' | 'medium' | 'high' | 'capture';
 
-export type ControlBindings = { forward: string; back: string; left: string; right: string; jog: string; interact: string; cameraToggle: string; dismount: string };
-export const DEFAULT_CONTROL_BINDINGS: ControlBindings = { forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jog: 'ShiftLeft', interact: 'KeyE', cameraToggle: 'KeyV', dismount: 'KeyX' };
+export type ControlBindings = { forward: string; back: string; left: string; right: string; jog: string; interact: string; cameraToggle: string; dismount: string; bell: string };
+export const DEFAULT_CONTROL_BINDINGS: ControlBindings = { forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jog: 'ShiftLeft', interact: 'KeyE', cameraToggle: 'KeyV', dismount: 'KeyX', bell: 'KeyR' };
 
 export type GameSettings = {
   fov: number;

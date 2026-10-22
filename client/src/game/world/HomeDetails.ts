@@ -43,6 +43,6 @@ export function dressHome(root: THREE.Group, materials: MaterialLibrary, x:numbe
   add([0.085,0.24,0.66],[-hw+0.23,1.75,0.3],'curtainWarm');
   for(const sy of [0.4,0.85,1.3])add([0.35,0.06,1.7],[-hw+0.28,sy,1.6],'wood');
   for(let i=0;i<7;i+=1)add([0.22,0.31,0.1],[-hw+0.27,1.03,0.92+i*0.18],i%2?'terracottaPlaster':'sagePlaster');
-  const lamp=new THREE.PointLight(0xffd9a0,13,10,2);lamp.position.set(x,y+2.55,z+0.5);root.add(lamp);
+  const lamp=new THREE.PointLight(0xffd9a0,3.6,10,2);lamp.position.set(x,y+2.15,z+0.5);root.add(lamp);
   const kitchenFill=new THREE.PointLight(0xffe5bf,5,6,2);kitchenFill.position.set(x+kitchenX,y+2.4,z+hd-1.2);root.add(kitchenFill);
 }

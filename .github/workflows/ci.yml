@@ -66,3 +66,24 @@ jobs:
           path: client/test-results
           if-no-files-found: ignore
           retention-days: 14
+
+  container-candidate:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment configuration
+        run: docker compose --env-file deploy/.env.production.example -f deploy/compose.yaml config --quiet
+
+      - name: Build server and web candidates without deployment credentials
+        run: docker compose --env-file deploy/.env.production.example -f deploy/compose.yaml build server web
+
+      - name: Verify packaged server dependencies and migrations
+        run: |
+          docker run --rm together-server:candidate node --input-type=module -e "await import('./server/dist/app.js'); await import('@together/shared'); await import('@together/content'); const fs = await import('node:fs'); if (!fs.existsSync('server/dist/db/migrate.js') || fs.readdirSync('server/dist/db/migrations').filter(name => name.endsWith('.sql')).length === 0) process.exit(1);"
+
+      - name: Validate packaged HTTPS and proxy configuration
+        run: docker run --rm -e SITE_DOMAIN=game.example.com -e TLS_EMAIL=ops@example.com together-web:candidate caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile

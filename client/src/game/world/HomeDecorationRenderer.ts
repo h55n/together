@@ -194,14 +194,19 @@ function buildFurnitureVisual(definition: FurnitureDefinition, materials: Materi
   const soft = materials.get(definition.category === 'seat' || definition.category === 'bed' ? 'curtainWarm' : 'warmPlaster');
   switch (definition.category) {
     case 'seat': {
-      addBox(group, [width, 0.42, depth], [0, 0.21, 0], soft);
-      addBox(group, [width, 0.58, 0.12], [0, 0.66, depth / 2 - 0.06], accent);
+      addBox(group, [width, 0.3, depth], [0, 0.15, 0], accent);
+      addBox(group, [width * 0.92, 0.14, depth * 0.86], [0, 0.37, -depth * 0.03], soft);
+      addBox(group, [width, 0.52, 0.16], [0, 0.6, depth / 2 - 0.08], soft);
+      // Rounded arms and loose cushions soften the silhouette.
+      if (width > 0.9) for (const side of [-1, 1]) addBox(group, [0.14, 0.5, depth], [side * (width / 2 - 0.07), 0.39, 0], soft);
+      if (width > 0.9) for (const side of [-1, 1]) addBox(group, [0.34, 0.3, 0.12], [side * width * 0.24, 0.62, depth / 2 - 0.2], materials.get('pastelYellow'));
       break;
     }
     case 'bed': {
       addBox(group, [width, 0.34, depth], [0, 0.17, 0], materials.get('wood'));
       addBox(group, [width * 0.94, 0.18, depth * 0.9], [0, 0.43, -depth * 0.02], soft);
       addBox(group, [width, 0.72, 0.1], [0, 0.68, depth / 2 - 0.05], accent);
+      for (const side of width > 1.2 ? [-1, 1] : [0]) addBox(group, [width > 1.2 ? width * 0.4 : width * 0.7, 0.12, 0.36], [side * width * 0.23, 0.58, depth / 2 - 0.32], materials.get('creamPlaster'));
       break;
     }
     case 'table': {
@@ -215,10 +220,16 @@ function buildFurnitureVisual(definition: FurnitureDefinition, materials: Materi
       break;
     }
     case 'lighting': {
-      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.25, 10), accent);
-      stem.position.y = 0.68; group.add(stem);
-      const shade = new THREE.Mesh(new THREE.ConeGeometry(Math.min(width, depth) * 0.46, 0.42, 18, 1, true), soft);
-      shade.position.y = 1.38; shade.rotation.x = Math.PI; group.add(shade);
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.04, 20), accent);
+      base.position.y = 0.02; group.add(base);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.024, 1.25, 10), accent);
+      stem.position.y = 0.66; group.add(stem);
+      // A glowing paper drum shade with a warm bulb, open at top and bottom.
+      const radius = Math.min(width, depth) * 0.42;
+      const shade = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.82, radius, 0.36, 28, 1, true), preview ? accent : materials.get('lampShade'));
+      shade.position.y = 1.4; group.add(shade);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), preview ? accent : materials.get('lampShade'));
+      bulb.position.y = 1.32; group.add(bulb);
       break;
     }
     case 'plant': {

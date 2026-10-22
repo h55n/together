@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import { DEFAULT_GAME_SETTINGS, normalizeGameSettings, resolveStartupGameSettings, scoreMemoryCapture, shouldAutoCapture, type ActivityId, type ActivityStep, type AvatarConfig, type GameSettings, type HomeAction, type MicroActionStep, type JobId, type Placement2D, type RecipeStep, type StoryDefinition, type StoryTaskStateValue, type VoiceMode } from '@together/shared';
 import { GameEngine } from '../../game/GameEngine';
+import { useAmbientActivities } from './useAmbientActivities';
 import { advanceFirstSession, readFirstSession, type FirstSessionAction } from '../../game/core/FirstSession';
 import { FirstSessionGuide } from './FirstSessionGuide';
 import type { WeatherState } from '../../game/weather/weatherModel';
@@ -18,23 +19,52 @@ import { CookingPanel, type CookingSessionView, type KitchenInventoryView } from
 import { recipes, storyEvents } from '@together/content';
 import { StoryPanel, type StoryInstanceView } from './StoryPanel';
 import { ActivityPanel, type ActivitySessionView } from './ActivityPanel';
+import { GolfPanel } from './GolfPanel';
+import { BadmintonPanel } from './BadmintonPanel';
+import { BoardGamePanel } from './BoardGamePanel';
+import { PicnicPanel } from './PicnicPanel';
+import { CafePanel } from './CafePanel';
+import { TransportRentalPanel } from './TransportRentalPanel';
+import type { GolfShotIntent, BadmintonCommand, BoardGameCommand, PhotographyCommand, PicnicCommand, CafeCommand } from '@together/shared';
+import type { TransportRentalCommand } from '@together/shared';
+import { mergeActivitySnapshot } from './activitySnapshot';
+import { TransportOutingSave } from './transportOutingSave';
+import { ActivityTravelHint } from './ActivityTravelHint';
 import { NpcPanel, type NpcRelationshipView } from './NpcPanel';
 import { HomeGrowthPanel, type HomeGrowthHousehold, type MovingStateView, type RenovationStateView } from './HomeGrowthPanel';
 import { apiFetch } from '../../network/api';
+import { manageDialogFocus } from './dialogFocus';
+
+async function releaseKitchenStation(base: string, station: string, headers: Record<string, string>): Promise<CookingSessionView> {
+  const response = await apiFetch(`${base}/stations/${encodeURIComponent(station)}/release`, { method: 'POST', headers });
+  const session = await response.json() as CookingSessionView & { error?: string };
+  if (!response.ok) throw new Error(session.error ?? 'Station release failed');
+  return session;
+}
 
 export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropertyChanged }: { networkSession?: NetworkSession; avatarConfig?: AvatarConfig; propertyId?: string; onPropertyChanged?: (propertyId: string) => void }): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const engineCreateChainRef = useRef<Promise<void>>(Promise.resolve());
+  const autoBookingIntent = useRef<{ householdId: string; userId: string; destinationId: string; from: { x: number; z: number }; idempotencyKey: string } | null>(null);
+  const autoBookingInFlight = useRef(false);
+  const autoViewGeneration = useRef(0);
   const homeVersionRef = useRef(0);
   const homeMutationChainRef = useRef<Promise<void>>(Promise.resolve());
   const lastAutomaticCaptureRef = useRef(-300_000);
   const captureBusyRef = useRef(false);
+  const manualCapturePending = useRef<{ householdId: string; activitySessionId: string | undefined; imageId: string; key: string; blob: Blob; context: ReturnType<GameEngine['getMemoryContext']>; imageSaved: boolean } | null>(null);
   const [weatherState, setWeatherState] = useState<WeatherState>('clear');
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [compatibilityRenderer, setCompatibilityRenderer] = useState(false);
+  const [startupAttempt, setStartupAttempt] = useState(0);
+  const [preparationStage, setPreparationStage] = useState('Starting graphics and physics');
+  const retryWorld = useCallback(() => {
+    setReady(false); setError(null); setPreparationStage('Starting graphics and physics');
+    setStartupAttempt(attempt => attempt + 1);
+  }, []);
   const recoverRenderer = useCallback(() => { setReady(false); setError(null); setCompatibilityRenderer(true); }, []);
   const guideStorageKey = `together:first-day:v1:${networkSession?.userId ?? 'solo'}`;
   const [guideCompleted, setGuideCompleted] = useState<FirstSessionAction[]>(() => readFirstSession(localStorage.getItem(guideStorageKey)));
@@ -48,6 +78,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const [interactionPrompt, setInteractionPrompt] = useState<string | null>(null);
   const [location, setLocation] = useState<string | null>(null);
   const [connection, setConnection] = useState<'connecting' | 'connected' | 'reconnecting' | 'disconnected'>(networkSession ? 'connecting' : 'disconnected');
+  const [participantNames, setParticipantNames] = useState<Readonly<Record<string, string>>>({});
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memories, setMemories] = useState<MemoryView[]>([]);
   const [captureBusy, setCaptureBusy] = useState(false);
@@ -61,6 +92,13 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const [decorateBusy, setDecorateBusy] = useState(false);
   const [decorateMessage, setDecorateMessage] = useState<string | null>(null);
   const [autoOpen, setAutoOpen] = useState(false);
+  const closeAuto = useCallback(() => { autoViewGeneration.current++; setAutoOpen(false); }, []);
+  useEffect(() => {
+    autoViewGeneration.current++;
+    autoBookingIntent.current = null;
+    const generation = autoViewGeneration;
+    return () => { generation.current++; };
+  }, [networkSession?.userId, networkSession?.householdId]);
   const [autoBusy, setAutoBusy] = useState(false);
   const [autoMessage, setAutoMessage] = useState<string | null>(null);
   const [autoFrom, setAutoFrom] = useState({ x: 0, z: 0 });
@@ -68,6 +106,11 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const [jobSession, setJobSession] = useState<JobSessionView | null>(null);
   const [jobBusy, setJobBusy] = useState(false);
   const [jobMessage, setJobMessage] = useState<string | null>(null);
+  const jobViewGeneration = useRef(0);
+  useLayoutEffect(() => {
+    jobViewGeneration.current++;
+    return () => { jobViewGeneration.current++; };
+  }, [venueSession, jobSession?.id, networkSession?.userId, networkSession?.householdId, networkSession?.shardId]);
   const [cookingOpen, setCookingOpen] = useState(false);
   const [cookingSession, setCookingSession] = useState<CookingSessionView | null>(null);
   const [kitchenInventory, setKitchenInventory] = useState<KitchenInventoryView[]>([]);
@@ -81,6 +124,45 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const [activitySession, setActivitySession] = useState<ActivitySessionView | null>(null);
   const [activityBusy, setActivityBusy] = useState(false);
   const [activityMessage, setActivityMessage] = useState<string | null>(null);
+  const [activityTravel, setActivityTravel] = useState<{ kind: 'cycling' | 'kayak' | 'scooter_ride'; phase: 'travelling' | 'saving' | 'retry' } | null>(null);
+  const [photographyFraming, setPhotographyFraming] = useState(false);
+  const [photographyRetry, setPhotographyRetry] = useState(false);
+  const photographyPending = useRef<PhotographyCommand | null>(null);
+  const activityFinishedSave = useRef<{ save: TransportOutingSave; kind: 'cycling' | 'kayak' | 'scooter_ride' } | null>(null);
+  const rentalPending = useRef<{ sessionId: string; command: TransportRentalCommand } | null>(null);
+  const activitySnapshot = useRef<ActivitySessionView | null>(null);
+  const activityViewGeneration = useRef(0);
+  const activityOperation = useRef<number | null>(null);
+  const activityAbort = useRef<AbortController | null>(null);
+  const sportsPending = useRef<{ sessionId: string; path: string; key: string; input: GolfShotIntent | BadmintonCommand | BoardGameCommand | PhotographyCommand | PicnicCommand | CafeCommand } | null>(null);
+  const closeActivity = useCallback(() => {
+    engineRef.current?.clearSports();
+    sportsPending.current = null;
+    photographyPending.current = null; setPhotographyFraming(false); setPhotographyRetry(false);
+    manualCapturePending.current = null;
+    activityAbort.current?.abort();
+    activityAbort.current = null;
+    activityViewGeneration.current++;
+    activityOperation.current = null;
+    activitySnapshot.current = null;
+    activityFinishedSave.current = null;
+    rentalPending.current = null;
+    setActivityTravel(null);
+    setActivitySession(null);
+    setActivityBusy(false);
+  }, []);
+  useLayoutEffect(() => {
+    closeActivity();
+    const generation = activityViewGeneration;
+    const operation = activityOperation;
+    const abort = activityAbort;
+    return () => {
+      abort.current?.abort();
+      abort.current = null;
+      generation.current++;
+      operation.current = null;
+    };
+  }, [closeActivity, networkSession?.userId, networkSession?.householdId, networkSession?.shardId, propertyId, compatibilityRenderer, startupAttempt]);
   const [npcId, setNpcId] = useState<string | null>(null);
   const [npcRelationship, setNpcRelationship] = useState<NpcRelationshipView | null>(null);
   const [npcBusy, setNpcBusy] = useState(false);
@@ -93,8 +175,12 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const [lifeData, setLifeData] = useState<LifePanelData>({});
   const [settings, setSettings] = useState<GameSettings>(() => loadGameSettings());
   const settingsRef = useRef(settings);
+  const activityBlocked = memoryOpen || lifeOpen || mapOpen || settingsOpen || decorateOpen || autoOpen || cookingOpen || storyOpen || Boolean(npcId) || Boolean(venueSession) || Boolean(jobSession) || homeGrowthOpen;
+  useLayoutEffect(() => { if (activityBlocked) closeActivity(); }, [activityBlocked, closeActivity]);
 
   const authHeaders = useCallback((): Record<string, string> => networkSession ? authHeadersForIdentity(networkSession) : {}, [networkSession]);
+  const getAmbientEngine = useCallback(() => engineRef.current, []);
+  const { refreshAmbientActivities, acceptAmbientActivity } = useAmbientActivities(getAmbientEngine, networkSession, authHeaders, ready);
 
   const refreshHomeState = useCallback(async (): Promise<HomeStateView | null> => {
     if (!networkSession) return null;
@@ -192,44 +278,64 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     if (open) void refreshMemories().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
   }, [refreshMemories]);
 
-  const captureMemory = useCallback(async (): Promise<void> => {
+  const captureMemory = useCallback(async (activitySessionId?: string): Promise<MemoryView | null> => {
     const engine = engineRef.current;
-    if (!engine || !networkSession || captureBusyRef.current) return;
+    if (!engine || !networkSession || captureBusyRef.current) return null;
+    const generation = activityViewGeneration.current;
     captureBusyRef.current = true;
     setCaptureBusy(true);
     try {
-      const context = engine.getMemoryContext();
-      const blob = await engine.captureFrame();
-      const imageId = `photo_${crypto.randomUUID().replaceAll('-', '')}`;
-      const imageResponse = await apiFetch(`/api/households/${networkSession.householdId}/memory-images/${imageId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'image/jpeg', ...authHeaders() },
-        body: blob,
-      });
-      if (!imageResponse.ok) throw new Error(`Memory image upload failed (${imageResponse.status})`);
-      const image = await imageResponse.json() as { screenshotPath: string };
+      let intent = manualCapturePending.current;
+      if (!intent || intent.householdId !== networkSession.householdId || intent.activitySessionId !== activitySessionId) {
+        intent = { householdId: networkSession.householdId, activitySessionId, imageId: `photo_${crypto.randomUUID().replaceAll('-', '')}`,
+          key: `manual:${crypto.randomUUID()}`, blob: await engine.captureFrame(), context: engine.getMemoryContext(), imageSaved: false };
+        if (generation !== activityViewGeneration.current) return null;
+        manualCapturePending.current = intent;
+      }
+      const { context, imageId } = intent;
+      const imageUrl = `/api/households/${networkSession.householdId}/memory-images/${imageId}`;
+      if (!intent.imageSaved) {
+        try {
+          const uploaded = await apiFetch(imageUrl, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', ...authHeaders() }, body: intent.blob });
+          if (!uploaded.ok) throw new Error(`Memory image upload failed (${uploaded.status})`);
+        } catch (cause) {
+          const recovered = await apiFetch(imageUrl, { headers: authHeaders() });
+          if (!recovered.ok) throw cause;
+        }
+        intent = { ...intent, imageSaved: true };
+        if (generation === activityViewGeneration.current && manualCapturePending.current?.key === intent.key) {
+          manualCapturePending.current = intent;
+        }
+      }
       const caption = `${context.locationId} · ${formatGameTime(context.gameMinutes)}`;
       const memoryResponse = await apiFetch(`/api/households/${networkSession.householdId}/memories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
-          idempotencyKey: `manual:${crypto.randomUUID()}`,
+          idempotencyKey: intent.key,
           type: 'manual',
-          screenshotPath: image.screenshotPath,
+          screenshotPath: `memory-image:${imageId}`,
           caption,
           locationId: context.locationId,
           weather: context.weather,
           participants: [networkSession.userId],
-          metadata: { gameMinutes: context.gameMinutes, source: 'manual-photo' },
+          metadata: { gameMinutes: context.gameMinutes, source: 'manual-photo', ...(activitySessionId ? { activitySessionId } : {}) },
         }),
       });
       if (!memoryResponse.ok) throw new Error(`Memory creation failed (${memoryResponse.status})`);
       const memory = await memoryResponse.json() as MemoryView;
+      if (generation !== activityViewGeneration.current) return null;
+      if (manualCapturePending.current === intent) manualCapturePending.current = null;
       setMemories((current) => [memory, ...current.filter((entry) => entry.id !== memory.id)]);
       setToast('Saved to your Memory Book');
       window.setTimeout(() => setToast(null), 2400);
+      return memory;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (generation === activityViewGeneration.current) {
+        if (activitySessionId) { setPhotographyRetry(true); setActivityMessage('Photo was not saved yet. Press P to retry the original photo.'); }
+        else setToast(cause instanceof Error ? cause.message : String(cause));
+      }
+      return null;
     } finally {
       captureBusyRef.current = false;
       setCaptureBusy(false);
@@ -410,56 +516,105 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
   const bookAutoRide = useCallback(async (destinationId: string, skip: boolean): Promise<void> => {
     if (!networkSession) { setAutoMessage('Join a household before using persistent city transit.'); return; }
+    if (autoBookingInFlight.current) return;
     const position = engineRef.current?.getPlayerPosition();
     const from = position ? { x: position.x, z: position.z } : autoFrom;
+    let intent = autoBookingIntent.current;
+    if (intent && (intent.householdId !== networkSession.householdId || intent.userId !== networkSession.userId)) intent = null;
+    if (intent && intent.destinationId !== destinationId) { setAutoMessage('Retry the previous destination first to confirm whether its fare was saved.'); return; }
+    intent ??= { householdId: networkSession.householdId, userId: networkSession.userId, from, destinationId, idempotencyKey: `auto:${crypto.randomUUID()}` };
+    autoBookingIntent.current = intent;
+    autoBookingInFlight.current = true;
+    const generation = autoViewGeneration.current;
     setAutoBusy(true); setAutoMessage(null);
     try {
       const response = await apiFetch(`/api/households/${networkSession.householdId}/transit/auto`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ from, destinationId, idempotencyKey: `auto:${crypto.randomUUID()}` }),
+        body: JSON.stringify({ from: intent.from, destinationId: intent.destinationId, idempotencyKey: intent.idempotencyKey }),
       });
       const data = await response.json() as { fare?: number; personalWallet?: number; error?: string };
-      if (!response.ok) throw new Error(data.error ?? 'Could not book auto-rickshaw');
+      if (!response.ok) { autoBookingIntent.current = null; throw new Error(data.error ?? 'Could not book auto-rickshaw'); }
+      autoBookingIntent.current = null;
+      if (generation !== autoViewGeneration.current) return;
       setAutoOpen(false);
       engineRef.current?.startAutoRide(destinationId, skip);
       setToast(`Auto fare ₹${data.fare ?? 0} · personal wallet ₹${data.personalWallet ?? 'updated'}`);
       window.setTimeout(() => setToast(null), 2600);
-    } catch (cause) { setAutoMessage(cause instanceof Error ? cause.message : String(cause)); }
-    finally { setAutoBusy(false); }
+    } catch (cause) { if (generation === autoViewGeneration.current) setAutoMessage(cause instanceof Error ? cause.message : String(cause)); }
+    finally { autoBookingInFlight.current = false; setAutoBusy(false); }
   }, [authHeaders, autoFrom, networkSession]);
 
+  const readJobSessions = useCallback(async (): Promise<JobSessionView[]> => {
+    if (!networkSession) return [];
+    const response = await apiFetch(`/api/households/${networkSession.householdId}/jobs`, { headers: authHeaders() });
+    if (!response.ok) throw new Error(`Saved shifts could not be read (${response.status})`);
+    const sessions = await response.json() as JobSessionView[];
+    if (!Array.isArray(sessions)) throw new Error('Saved shifts returned an invalid response');
+    return sessions;
+  }, [authHeaders, networkSession]);
+
   const startJob = useCallback(async (jobId: JobId): Promise<void> => {
+    if (jobBusy) return;
     if (!networkSession) { setToast('Connect a household to work a persistent shift.'); return; }
+    const generation = jobViewGeneration.current;
     setJobBusy(true); setJobMessage(null);
     try {
+      const existing = (await readJobSessions()).find(session => session.jobId === jobId && session.state === 'active');
+      if (generation !== jobViewGeneration.current) return;
+      if (existing) {
+        setVenueSession(null); setJobSession(existing); setJobMessage('Resumed your saved shift. Continue where you left off.');
+        return;
+      }
       const response = await apiFetch(`/api/households/${networkSession.householdId}/jobs/${jobId}/start`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ idempotencyKey: `job-start:${crypto.randomUUID()}` }),
       });
       const data = await response.json() as JobSessionView & { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Could not start shift');
+      if (generation !== jobViewGeneration.current) return;
       setVenueSession(null); setJobSession(data); setJobMessage('Clocked in. Work through the physical task sequence.');
-    } catch (error) { setJobMessage(error instanceof Error ? error.message : 'Could not start shift'); }
+    } catch (error) {
+      if (generation !== jobViewGeneration.current) return;
+      const message = error instanceof Error ? error.message : 'Could not start shift';
+      setJobMessage(message); setToast(message); window.setTimeout(() => setToast(null), 5000);
+    }
     finally { setJobBusy(false); }
-  }, [authHeaders, networkSession]);
+  }, [authHeaders, jobBusy, networkSession, readJobSessions]);
 
   const advanceJob = useCallback(async (action: string): Promise<void> => {
-    if (!networkSession || !jobSession) return;
+    if (!networkSession || !jobSession || jobBusy) return;
+    const generation = jobViewGeneration.current;
     setJobBusy(true); setJobMessage(null);
-    engineRef.current?.playContextAction(action);
     try {
+      const engine = engineRef.current;
+      if (!engine) throw new Error('The world is still preparing. Try again shortly.');
+      await engine.playContextAction(action);
       const response = await apiFetch(`/api/job-sessions/${jobSession.id}/advance`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ action }),
       });
       const data = await response.json() as JobSessionView & { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Task could not be recorded');
+      if (generation !== jobViewGeneration.current) return;
       setJobSession(data); setJobMessage(data.nextAction ? 'Task done. Move to the next part of the shift.' : 'The shift tasks are finished. Clock out when ready.');
-    } catch (error) { setJobMessage(error instanceof Error ? error.message : 'Task failed'); }
+    } catch (error) {
+      if (generation !== jobViewGeneration.current) return;
+      const message = error instanceof Error ? error.message : 'Task failed';
+      try {
+        const saved = (await readJobSessions()).find(session => session.id === jobSession.id);
+        if (generation !== jobViewGeneration.current) return;
+        if (saved) setJobSession(current => current?.id === saved.id ? saved : current);
+        setJobMessage(`${message}. Saved progress refreshed; continue from the next available task.`);
+      } catch {
+        if (generation !== jobViewGeneration.current) return;
+        setJobMessage(`${message}. Could not refresh saved progress. Reopen the shift when your connection recovers.`);
+      }
+    }
     finally { setJobBusy(false); }
-  }, [authHeaders, jobSession, networkSession]);
+  }, [authHeaders, jobBusy, jobSession, networkSession, readJobSessions]);
 
   const completeJob = useCallback(async (): Promise<void> => {
-    if (!networkSession || !jobSession) return;
+    if (!networkSession || !jobSession || jobBusy) return;
+    const generation = jobViewGeneration.current;
     setJobBusy(true); setJobMessage(null);
     try {
       const response = await apiFetch(`/api/job-sessions/${jobSession.id}/complete`, {
@@ -468,10 +623,11 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       });
       const data = await response.json() as { session?: JobSessionView; economy?: { personalWallet: number }; error?: string };
       if (!response.ok || !data.session) throw new Error(data.error ?? 'Could not complete shift');
+      if (generation !== jobViewGeneration.current) return;
       setJobSession(data.session); setJobMessage(`Shift paid. Personal wallet ₹${data.economy?.personalWallet ?? 'updated'}.`);
-    } catch (error) { setJobMessage(error instanceof Error ? error.message : 'Could not finish shift'); }
+    } catch (error) { if (generation === jobViewGeneration.current) setJobMessage(error instanceof Error ? error.message : 'Could not finish shift'); }
     finally { setJobBusy(false); }
-  }, [authHeaders, jobSession, networkSession]);
+  }, [authHeaders, jobBusy, jobSession, networkSession]);
 
   const refreshStories = useCallback(async (): Promise<void> => {
     if (!networkSession) return;
@@ -511,6 +667,20 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     finally { setStoryBusy(false); }
   }, [authHeaders, networkSession]);
 
+  // The household's active story shows a lantern over its next place to visit; arriving records the visit.
+  useEffect(() => {
+    if (!ready || !networkSession) return;
+    void refreshStories().catch(() => undefined);
+  }, [ready, networkSession, refreshStories]);
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine?.setStoryLocation) return;
+    const definition = storyActive?.state === 'active' ? storyEvents.find(event => event.id === storyActive.eventId) : undefined;
+    const next = definition?.tasks.find(task => task.type === 'location' && (storyActive!.taskState[task.id] ?? 'pending') === 'pending');
+    if (!storyActive || !next) { engine.setStoryLocation(null); return; }
+    engine.setStoryLocation(next.target, () => { void updateStoryTask(storyActive.id, next.id, 'complete'); });
+  }, [ready, storyActive, updateStoryTask]);
+
   const createStoryMemory = useCallback(async (instance: StoryInstanceView): Promise<void> => {
     const engine = engineRef.current;
     if (!engine || !networkSession || !instance.memoryTag) return;
@@ -549,9 +719,9 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
   const openKitchen = useCallback((): void => {
     if (!networkSession) { setToast('Join a household to use the shared kitchen.'); return; }
-    setCookingOpen(true); setCookingMessage(null); setVenueSession(null); setJobSession(null); setActivitySession(null);
+    setCookingOpen(true); setCookingMessage(null); setVenueSession(null); setJobSession(null); closeActivity();
     void refreshKitchen().catch((cause: unknown) => setCookingMessage(cause instanceof Error ? cause.message : String(cause)));
-  }, [networkSession, refreshKitchen]);
+  }, [closeActivity, networkSession, refreshKitchen]);
 
   const startCooking = useCallback(async (recipeId: string): Promise<void> => {
     if (!networkSession) return;
@@ -571,47 +741,91 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
   const performCookingStep = useCallback(async (step: RecipeStep, mistake: boolean): Promise<void> => {
     if (!networkSession || !cookingSession) return;
     setCookingBusy(true); setCookingMessage(null);
+    const base = `/api/households/${networkSession.householdId}/cooking/${cookingSession.id}`;
+    let stationClaimed = false;
     try {
-      const base = `/api/households/${networkSession.householdId}/cooking/${cookingSession.id}`;
       const claim = await apiFetch(`${base}/stations/${encodeURIComponent(step.station)}/claim`, { method: 'POST', headers: authHeaders() });
       const claimed = await claim.json() as CookingSessionView & { error?: string };
       if (!claim.ok) throw new Error(claimed.error ?? `${step.station} is occupied`);
+      stationClaimed = true;
       setCookingSession(claimed);
       const engine = engineRef.current;
-      if (engine) await engine.playCookingAction(step.action);
+      if (!engine) throw new Error('The world is still preparing. Try again shortly.');
+      await engine.playCookingAction(step.action);
       const complete = await apiFetch(`${base}/steps/${encodeURIComponent(step.id)}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ mistake }),
       });
       const completed = await complete.json() as CookingSessionView & { error?: string };
       if (!complete.ok) throw new Error(completed.error ?? 'Cooking step could not be completed');
       setCookingSession(completed);
-      await apiFetch(`${base}/stations/${encodeURIComponent(step.station)}/release`, { method: 'POST', headers: authHeaders() });
       if (completed.state.status === 'completed') {
         const quality = completed.state.outcome?.quality ?? 'shared';
         setCookingMessage(quality === 'burnt' ? 'Dinner got a little burnt. It still counts as dinner—and a story.' : quality === 'imperfect' ? 'A little imperfect. Still warm, shared food.' : 'Meal ready. Serve it while it is warm.');
-        void engineRef.current?.playCookingAction('serve');
+        void engineRef.current?.playCookingAction('serve').catch(() => undefined);
         void captureAutomaticMemory('shared_meal');
       } else setCookingMessage('Step complete. Another station may have opened up.');
     } catch (cause) { setCookingMessage(cause instanceof Error ? cause.message : String(cause)); }
-    finally { setCookingBusy(false); }
+    finally {
+      if (stationClaimed) {
+        try {
+          setCookingSession(await releaseKitchenStation(base, step.station, authHeaders()));
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause);
+          setCookingMessage(current => `${current ? `${current} ` : ''}${message}. Retry your step to resume your station.`);
+        }
+      }
+      setCookingBusy(false);
+    }
   }, [authHeaders, captureAutomaticMemory, cookingSession, networkSession]);
 
+  const acceptActivitySnapshot = useCallback((incoming: ActivitySessionView, message?: string): ActivitySessionView => {
+    const previous = activitySnapshot.current;
+    const accepted = mergeActivitySnapshot(previous, incoming);
+    // Keep a synchronous accepted revision so replies in the same render turn
+    // use the latest server state. Effects never run inside a React updater.
+    activitySnapshot.current = accepted;
+    acceptAmbientActivity(accepted);
+    setActivitySession(accepted);
+    setPhotographyFraming(accepted.activityId === 'photography' && accepted.state.status === 'active' && accepted.state.completedStepIds.includes('frame'));
+    if (accepted.state.status === 'complete') {
+      setActivityMessage('A small piece of the day, finished together.');
+      if (accepted.activityId !== 'photography' && previous?.id === accepted.id && previous.state.status !== 'complete') void captureAutomaticMemory(accepted.activityId);
+    } else if (message) setActivityMessage(message);
+    return accepted;
+  }, [captureAutomaticMemory, acceptAmbientActivity]);
+
   const refreshActiveActivity = useCallback(async (): Promise<void> => {
-    if (!networkSession) return;
-    const response = await apiFetch(`/api/households/${networkSession.householdId}/activities`, { headers: authHeaders() });
-    if (!response.ok) throw new Error(`Activity list failed (${response.status})`);
-    const sessions = await response.json() as ActivitySessionView[];
-    setActivitySession((current) => current ? (sessions.find((candidate) => candidate.id === current.id) ?? current) : current);
-  }, [authHeaders, networkSession]);
+    if (!networkSession || !activitySession) return;
+    const generation = activityViewGeneration.current;
+    const sessionId = activitySession.id;
+    const requestedRevision = activitySnapshot.current;
+    try {
+      const response = await apiFetch(`/api/households/${networkSession.householdId}/activities`, { headers: authHeaders() });
+      if (!response.ok) throw new Error(`Activity list failed (${response.status})`);
+      const sessions = await response.json() as ActivitySessionView[];
+      if (generation !== activityViewGeneration.current) return;
+      if (activitySnapshot.current?.id !== sessionId) return;
+      const incoming = sessions.find(candidate => candidate.id === sessionId);
+      if (incoming) acceptActivitySnapshot(incoming);
+    } catch (cause) {
+      if (generation === activityViewGeneration.current && activitySnapshot.current === requestedRevision) setActivityMessage(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, [acceptActivitySnapshot, activitySession, authHeaders, networkSession]);
 
   const openActivity = useCallback(async (activityId: ActivityId): Promise<void> => {
     if (!networkSession) { setToast('Join a household to share persistent activities.'); return; }
+    if (activityOperation.current !== null) return;
+    const generation = ++activityViewGeneration.current;
+    activityOperation.current = generation;
     setActivityBusy(true); setActivityMessage(null); setVenueSession(null); setJobSession(null); setCookingOpen(false);
     try {
       const listResponse = await apiFetch(`/api/households/${networkSession.householdId}/activities`, { headers: authHeaders() });
       if (!listResponse.ok) throw new Error(`Activity list failed (${listResponse.status})`);
       const sessions = await listResponse.json() as ActivitySessionView[];
-      let session = sessions.find((candidate) => candidate.activityId === activityId && candidate.state.status === 'active') ?? null;
+      if (generation !== activityViewGeneration.current) return;
+      const active = sessions.filter(candidate => candidate.activityId === activityId && candidate.state.status === 'active' && candidate.state.badminton?.phase !== 'cancelled');
+      if (activityId === 'picnic' || activityId === 'cafe_hangout') active.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+      let session = active.find(candidate => candidate.state.transportRental?.rentals.some(rental => rental.ownerUserId === networkSession.userId && rental.status !== 'returned')) ?? active[0] ?? null;
       if (!session) {
         const start = await apiFetch(`/api/households/${networkSession.householdId}/activities/${activityId}`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -620,37 +834,299 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
         const data = await start.json() as ActivitySessionView & { error?: string };
         if (!start.ok) throw new Error(data.error ?? 'Could not begin activity');
         session = data;
-      } else if (!session.state.participants.includes(networkSession.userId)) {
+      } else if (!session.state.participants.includes(networkSession.userId) && !(session.state.golf?.revision || session.state.badminton?.revision || session.state.boardGame?.revision)) {
         const join = await apiFetch(`/api/activities/${session.id}/join`, { method: 'POST', headers: authHeaders() });
         const data = await join.json() as ActivitySessionView & { error?: string };
         if (!join.ok) throw new Error(data.error ?? 'Could not join activity');
         session = data;
       }
-      setActivitySession(session); setActivityMessage('No rush. Take the activity one physical step at a time.');
-    } catch (cause) { setActivityMessage(cause instanceof Error ? cause.message : String(cause)); }
-    finally { setActivityBusy(false); }
-  }, [authHeaders, networkSession]);
+      if (generation !== activityViewGeneration.current) return;
+      if ((activityId === 'mini_golf' && !session.state.golf) || (activityId === 'badminton' && !session.state.badminton) || (activityId === 'board_game' && !session.state.boardGame) || (activityId === 'picnic' && !session.state.picnic) || (activityId === 'cafe_hangout' && !session.state.cafe) || ((activityId === 'cycling' || activityId === 'kayak' || activityId === 'scooter_ride') && !session.state.transportRental)) {
+        const upgrade = await apiFetch(`/api/activities/${session.id}/sports/start`, { method: 'POST', headers: authHeaders() });
+        const data = await upgrade.json() as ActivitySessionView & { error?: string };
+        if (!upgrade.ok) throw new Error(data.error ?? 'Could not start sports gameplay');
+        session = data;
+      }
+      if (generation !== activityViewGeneration.current) return;
+      acceptActivitySnapshot(session, 'No rush. Take the activity one physical step at a time.');
+    } catch (cause) { if (generation === activityViewGeneration.current) setActivityMessage(cause instanceof Error ? cause.message : String(cause)); }
+    finally { if (activityOperation.current === generation) { activityOperation.current = null; setActivityBusy(false); } }
+  }, [acceptActivitySnapshot, authHeaders, networkSession]);
+
+  useEffect(() => {
+    if (!activitySession?.state?.golf && !activitySession?.state?.badminton && !activitySession?.state?.picnic && !activitySession?.state?.cafe) return;
+    engineRef.current?.showSports(activitySession.id, activitySession.state, activitySession.serverNow);
+  }, [activitySession, ready]);
+
+  useEffect(() => {
+    // Raw groceries (not cooked dishes) show in the bicycle basket.
+    const groceries = kitchenInventory.filter(entry => !entry.itemId.startsWith('dish:')).reduce((sum, entry) => sum + Math.max(0, entry.quantity), 0);
+    engineRef.current?.setBasketLoad?.(groceries);
+  }, [kitchenInventory, ready]);
+
+  const picnicRevision = activitySession?.state?.picnic?.revision;
+  useEffect(() => {
+    if (picnicRevision === undefined) return;
+    void refreshKitchen().catch(() => undefined);
+  }, [picnicRevision, refreshKitchen]);
+
+  const sportsSessionId = activitySession?.state?.golf || activitySession?.state?.badminton || activitySession?.state?.boardGame || activitySession?.state?.picnic || activitySession?.state?.cafe ? activitySession.id : undefined;
+  useEffect(() => {
+    if (!sportsSessionId) return;
+    const id = sportsSessionId, generation = activityViewGeneration.current;
+    let stopped = false, timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const response = await apiFetch(`/api/activities/${id}/sports`, { headers: authHeaders() });
+        if (!response.ok) throw new Error('Sports connection interrupted; retrying.');
+        const saved = await response.json() as ActivitySessionView;
+        if (!stopped && generation === activityViewGeneration.current) acceptActivitySnapshot(saved);
+      } catch (cause) { if (!stopped && generation === activityViewGeneration.current) setActivityMessage(cause instanceof Error ? cause.message : String(cause)); }
+      finally { if (!stopped) timer = setTimeout(() => void poll(), 180); }
+    };
+    void poll();
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [sportsSessionId, acceptActivitySnapshot, authHeaders]);
+
+  const sendSports = useCallback(async (path: string, input: GolfShotIntent | BadmintonCommand | BoardGameCommand | PhotographyCommand | PicnicCommand | CafeCommand): Promise<void> => {
+    const session = activitySnapshot.current;
+    if (!session || !networkSession || activityOperation.current !== null) return;
+    const generation = activityViewGeneration.current;
+    const pending = sportsPending.current ?? { sessionId: session.id, path, key: 'key' in input ? input.key : input.id, input };
+    sportsPending.current = pending;
+    activityOperation.current = generation; setActivityBusy(true); setActivityMessage(null);
+    try {
+      const response = await apiFetch(`/api/activities/${pending.sessionId}/${pending.path}`, { method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(pending.input) });
+      const saved = await response.json() as ActivitySessionView & { error?: string };
+      if (!response.ok) throw new Error(saved.error ?? 'Sports command was not accepted');
+      if (generation !== activityViewGeneration.current) return;
+      acceptActivitySnapshot(saved); sportsPending.current = null;
+    } catch (cause) {
+      if (generation !== activityViewGeneration.current) return;
+      try {
+        const response = await apiFetch(`/api/activities/${pending.sessionId}/sports`, { headers: authHeaders() });
+        if (response.ok) {
+          const saved = await response.json() as ActivitySessionView;
+          if (generation !== activityViewGeneration.current) return;
+          acceptActivitySnapshot(saved);
+          if (saved.state.receipts?.[pending.key]) { sportsPending.current = null; setActivityMessage('Saved move recovered.'); return; }
+          sportsPending.current = null;
+        }
+      } catch { /* Preserve the exact command key until its outcome can be reconciled. */ }
+      setActivityMessage(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      if (activityOperation.current === generation) { activityOperation.current = null; setActivityBusy(false); }
+    }
+  }, [acceptActivitySnapshot, authHeaders, networkSession]);
+
+  const persistRentalCommand = useCallback(async function requestRental(command: TransportRentalCommand, generation: number): Promise<ActivitySessionView> {
+    const session = activitySnapshot.current;
+    if (!session) throw new Error('Reopen the outing before using equipment.');
+    if (rentalPending.current && rentalPending.current.command.kind !== command.kind) {
+      await requestRental(rentalPending.current.command, generation);
+      if (generation !== activityViewGeneration.current) throw new Error('Outing closed while recovering equipment.');
+      const latest = activitySnapshot.current?.state.transportRental;
+      return requestRental({ ...command, expectedRevision: latest?.revision ?? command.expectedRevision }, generation);
+    }
+    const pending = rentalPending.current ?? { sessionId: session.id, command };
+    rentalPending.current = pending;
+    let rejectionConfirmed = false;
+    try {
+      const response = await apiFetch(`/api/activities/${pending.sessionId}/rental/commands`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(pending.command) });
+      const saved = await response.json() as ActivitySessionView & { error?: string };
+      if (!response.ok) { rejectionConfirmed = true; throw new Error(saved.error ?? 'Equipment could not be saved.'); }
+      if (generation === activityViewGeneration.current) { acceptActivitySnapshot(saved); rentalPending.current = null; }
+      return saved;
+    } catch (cause) {
+      const response = await apiFetch(`/api/activities/${pending.sessionId}/sports`, { headers: authHeaders() });
+      if (response.ok) {
+        const saved = await response.json() as ActivitySessionView;
+        if (generation === activityViewGeneration.current) acceptActivitySnapshot(saved);
+        if (saved.state.receipts?.[pending.command.key]) {
+          if (generation === activityViewGeneration.current) rentalPending.current = null;
+          return saved;
+        }
+        if (generation === activityViewGeneration.current && pending.command.kind !== 'return') rentalPending.current = null;
+        if (generation === activityViewGeneration.current && rejectionConfirmed && pending.command.kind === 'return' && saved.state.transportRental && saved.state.transportRental.revision !== pending.command.expectedRevision) {
+          rentalPending.current = { sessionId: pending.sessionId, command: { ...pending.command, key: crypto.randomUUID(), expectedRevision: saved.state.transportRental.revision } };
+        }
+      }
+      throw cause;
+    }
+  }, [acceptActivitySnapshot, authHeaders]);
+
+  const retryRentalReturn = useCallback(async (): Promise<void> => {
+    const pending = rentalPending.current, session = activitySnapshot.current;
+    if (!pending || pending.command.kind !== 'return' || !session?.state.transportRental) return;
+    const generation = activityViewGeneration.current;
+    setActivityBusy(true); setActivityTravel({ kind: session.state.transportRental.activityId, phase: 'saving' });
+    try { await persistRentalCommand(pending.command, generation); if (generation === activityViewGeneration.current) { setActivityTravel(null); setActivityMessage('Equipment returned.'); } }
+    catch (cause) { if (generation === activityViewGeneration.current) { setActivityTravel({ kind: session.state.transportRental.activityId, phase: 'retry' }); setActivityMessage(cause instanceof Error ? cause.message : String(cause)); } }
+    finally { if (generation === activityViewGeneration.current) setActivityBusy(false); }
+  }, [persistRentalCommand]);
+
+  const handleRentalCommand = useCallback(async (input: TransportRentalCommand): Promise<void> => {
+    if (activityOperation.current !== null || !networkSession) return;
+    const session = activitySnapshot.current, engine = engineRef.current;
+    if (!session?.state.transportRental || !engine) return;
+    const generation = activityViewGeneration.current, kind = session.state.transportRental.activityId;
+    const abort = new AbortController(); activityAbort.current = abort;
+    activityOperation.current = generation; setActivityBusy(true); setActivityMessage(null);
+    let physicalReturn = false;
+    try {
+      if (input.kind === 'return') { await engine.playActivityStep(kind, { id: kind === 'cycling' ? 'park_cycle' : kind === 'scooter_ride' ? 'park_scooter' : 'return', label: 'Return equipment', animation: 'place' }, abort.signal); physicalReturn = true; }
+      const saved = await persistRentalCommand(input, generation);
+      if (generation !== activityViewGeneration.current) return;
+      if (input.kind === 'depart') {
+        setActivityTravel({ kind, phase: 'travelling' }); setActivityBusy(false);
+        await engine.playTransportOuting(kind, abort.signal);
+        if (generation !== activityViewGeneration.current) return;
+        physicalReturn = true;
+        setActivityBusy(true); setActivityTravel({ kind, phase: 'saving' });
+        const latest = activitySnapshot.current ?? saved;
+        const rental = [...latest.state.transportRental!.rentals].reverse().find(item => item.ownerUserId === networkSession.userId)!;
+        await persistRentalCommand({ key: crypto.randomUUID(), expectedRevision: latest.state.transportRental!.revision, kind: 'return', rentalId: rental.rentalId }, generation);
+        if (generation !== activityViewGeneration.current) return;
+        setActivityTravel(null); setActivityMessage('Equipment returned.');
+      }
+    } catch (cause) {
+      if (generation !== activityViewGeneration.current) return;
+      if (physicalReturn) setActivityTravel({ kind, phase: 'retry' });
+      else setActivityTravel(null);
+      setActivityMessage(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      if (activityOperation.current === generation) { activityOperation.current = null; setActivityBusy(false); }
+    }
+  }, [networkSession, persistRentalCommand]);
+
+  const persistTransportSave = useCallback(async (save: TransportOutingSave, kind: 'cycling' | 'kayak' | 'scooter_ride', abort: AbortController, generation: number): Promise<void> => {
+    if (!networkSession) return;
+    setActivityTravel({ kind, phase: 'saving' });
+    const sessionId = activitySnapshot.current?.id;
+    if (!sessionId) throw new Error('Reopen the activity before saving your outing.');
+    try {
+      const completed = await save.persist(async stepId => {
+        const response = await apiFetch(`/api/activities/${sessionId}/steps/${encodeURIComponent(stepId)}`, { method: 'POST', headers: authHeaders() });
+        const data = await response.json() as ActivitySessionView & { error?: string };
+        if (!response.ok) throw new Error(data.error ?? 'Outing step could not be saved');
+        return generation === activityViewGeneration.current ? acceptActivitySnapshot(data) : data;
+      }, async () => {
+        const response = await apiFetch(`/api/households/${networkSession.householdId}/activities`, { headers: authHeaders() });
+        if (!response.ok) throw new Error(`Activity list failed (${response.status})`);
+        const sessions = await response.json() as ActivitySessionView[];
+        const saved = sessions.find(candidate => candidate.id === sessionId) ?? null;
+        return saved && generation === activityViewGeneration.current ? acceptActivitySnapshot(saved) : saved;
+      }, abort.signal);
+      if (generation !== activityViewGeneration.current) return;
+      acceptActivitySnapshot(completed);
+      activityFinishedSave.current = null;
+      setActivityTravel(null);
+    } catch (cause) {
+      if (generation !== activityViewGeneration.current) return;
+      setActivityTravel({ kind, phase: 'retry' });
+      setActivityMessage(`${cause instanceof Error ? cause.message : String(cause)}. Your equipment is returned; retry saving when ready.`);
+    }
+  }, [acceptActivitySnapshot, authHeaders, networkSession]);
+
+  const retryTransportSave = useCallback(async (): Promise<void> => {
+    const finished = activityFinishedSave.current;
+    if (!finished || activityOperation.current !== null) return;
+    const generation = activityViewGeneration.current;
+    const abort = new AbortController();
+    activityOperation.current = generation; activityAbort.current = abort; setActivityBusy(true);
+    try { await persistTransportSave(finished.save, finished.kind, abort, generation); }
+    finally {
+      if (activityAbort.current === abort) activityAbort.current = null;
+      if (activityOperation.current === generation) { activityOperation.current = null; setActivityBusy(false); }
+    }
+  }, [persistTransportSave]);
+
+  const capturePhotography = useCallback(async (): Promise<void> => {
+    const session = activitySnapshot.current;
+    if (!session || session.activityId !== 'photography' || session.state.status !== 'active' || activityOperation.current !== null) return;
+    const generation = activityViewGeneration.current;
+    let command = photographyPending.current;
+    if (!command) {
+      const memory = await captureMemory(session.id);
+      if (!memory || generation !== activityViewGeneration.current) return;
+      command = { key: crypto.randomUUID(), expectedRevision: session.state.revision ?? 0, memoryId: memory.id };
+      photographyPending.current = command;
+    }
+    await sendSports('photography/capture', command);
+    const current = activitySnapshot.current;
+    if (generation === activityViewGeneration.current && !sportsPending.current && current?.id === session.id && current.state.status === 'active') {
+      setPhotographyRetry(true);
+      photographyPending.current = { ...command, key: crypto.randomUUID(), expectedRevision: current.state.revision ?? 0 };
+    }
+  }, [captureMemory, sendSports]);
 
   const advanceActivity = useCallback(async (step: ActivityStep): Promise<void> => {
-    if (!networkSession || !activitySession) return;
+    if (!networkSession || !activitySession || activityOperation.current !== null) return;
+    const generation = activityViewGeneration.current;
+    activityOperation.current = generation;
+    const abort = new AbortController();
+    activityAbort.current = abort;
     setActivityBusy(true); setActivityMessage(null);
-    engineRef.current?.playActivityAction(step.animation);
+    const applySavedStep = (data: ActivitySessionView): void => {
+      if (generation !== activityViewGeneration.current) return;
+      acceptActivitySnapshot(data, 'That part is done. Continue whenever it feels right.');
+    };
+    let saveRequested = false;
     try {
+      const engine = engineRef.current;
+      if (!engine) throw new Error('The world is still preparing. Try again shortly.');
+      const kind = activitySession.activityId === 'cycling' && step.id === 'ride_route' ? 'cycling'
+        : activitySession.activityId === 'kayak' && step.id === 'paddle' ? 'kayak'
+          : activitySession.activityId === 'scooter_ride' && step.id === 'ride' ? 'scooter_ride' : null;
+      if (kind) {
+        setActivityTravel({ kind, phase: 'travelling' });
+        const result = await engine.playTransportOuting(kind, abort.signal);
+        if (generation !== activityViewGeneration.current) return;
+        if (!result.underway) {
+          setActivityTravel(null);
+          setActivityMessage('Equipment returned. Head out whenever you feel like exploring.');
+          return;
+        }
+        const save = new TransportOutingSave(activitySnapshot.current ?? activitySession, true);
+        activityFinishedSave.current = { save, kind };
+        await persistTransportSave(save, kind, abort, generation);
+        return;
+      }
+      await engine.playActivityStep(activitySession.activityId, step, abort.signal);
+      if (generation !== activityViewGeneration.current) return;
+      setActivityTravel(null);
+      saveRequested = true;
       const response = await apiFetch(`/api/activities/${activitySession.id}/steps/${encodeURIComponent(step.id)}`, { method: 'POST', headers: authHeaders() });
       const data = await response.json() as ActivitySessionView & { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Activity step could not be saved');
-      setActivitySession(data);
-      if (data.state.status === 'complete') {
-        setActivityMessage('A small piece of the day, finished together.');
-        void captureAutomaticMemory(data.activityId);
-      } else setActivityMessage('That part is done. Continue whenever it feels right.');
-    } catch (cause) { setActivityMessage(cause instanceof Error ? cause.message : String(cause)); }
-    finally { setActivityBusy(false); }
-  }, [activitySession, authHeaders, captureAutomaticMemory, networkSession]);
+      applySavedStep(data);
+    } catch (cause) {
+      if (generation !== activityViewGeneration.current) return;
+      setActivityTravel(null);
+      if (saveRequested) {
+        const accepted = activitySnapshot.current;
+        if (accepted?.id === activitySession.id && accepted.state.completedStepIds.includes(step.id)) { applySavedStep(accepted); return; }
+        try {
+          const response = await apiFetch(`/api/households/${networkSession.householdId}/activities`, { headers: authHeaders() });
+          if (response.ok) {
+            const sessions = await response.json() as ActivitySessionView[];
+            const saved = sessions.find(candidate => candidate.id === activitySession.id);
+            if (saved?.state.completedStepIds.includes(step.id)) { applySavedStep(saved); return; }
+          }
+        } catch { /* Keep the original action/save failure available for retry. */ }
+      }
+      if (generation === activityViewGeneration.current) setActivityMessage(cause instanceof Error ? cause.message : String(cause));
+    }
+    finally {
+      if (activityAbort.current === abort) activityAbort.current = null;
+      if (activityOperation.current === generation) { activityOperation.current = null; setActivityBusy(false); }
+    }
+  }, [acceptActivitySnapshot, activitySession, authHeaders, networkSession, persistTransportSave]);
 
   const openNpc = useCallback(async (nextNpcId: string): Promise<void> => {
     if (!networkSession) { setToast('Join a household before residents can remember your visits.'); return; }
-    setNpcId(nextNpcId); setNpcBusy(true); setActivitySession(null); setVenueSession(null); setCookingOpen(false);
+    setNpcId(nextNpcId); setNpcBusy(true); closeActivity(); setVenueSession(null); setCookingOpen(false);
     try {
       const response = await apiFetch(`/api/households/${networkSession.householdId}/npc-memory`, { headers: authHeaders() });
       if (!response.ok) throw new Error(`NPC memory request failed (${response.status})`);
@@ -667,7 +1143,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       setNpcRelationship(relationship);
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setNpcBusy(false); }
-  }, [authHeaders, networkSession]);
+  }, [authHeaders, closeActivity, networkSession]);
 
   const talkToNpc = useCallback(async (): Promise<void> => {
     if (!networkSession || !npcId) return;
@@ -679,7 +1155,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       });
       if (!response.ok) throw new Error(`Conversation could not be remembered (${response.status})`);
       setNpcRelationship(await response.json() as NpcRelationshipView);
-      engineRef.current?.playActivityAction('nod');
+      void engineRef.current?.playActivityAction('nod').catch(() => undefined);
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setNpcBusy(false); }
   }, [authHeaders, networkSession, npcId]);
@@ -701,6 +1177,18 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     setRenovationState(await renovationResponse.json() as RenovationStateView);
     if (home) setHomeState(home);
   }, [authHeaders, networkSession, refreshHomeState]);
+
+  // Packed boxes survive a reload: read moving state once the world is ready.
+  useEffect(() => {
+    if (!ready || !networkSession || !propertyId) return;
+    void refreshHomeGrowth().catch(() => undefined);
+  }, [ready, networkSession, propertyId, refreshHomeGrowth]);
+  useEffect(() => {
+    const plan = movingState?.plan;
+    const packed = plan && plan.status !== 'moved' ? plan.packedObjectIds.map(id => ({ disposition: plan.dispositionByObject[id] ?? 'keep' })) : [];
+    engineRef.current?.setMovingBoxes?.(packed);
+  }, [movingState, ready]);
+
 
   const openHomeGrowth = useCallback((): void => {
     setHomeGrowthOpen(true); setHomeGrowthMessage(null);
@@ -759,15 +1247,26 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
     catch (cause) { setHomeGrowthMessage(cause instanceof Error ? cause.message : String(cause)); } finally { setHomeGrowthBusy(false); }
   }, [authHeaders, captureAutomaticMemory, refreshHomeGrowth]);
 
+  const engineBindings = { networkSession, captureAutomaticMemory, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, persistDomesticStep, refreshActiveActivity, refreshAmbientActivities, refreshHomeState, refreshKitchen, refreshMemories, onFirstSessionAction, recoverRenderer };
+  const engineBindingsRef = useRef(engineBindings);
+  useLayoutEffect(() => { engineBindingsRef.current = engineBindings; });
+  useEffect(() => {
+    engineRef.current?.updateAccessToken(networkSession?.accessToken);
+  }, [networkSession?.accessToken]);
+  const sessionUserId = networkSession?.userId;
+  const sessionHouseholdId = networkSession?.householdId;
+  const sessionShardId = networkSession?.shardId;
+
   useEffect(() => {
     let cancelled = false;
+    const preparation = new AbortController();
     let ownedEngine: GameEngine | null = null;
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    void refreshHomeState().catch(() => undefined);
-    void refreshMemories().catch(() => undefined);
+    void engineBindingsRef.current.refreshHomeState().catch(() => undefined);
+    void engineBindingsRef.current.refreshMemories().catch(() => undefined);
 
     const requestedRenderer = new URLSearchParams(window.location.search).get('renderer');
     const forceRendererBackend = compatibilityRenderer || requestedRenderer === 'webgl2' ? 'webgl2' as const : undefined;
@@ -781,32 +1280,34 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
       try {
         const engine = await GameEngine.create({
+          signal: preparation.signal,
           canvas,
           container,
           initialWeather: 'clear',
           initialGameMinutes: 17 * 60 + 20,
-          ...(networkSession ? { networkSession } : {}),
-          onConnectionState: setConnection,
+          ...(engineBindingsRef.current.networkSession ? { networkSession: engineBindingsRef.current.networkSession } : {}),
+          onConnectionState: state => { setConnection(state); if (state === 'connected') void engineBindingsRef.current.refreshAmbientActivities(); },
           onNetworkError: setError,
-          onHomeStateChanged: () => void refreshHomeState().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))),
-          onCookingStateChanged: () => void refreshKitchen().catch((cause: unknown) => setCookingMessage(cause instanceof Error ? cause.message : String(cause))),
-          onActivityStateChanged: () => void refreshActiveActivity().catch((cause: unknown) => setActivityMessage(cause instanceof Error ? cause.message : String(cause))),
+          onHomeStateChanged: () => void engineBindingsRef.current.refreshHomeState().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))),
+          onCookingStateChanged: () => void engineBindingsRef.current.refreshKitchen().catch((cause: unknown) => setCookingMessage(cause instanceof Error ? cause.message : String(cause))),
+          onActivityStateChanged: () => { void engineBindingsRef.current.refreshActiveActivity(); void engineBindingsRef.current.refreshAmbientActivities(); },
+          onParticipantNamesChanged: setParticipantNames,
           onInteractionPrompt: setInteractionPrompt,
           onLocationChange: setLocation,
-          onDomesticStep: persistDomesticStep,
-          onDomesticAction: persistDomesticAction,
+          onDomesticStep: (...args) => engineBindingsRef.current.persistDomesticStep(...args),
+          onDomesticAction: (...args) => engineBindingsRef.current.persistDomesticAction(...args),
           onVoiceState: setVoiceState,
           onMoment: (message) => { setToast(message); window.setTimeout(() => setToast(null), 2600); },
           onVenueInteraction: (venue) => setVenueSession(venue),
-          onKitchenInteraction: openKitchen,
-          onAutoStand: () => { const position = engineRef.current?.getPlayerPosition(); if (position) setAutoFrom({ x: position.x, z: position.z }); setAutoOpen(true); setAutoMessage(null); },
-          onMemoryOpportunity: (tag) => void captureAutomaticMemory(tag),
-          onActivityInteraction: (activityId) => void openActivity(activityId),
-          onNpcInteraction: (nextNpcId) => void openNpc(nextNpcId),
-          onHomeGrowthInteraction: openHomeGrowth,
-          onFirstSessionAction,
+          onKitchenInteraction: () => engineBindingsRef.current.openKitchen(),
+          onAutoStand: () => { autoViewGeneration.current++; const position = engineRef.current?.getPlayerPosition(); if (position) setAutoFrom({ x: position.x, z: position.z }); setAutoOpen(true); setAutoMessage(null); },
+          onMemoryOpportunity: (tag) => void engineBindingsRef.current.captureAutomaticMemory(tag),
+          onActivityInteraction: (activityId) => void engineBindingsRef.current.openActivity(activityId),
+          onNpcInteraction: (nextNpcId) => void engineBindingsRef.current.openNpc(nextNpcId),
+          onHomeGrowthInteraction: () => engineBindingsRef.current.openHomeGrowth(),
+          onFirstSessionAction: (...args) => engineBindingsRef.current.onFirstSessionAction(...args),
           recoverRenderer: compatibilityRenderer,
-          onRendererDeviceLost: () => { if (!cancelled) recoverRenderer(); },
+          onRendererDeviceLost: () => { if (!cancelled) engineBindingsRef.current.recoverRenderer(); },
           ...(avatarConfig ? { avatarConfig } : {}),
           ...(propertyId ? { propertyId } : {}),
           ...(forceRendererBackend ? { forceRendererBackend } : {}),
@@ -819,7 +1320,8 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
         ownedEngine = engine;
         engine.applySettings(settingsRef.current);
-        await engine.prepareFirstPlayable();
+        setPreparationStage('Preparing nearby streets and lighting');
+        await engine.prepareFirstPlayable(preparation.signal);
         if (cancelled) {
           if (ownedEngine === engine) { engine.dispose(); ownedEngine = null; }
           return;
@@ -827,11 +1329,14 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
         ownedEngine = engine;
         engineRef.current = engine;
-        void refreshHomeState().catch(() => undefined);
+        engine.updateAccessToken(engineBindingsRef.current.networkSession?.accessToken);
+        void engineBindingsRef.current.refreshHomeState().catch(() => undefined);
         engine.start();
       if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('worldReview') === '1') {
         (window as Window & { __amayaReviewTravel?: (destinationId: string) => void }).__amayaReviewTravel =
           (destinationId) => engine.startAutoRide(destinationId, true);
+        (window as Window & { __amayaReviewRide?: (destinationId: string) => void }).__amayaReviewRide =
+          (destinationId) => engine.startAutoRide(destinationId, false);
         (window as Window & { __amayaReviewPlace?: (x: number, z: number) => void }).__amayaReviewPlace =
           (x, z) => engine.placeForWorldReview(x, z);
         (window as Window & { __amayaReviewFace?: (yaw: number) => void }).__amayaReviewFace =
@@ -842,6 +1347,10 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
           (minutes) => engine.setGameTime(minutes);
         (window as Window & { __amayaReviewWalkRoute?: () => unknown }).__amayaReviewWalkRoute =
           () => engine.reviewWalkHeroRoute();
+        (window as Window & { __amayaReviewPlayer?: () => unknown }).__amayaReviewPlayer =
+          () => engine.playerForWorldReview();
+        (window as Window & { __amayaReviewLeisure?: () => unknown }).__amayaReviewLeisure = () => engine.leisureForWorldReview();
+        (window as Window & { __amayaReviewMovingBoxes?: () => number }).__amayaReviewMovingBoxes = () => engine.movingBoxesForWorldReview();
         (window as Window & { __amayaReviewMetrics?: (reset?: boolean) => unknown }).__amayaReviewMetrics =
           (reset) => { if (reset) engine.performance.resetFrameSamples(); return structuredClone(engine.performance.read()); };
       }
@@ -860,35 +1369,45 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
 
     return () => {
       cancelled = true;
+      preparation.abort();
+      delete (window as Window & { __amayaReviewPlayer?: () => unknown }).__amayaReviewPlayer;
+      delete (window as Window & { __amayaReviewLeisure?: () => unknown }).__amayaReviewLeisure;
+      delete (window as Window & { __amayaReviewMovingBoxes?: () => number }).__amayaReviewMovingBoxes;
+      delete (window as Window & { __amayaReviewRide?: (destinationId: string) => void }).__amayaReviewRide;
 delete (window as Window & { __amayaReviewTravel?: (destinationId: string) => void }).__amayaReviewTravel; delete (window as Window & { __amayaReviewPlace?: (x: number, z: number) => void }).__amayaReviewPlace; delete (window as Window & { __amayaReviewFace?: (yaw: number) => void }).__amayaReviewFace; delete (window as Window & { __amayaReviewWeather?: (weather: WeatherState) => void }).__amayaReviewWeather; delete (window as Window & { __amayaReviewTime?: (minutes: number) => void }).__amayaReviewTime; delete (window as Window & { __amayaReviewWalkRoute?: () => unknown }).__amayaReviewWalkRoute; delete (window as Window & { __amayaReviewMetrics?: (reset?: boolean) => unknown }).__amayaReviewMetrics;
       if (!ownedEngine) return;
       ownedEngine.dispose();
       if (engineRef.current === ownedEngine) engineRef.current = null;
       ownedEngine = null;
     };
-  }, [avatarConfig, captureAutomaticMemory, networkSession, openActivity, openHomeGrowth, openKitchen, openNpc, persistDomesticAction, persistDomesticStep, propertyId, refreshActiveActivity, refreshHomeState, refreshKitchen, refreshMemories, onFirstSessionAction, compatibilityRenderer, recoverRenderer]);
+  }, [avatarConfig, sessionUserId, sessionHouseholdId, sessionShardId, propertyId, compatibilityRenderer, startupAttempt]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      const target = event.target as HTMLElement | null;
-      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') return;
+      if (event.defaultPrevented) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (event.code !== 'Escape' && target?.matches('input, textarea, select, [contenteditable="true"]')) return;
       if (event.code === 'KeyB' && !event.repeat) { event.preventDefault(); setBookOpen(!memoryOpen); setLifeOpen(false); setMapOpen(false); setSettingsOpen(false); }
       if (event.code === 'Tab' && !event.repeat) { event.preventDefault(); const next = !lifeOpen; setLifeOpen(next); setMemoryOpen(false); setMapOpen(false); setSettingsOpen(false); if (next) void refreshLife().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))); }
       if (event.code === 'KeyM' && !event.repeat) { event.preventDefault(); setMapOpen(!mapOpen); setMemoryOpen(false); setLifeOpen(false); setSettingsOpen(false); }
       if (event.code === 'KeyJ' && !event.repeat) { event.preventDefault(); const next = !storyOpen; setStoryOpen(next); setMemoryOpen(false); setLifeOpen(false); setMapOpen(false); setSettingsOpen(false); setDecorateOpen(false); setCookingOpen(false); if (next) void refreshStories().catch((cause: unknown) => setStoryMessage(cause instanceof Error ? cause.message : String(cause))); }
       if (event.code === 'KeyO' && !event.repeat) { event.preventDefault(); setSettingsOpen(!settingsOpen); setMemoryOpen(false); setLifeOpen(false); setMapOpen(false); setDecorateOpen(false); }
       if (event.code === 'KeyC' && !event.repeat && propertyId) { event.preventDefault(); const next = !decorateOpen; setDecorateOpen(next); setMemoryOpen(false); setLifeOpen(false); setMapOpen(false); setSettingsOpen(false); setVenueSession(null); setJobSession(null); setCookingOpen(false); if (next) { void refreshHomeState().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))); void refreshKitchen().catch(() => undefined); } else engineRef.current?.clearHomeDecorationPreview(); }
-      if (event.code === 'Escape' && !event.repeat && (memoryOpen || lifeOpen || mapOpen || settingsOpen || decorateOpen || autoOpen || cookingOpen || storyOpen || activitySession || npcId || venueSession || jobSession || homeGrowthOpen)) { event.preventDefault(); setMemoryOpen(false); setLifeOpen(false); setMapOpen(false); setSettingsOpen(false); setDecorateOpen(false); setAutoOpen(false); setCookingOpen(false); setStoryOpen(false); setActivitySession(null); setNpcId(null); setVenueSession(null); setJobSession(null); setHomeGrowthOpen(false); setCookingOpen(false); engineRef.current?.clearHomeDecorationPreview(); }
-      if (event.code === 'KeyP' && !event.repeat && !memoryOpen && !lifeOpen && !mapOpen && !settingsOpen) { event.preventDefault(); void captureMemory(); }
+      if (event.code === 'Escape' && !event.repeat && (memoryOpen || lifeOpen || mapOpen || settingsOpen || decorateOpen || autoOpen || cookingOpen || storyOpen || activitySession || activityBusy || npcId || venueSession || jobSession || homeGrowthOpen)) { event.preventDefault(); setMemoryOpen(false); setLifeOpen(false); setMapOpen(false); setSettingsOpen(false); setDecorateOpen(false); closeAuto(); setCookingOpen(false); setStoryOpen(false); closeActivity(); setNpcId(null); setVenueSession(null); setJobSession(null); setHomeGrowthOpen(false); setCookingOpen(false); engineRef.current?.clearHomeDecorationPreview(); }
+      if (event.code === 'KeyP' && !event.repeat && !memoryOpen && !lifeOpen && !mapOpen && !settingsOpen && (!activitySession || photographyFraming)) { event.preventDefault(); void (photographyFraming ? capturePhotography() : captureMemory()); }
       if (event.code === 'KeyT' && !event.repeat && voiceState.pushToTalk) engineRef.current?.setPushToTalkHeld(true);
     };
     const onKeyUp = (event: KeyboardEvent): void => { if (event.code === 'KeyT' && voiceState.pushToTalk) engineRef.current?.setPushToTalkHeld(false); };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
-  }, [activitySession, autoOpen, captureMemory, cookingOpen, decorateOpen, jobSession, lifeOpen, mapOpen, memoryOpen, propertyId, refreshHomeState, refreshKitchen, refreshLife, refreshStories, setBookOpen, settingsOpen, storyOpen, npcId, venueSession, voiceState.pushToTalk, homeGrowthOpen]);
+  }, [activityBusy, activitySession, autoOpen, captureMemory, capturePhotography, photographyFraming, closeActivity, closeAuto, cookingOpen, decorateOpen, jobSession, lifeOpen, mapOpen, memoryOpen, propertyId, refreshHomeState, refreshKitchen, refreshLife, refreshStories, setBookOpen, settingsOpen, storyOpen, npcId, venueSession, voiceState.pushToTalk, homeGrowthOpen]);
 
-  const anyPanelOpen = memoryOpen || lifeOpen || mapOpen || settingsOpen || decorateOpen || autoOpen || cookingOpen || storyOpen || Boolean(activitySession) || Boolean(npcId) || Boolean(venueSession) || Boolean(jobSession) || homeGrowthOpen;
+  const anyPanelOpen = memoryOpen || lifeOpen || mapOpen || settingsOpen || decorateOpen || autoOpen || cookingOpen || storyOpen || (Boolean(activitySession) && !activityTravel && !photographyFraming) || Boolean(npcId) || Boolean(venueSession) || Boolean(jobSession) || homeGrowthOpen;
+  useEffect(() => {
+    if (!anyPanelOpen || !containerRef.current) return;
+    return manageDialogFocus(containerRef.current, canvasRef.current);
+  }, [anyPanelOpen]);
   useEffect(() => {
     engineRef.current?.setInputEnabled(!anyPanelOpen);
     if (anyPanelOpen && document.pointerLockElement) void document.exitPointerLock();
@@ -905,9 +1424,9 @@ delete (window as Window & { __amayaReviewTravel?: (destinationId: string) => vo
 
   const setWeather = (weather: WeatherState) => { engineRef.current?.setWeather(weather); setWeatherState(weather); };
   return <div ref={containerRef} className="game-shell">
-    <canvas key={compatibilityRenderer ? 'compatibility' : 'preferred'} ref={canvasRef} className="game-canvas" aria-label="Amaya Bay 3D world" />
-    {!ready && !error && <div className="world-loading">Preparing Amaya Bay…</div>}
-    {error && <div className="compatibility-card"><strong>Amaya Bay notice</strong><span>{error}</span><button className="quiet-action" onClick={() => setError(null)}>Dismiss</button></div>}
+    <canvas key={`${compatibilityRenderer ? 'compatibility' : 'preferred'}:${startupAttempt}`} ref={canvasRef} className="game-canvas" tabIndex={0} aria-label="Amaya Bay 3D world" />
+    {!ready && !error && <div className="world-loading" role="status">Preparing Amaya Bay…<small>{preparationStage}</small></div>}
+    {error && <div className="compatibility-card" role="alert"><strong>Amaya Bay notice</strong><span>{error}</span>{ready ? <button className="quiet-action" onClick={() => setError(null)}>Dismiss</button> : <><button className="quiet-action" onClick={retryWorld}>Retry world</button><button className="quiet-action" onClick={() => { setCompatibilityRenderer(true); retryWorld(); }}>Use compatibility graphics</button></>}</div>}
     {location && !anyPanelOpen && <div className="location-chip">{location}</div>}
     {interactionPrompt && !anyPanelOpen && <div className="interaction-prompt">{interactionPrompt}</div>}
     {networkSession && !anyPanelOpen && <div className={`connection-pill ${connection}`}>{connection === 'connected' ? 'household connected' : connection}</div>}
@@ -932,18 +1451,26 @@ delete (window as Window & { __amayaReviewTravel?: (destinationId: string) => vo
     <LifePanel open={lifeOpen} data={lifeData} onClose={() => setLifeOpen(false)} />
     <CityMap open={mapOpen} currentLocation={location} onClose={() => setMapOpen(false)} />
     <GameSettingsPanel open={settingsOpen} settings={settings} onChange={(next) => setSettings(normalizeGameSettings(next))} onClose={() => setSettingsOpen(false)} />
-    <AutoRickshawPanel open={autoOpen} from={autoFrom} busy={autoBusy} message={autoMessage} onRide={bookAutoRide} onClose={() => setAutoOpen(false)} />
+    <AutoRickshawPanel open={autoOpen} from={autoFrom} busy={autoBusy} message={autoMessage} onRide={bookAutoRide} onClose={closeAuto} />
     {propertyId && <DecoratePanel open={decorateOpen} propertyId={propertyId} home={homeState} inventory={kitchenInventory} busy={decorateBusy} message={decorateMessage}
       onPreview={(definitionId: string, roomId: string, placement: Placement2D) => engineRef.current?.previewHomeDecoration(definitionId, roomId, placement)}
       onClearPreview={() => engineRef.current?.clearHomeDecorationPreview()}
       onCommit={commitDecoration} onRemove={removeDecoration} onSurface={setHomeSurface}
       onClose={() => { setDecorateOpen(false); engineRef.current?.clearHomeDecorationPreview(); }} />}
     <StoryPanel open={storyOpen} active={storyActive} eligible={storyEligible} definitions={storyEvents} busy={storyBusy} message={storyMessage} onStart={startStory} onTask={updateStoryTask} onResolve={resolveStory} onClose={() => setStoryOpen(false)} />
-    <CookingPanel open={cookingOpen} recipes={recipes} inventory={kitchenInventory} session={cookingSession} busy={cookingBusy} message={cookingMessage} onStart={startCooking} onStep={performCookingStep} onClose={() => setCookingOpen(false)} />
+    <CookingPanel open={cookingOpen} userId={networkSession?.userId} recipes={recipes} inventory={kitchenInventory} session={cookingSession} busy={cookingBusy} message={cookingMessage} onStart={startCooking} onStep={performCookingStep} onClose={() => setCookingOpen(false)} />
     <NpcPanel npcId={npcId} relationship={npcRelationship} weather={weatherState} busy={npcBusy} onTalk={talkToNpc} onClose={() => setNpcId(null)} />
     {propertyId && <HomeGrowthPanel open={homeGrowthOpen} currentPropertyId={propertyId} household={homeGrowthHousehold} homeObjects={homeState?.objects ?? []} moving={movingState} renovation={renovationState} userId={networkSession?.userId} busy={homeGrowthBusy} message={homeGrowthMessage} onProposeMove={proposeMove} onCastMove={castMove} onPack={packMovingObject} onCommitMove={commitMove} onProposeRenovation={proposeRenovation} onCastRenovation={castRenovation} onCommitRenovation={commitRenovation} onClose={() => setHomeGrowthOpen(false)} />}
-    <ActivityPanel session={activitySession} {...(networkSession ? { userId: networkSession.userId } : {})} busy={activityBusy} message={activityMessage} onStep={advanceActivity} onClose={() => setActivitySession(null)} />
-    <VenuePanel venue={venueSession} {...(networkSession ? { networkSession } : {})} onClose={() => setVenueSession(null)} onStartJob={(jobId) => void startJob(jobId)} onMoment={(message) => { setToast(message); window.setTimeout(() => setToast(null), 2600); }} />
+    <ActivityPanel session={photographyFraming || activityTravel || activitySession?.state?.golf || activitySession?.state?.badminton || activitySession?.state?.boardGame || activitySession?.state?.picnic || activitySession?.state?.cafe || activitySession?.state?.transportRental ? null : activitySession} {...(networkSession ? { userId: networkSession.userId } : {})} busy={activityBusy} message={activityMessage} onStep={advanceActivity} onClose={closeActivity} />
+    {activitySession?.state.transportRental && !activityTravel && <TransportRentalPanel session={activitySession} {...(networkSession ? { userId: networkSession.userId } : {})} busy={activityBusy} message={activityMessage} onCommand={handleRentalCommand} onClose={closeActivity} />}
+    {activitySession?.state?.golf && <GolfPanel session={activitySession} {...(networkSession ? { userId: networkSession.userId } : {})} busy={activityBusy} message={activityMessage} onShot={input => sendSports('golf/shots', input)} onAim={(angle, power) => engineRef.current?.setGolfAim(angle, power)} onClose={closeActivity} />}
+    {activitySession?.state?.badminton && <BadmintonPanel session={activitySession} {...(networkSession ? { userId: networkSession.userId } : {})} busy={activityBusy} message={activityMessage} onCommand={input => sendSports('badminton/commands', input)} onClose={closeActivity} />}
+    {activitySession?.state?.picnic && <PicnicPanel participantNames={participantNames} session={activitySession} {...(networkSession ? { userId: networkSession.userId } : {})} busy={activityBusy} message={activityMessage} inventory={kitchenInventory} onCommand={input => sendSports('picnic/commands', input)} onClose={closeActivity} />}
+    {activitySession?.state?.cafe && <CafePanel participantNames={participantNames} session={activitySession} {...(networkSession ? { userId: networkSession.userId } : {})} busy={activityBusy} message={activityMessage} onCommand={input => sendSports('cafe/commands', input)} onClose={closeActivity} />}
+    {activitySession?.state?.boardGame && <BoardGamePanel session={activitySession} {...(networkSession ? { userId: networkSession.userId } : {})} busy={activityBusy} message={activityMessage} onCommand={input => sendSports('board-game/commands', input)} onClose={closeActivity} />}
+    {photographyFraming && <aside className="activity-travel-hint" aria-label="Photography outing"><p>Walk and look around to frame your scene. P · Take photo. Esc · Leave photography.</p>{activityMessage && <p role="status">{activityMessage}</p>}<button disabled={activityBusy || captureBusy} onClick={() => void capturePhotography()}>{activityBusy || captureBusy ? 'Saving photo…' : photographyRetry ? 'Retry photo save' : 'Take photo'}</button><button onClick={closeActivity}>Leave photography</button></aside>}
+    {activityTravel && <ActivityTravelHint kind={activityTravel.kind} endKey={settings.bindings.dismount} busy={activityTravel.phase === 'saving'} retry={activityTravel.phase === 'retry'} message={activityMessage} onFinish={() => { if (activityTravel.phase === 'retry') { if (activitySession?.state.transportRental) void retryRentalReturn(); else void retryTransportSave(); } else engineRef.current?.finishTransportOuting(); }} onCancel={closeActivity} />}
+    <VenuePanel venue={venueSession} {...(networkSession ? { networkSession } : {})} jobBusy={jobBusy} onClose={() => setVenueSession(null)} onStartJob={(jobId) => void startJob(jobId)} onMoment={(message) => { setToast(message); window.setTimeout(() => setToast(null), 2600); }} />
     <JobShiftPanel session={jobSession} busy={jobBusy} message={jobMessage} onDoAction={(action) => void advanceJob(action)} onComplete={() => void completeJob()} onClose={() => setJobSession(null)} />
   </div>;
 }

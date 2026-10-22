@@ -1,6 +1,6 @@
 # Together V1 — Asset Requirements
 
-> **October 1, 2026 current audit:** [PROJECT_AUDIT_2026_10_01.md](PROJECT_AUDIT_2026_10_01.md). Earlier verification/baseline claims below apply to their recorded checkpoints. Current local full verification passes; current GitHub browser CI fails. PRD v3.1 requires Three.js-native compiled world art; external GLB/DCC production is not mandatory for world assets.
+> **Latest local audit:** [PROJECT_AUDIT_2026_10_08.md](PROJECT_AUDIT_2026_10_08.md). Earlier verification/CI claims apply to their recorded checkpoints. New mechanics are undergoing verification; remote CI and hosted acceptance remain open. PRD v3.1 requires Three.js-native compiled world art; external GLB/DCC production is not mandatory for world assets.
 
 The current build intentionally uses substantial procedural **development art** so systems/world scale can be implemented without pretending placeholder geometry is shipping art. This document defines the replacement path.
 
@@ -145,6 +145,14 @@ Current audio is primarily procedural/foundation-level. Production library is ne
 - sparse original music cues for arrival, morning, café work, home evening, Bay Steps golden hour, story resolutions, Memory Book and festival states.
 
 Audio should be original/licensed with source/license metadata stored alongside assets.
+
+### Procedural audio provenance — October 9, 2026
+
+The runtime sounds in `client/src/game/audio/AudioZoneManager.ts` are original, code-generated Web Audio waveforms created within this project. `activityBuffer` synthesizes golf putt/cup contact, racket impact, shuttle landing/fault, bicycle bell and paddle water sounds from sine partials, deterministic pseudo-random noise and amplitude envelopes. `ambienceBuffer` synthesizes wind, water, bird chirps and rain; district/weather/indoor context controls their mix. Footstep impacts are also synthesized locally. Sparse music uses the project's `shared/src/audio/music.ts` note/voicing definitions and runtime oscillators.
+
+No external recordings, samples, downloaded music, third-party sound packs or AI audio service outputs were used for these additions. There is no third-party audio license or attribution requirement attached to these generated buffers; their authoring source is the project code rather than a packaged audio file. This provenance entry does not assign a new license to the repository. Any later replacement recording or stem must carry its own source, author and redistribution/license metadata before integration.
+
+Buffers are cached per audio context; one-shot effects/footsteps/music have bounded voice counts and disconnect on completion, mute, suspension or disposal. District loops and buses disconnect on disposal. Local automated graph/lifecycle tests verify those behaviors, including a quick visibility reversal. The current sounds remain procedural foundation audio: listening acceptance, timbre/level balancing across devices, spatial placement, headphone/speaker comfort and final artistic acceptance are not certified by those tests. The production audio requirements above remain open where no accepted asset or behavior exists.
 
 ## UI/Memory materials
 

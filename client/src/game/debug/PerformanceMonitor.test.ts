@@ -2,6 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { PerformanceMonitor } from './PerformanceMonitor';
 
 describe('PerformanceMonitor', () => {
+  it('retains complete interval hitch totals after the rolling window expires and resets them', () => {
+    const monitor = new PerformanceMonitor();
+    monitor.recordFrame(120);
+    for (let frame = 0; frame < 300; frame++) monitor.recordFrame(16);
+    monitor.recordFrame(NaN);
+    expect(monitor.read()).toMatchObject({ frameSampleCount: 240, framesOver50ms: 0,
+      intervalFrameCount: 301, intervalElapsedMs: 4920, intervalFramesOver33ms: 1,
+      intervalFramesOver50ms: 1, intervalMaxFrameMs: 120 });
+    monitor.resetFrameSamples();
+    expect(monitor.read()).toMatchObject({ intervalFrameCount: 0, intervalElapsedMs: 0,
+      intervalFramesOver33ms: 0, intervalFramesOver50ms: 0, intervalMaxFrameMs: 0 });
+    monitor.recordFrame(40);
+    expect(monitor.read()).toMatchObject({ intervalFrameCount: 1, intervalElapsedMs: 40,
+      intervalFramesOver33ms: 1, intervalFramesOver50ms: 0, intervalMaxFrameMs: 40 });
+  });
   it('keeps frame cadence separate from CPU work', () => {
     const monitor = new PerformanceMonitor();
     for (let i = 0; i < 120; i += 1) {

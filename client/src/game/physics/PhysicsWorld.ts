@@ -1,4 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
+import { cityHeightAt, type SurfacePoint } from '@together/shared';
+import { awaitPreparation } from '../core/preparation';
 
 export type PlayerPhysicsHandle = {
   body: RAPIER.RigidBody;
@@ -17,9 +19,10 @@ export class PhysicsWorld {
     this.world = world;
   }
 
-  static async create(): Promise<PhysicsWorld> {
+  static async create(signal = new AbortController().signal): Promise<PhysicsWorld> {
     initialization ??= RAPIER.init().catch((error: unknown) => { initialization = undefined; throw error; });
-    await initialization;
+    await awaitPreparation(initialization, signal, 'Physics initialization');
+    signal.throwIfAborted();
     return new PhysicsWorld(new RAPIER.World({ x: 0, y: -9.81, z: 0 }));
   }
 
@@ -62,6 +65,24 @@ export class PhysicsWorld {
   }
 
   getActiveColliderCount(): number { return this.world.colliders.len(); }
+
+  canTraversePedestrian(from: SurfacePoint, to: SurfacePoint): boolean {
+    if (this.disposed || ![from.x, from.z, to.x, to.z].every(Number.isFinite)) return false;
+    const fromY = cityHeightAt(from.x, from.z), toY = cityHeightAt(to.x, to.z);
+    // Ground clearance allows sidewalk lips while the torso sweeps real obstacles.
+    const hit = this.world.castShape({ x: from.x, y: fromY + 1.05, z: from.z }, { x: 0, y: 0, z: 0, w: 1 },
+      { x: to.x - from.x, y: toY - fromY, z: to.z - from.z }, new RAPIER.Capsule(.5, .28),
+      .01, 1, true, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC | RAPIER.QueryFilterFlags.EXCLUDE_KINEMATIC);
+    return hit === null;
+  }
+
+  /** Distance to the first fixed collider along a unit direction, or null. Ignores the player and dynamic bodies. */
+  castStaticRay(origin: { x: number; y: number; z: number }, direction: { x: number; y: number; z: number }, maxDistance: number): number | null {
+    if (this.disposed) return null;
+    const hit = this.world.castRay(new RAPIER.Ray(origin, direction), maxDistance, true,
+      RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC | RAPIER.QueryFilterFlags.EXCLUDE_KINEMATIC);
+    return hit ? hit.timeOfImpact : null;
+  }
 
   step(): void {
     this.world.step();
