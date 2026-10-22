@@ -175,6 +175,13 @@ function withRealtimeActivityPublishing(activityService: ActivityService, publis
           return session;
         };
       }
+      if (property === 'rentalCommand') {
+        return async (...args: Parameters<ActivityService['rentalCommand']>) => {
+          const session = await target.rentalCommand(...args);
+          notify(session.householdId, session.id);
+          return session;
+        };
+      }
       const value = Reflect.get(target, property, target);
       return typeof value === 'function' ? value.bind(target) : value;
     },

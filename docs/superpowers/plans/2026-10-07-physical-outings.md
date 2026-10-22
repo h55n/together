@@ -1,0 +1,13 @@
+# Physical free-roam outings continuation
+
+Authority: existing readiness packages 4/6, PRD sections 40/41/57, and the user's explicit request to continue the full build with subagents. Preserve the browser stack, free world, scenic pauses and deliberate equipment return. No race, score, timer or distance quest bar.
+
+Start after the current combined browser checkpoint finishes. Root coordinates freezes, RED/GREEN, review and browser acceptance across agent ownership.
+
+1. First unify activity snapshot merging for realtime, POST replies and reconciliation. A delayed local older reply currently can replace newer peer progress. Reproduce delayed POST and reconciliation cases; preserve session identity, append-only completed steps and monotonic revisions. Keep side effects outside React state updaters.
+2. Replace instant `ride_route` / `paddle` completion with an owned free-roam outing. Starting releases the modal and input; it does not persist a completed travel step. Actual measured transport movement establishes a boolean departure. Ignore physics jitter, blocked input, teleport discontinuities, wrong mode, long suspended gaps and cancelled/disposed ownership. Tolerances are confidence checks, not gameplay targets.
+3. Show a compact accessible nonmodal controls hint with deliberate park/return and cancellation. Scenic stopping does not automatically complete. Ending before departure returns equipment without claiming a completed outing. After departure, physically park/dock and complete its owned animation before saving travel and final steps in order. Recover lost replies without repeating physical return or regressing shared progress.
+4. Retain existing generation/abort/immediate locks, resume semantics and multiplayer identity handling. Reload preserves server-saved steps and resets uncommitted local travel. Opening a menu must stop unintended controls; define pause/cancel behavior explicitly and test it. Disposal, weather closure and mode changes cannot publish false completion.
+5. Pure tracker and actual engine/UI regressions precede implementation. Real-browser keyboard cycling/kayak must move, steer, pause without autosave, deliberately return, recover lost replies and survive reload/interruptions. Inspect seated/waterline/parking captures.
+
+Current API authenticates membership and ordered steps; a local movement guard establishes UX behavior, not anti-cheat proof. Server snapshot sanity, hosted atomic activity start/mutation, rental/safety rules, two-person seating, scenic sites and full recreation mechanics remain separate release work. Do not close full leisure or production acceptance from this bounded outing implementation.

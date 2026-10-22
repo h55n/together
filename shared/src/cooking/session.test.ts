@@ -49,3 +49,13 @@ test('a player must own the step station and cannot complete locked steps', () =
   session = claimCookingStation(session, 'a', 'sink');
   assert.throws(() => completeCookingStep(recipe, session, 'b', 'wash', false), /claimed/);
 });
+
+test('completing a step releases its station atomically without releasing another player', () => {
+  let session = createCookingSession('cook-handoff', recipe);
+  session = claimCookingStation(session, 'a', 'sink');
+  session = claimCookingStation(session, 'b', 'counter');
+  const completed = completeCookingStep(recipe, session, 'a', 'wash', false);
+  assert.equal(completed.stationClaims.sink, undefined);
+  assert.equal(completed.stationClaims.counter, 'b');
+  assert.equal(session.stationClaims.sink, 'a');
+});

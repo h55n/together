@@ -43,3 +43,10 @@ temp/
 .art-review/
 client/test-results/
 server/.runtime/
+
+# Local runtime state
+.runtime/
+.claude/
+runtime-temp/
+server/server/
+test-results/

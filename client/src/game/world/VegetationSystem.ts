@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { prepareMergeGeometries } from '../assets/runtime/PreparedGeometryMerge';
+import { geometryCellSize, spatialCellKey, validateCellSize, type SpatialBatchOptions } from '../assets/runtime/SpatialBatch';
 import { createSeededRandom } from '@together/shared';
 import type { MaterialLibrary } from './MaterialLibrary';
 import { AssetRegistry, type AssetRegistryMetrics } from '../assets/runtime/AssetRegistry';
@@ -37,16 +38,34 @@ export class VegetationSystem {
     return instance;
   }
 
-  createTreeCluster(placements: readonly TreePlacement[], castShadow: boolean): THREE.Group {
+  *prepareTree(options: TreeOptions): Generator<void, THREE.Group, void> {
+    const asset = yield* this.prepareTreeAsset(options);
+    const instance = asset.root.clone(true) as THREE.Group;
+    instance.scale.setScalar(options.scale ?? 1);
+    return instance;
+  }
+
+  createTreeCluster(placements: readonly TreePlacement[], castShadow: boolean, options: SpatialBatchOptions = {}): THREE.Group {
+    const iterator = this.prepareTreeCluster(placements, castShadow, options);
+    let step = iterator.next();
+    while (!step.done) step = iterator.next();
+    return step.value;
+  }
+
+  *prepareTreeCluster(placements: readonly TreePlacement[], castShadow: boolean, options: SpatialBatchOptions = {}): Generator<void, THREE.Group, void> {
+    validateCellSize(options.cellSize);
     const byMaterial = new Map<string, { material: THREE.Material; geometries: THREE.BufferGeometry[] }>();
+    const cluster = new THREE.Group();
+    let finished = false;
     const placementMatrix = new THREE.Matrix4();
     const localToCluster = new THREE.Matrix4();
     const position = new THREE.Vector3();
     const scale = new THREE.Vector3();
     const rotation = new THREE.Quaternion();
 
+    try {
     for (const placement of placements) {
-      const asset = this.acquireTreeAsset(placement);
+      const asset = yield* this.prepareTreeAsset(placement);
       asset.root.updateMatrixWorld(true);
       const scalar = placement.scale ?? 1;
       position.set(placement.position.x, placement.position.y, placement.position.z);
@@ -57,34 +76,41 @@ export class VegetationSystem {
         if (!(object instanceof THREE.Mesh) || Array.isArray(object.material)) return;
         const material = object.material as THREE.Material;
         const compatibilityKey = geometryCompatibilityKey(object.geometry);
-        const batchKey = `${material.uuid}:${compatibilityKey}`;
+        const batchKey = `${material.uuid}:${compatibilityKey}:${spatialCellKey(placement.position, geometryCellSize(object.geometry, options))}`;
         let entry = byMaterial.get(batchKey);
         if (!entry) {
           entry = { material, geometries: [] };
           byMaterial.set(batchKey, entry);
         }
         localToCluster.copy(placementMatrix).multiply(object.matrixWorld);
-        entry.geometries.push(object.geometry.clone().applyMatrix4(localToCluster));
+        const temporary = object.geometry.clone().applyMatrix4(localToCluster);
+        delete temporary.userData.togetherShared;
+        entry.geometries.push(temporary);
       });
+      yield;
     }
 
-    const cluster = new THREE.Group();
     cluster.name = 'vegetation:cluster';
     let batchIndex = 0;
     for (const { material, geometries } of byMaterial.values()) {
-      const geometry = mergeGeometries(geometries, false);
+      const geometry = yield* prepareMergeGeometries(geometries);
       for (const source of geometries) source.dispose();
+      geometries.length = 0;
       if (!geometry) continue;
-      geometry.computeBoundingBox();
-      geometry.computeBoundingSphere();
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = `static-batch:vegetation:${batchIndex}`;
       mesh.castShadow = castShadow;
       mesh.receiveShadow = true;
       cluster.add(mesh);
       batchIndex += 1;
+      yield;
     }
+    finished = true;
     return cluster;
+    } finally {
+      for (const entry of byMaterial.values()) for (const geometry of entry.geometries) geometry.dispose();
+      if (!finished) for (const mesh of cluster.children as THREE.Mesh[]) mesh.geometry.dispose();
+    }
   }
 
   metrics(): AssetRegistryMetrics { return this.assets.metrics(); }
@@ -94,11 +120,30 @@ export class VegetationSystem {
     return this.assets.acquire(`tree:${options.species}:${variantSeed}:${options.lod ?? 'near'}`);
   }
 
+  private *prepareTreeAsset(options: TreeOptions) {
+    const variantSeed = Math.abs(options.seed % TREE_VARIANTS_PER_SPECIES);
+    const assetId = `tree:${options.species}:${variantSeed}:${options.lod ?? 'near'}`;
+    return yield* this.assets.prepare(assetId, this.compilePreparedTreeAsset(assetId, { ...options, seed: variantSeed }));
+  }
+
+  private *compilePreparedTreeAsset(assetId: string, options: TreeOptions) {
+    return { assetId, root: yield* this.prepareCompiledTree(options) };
+  }
+
   private compileTree(options: TreeOptions): THREE.Group {
+    const iterator = this.prepareCompiledTree(options);
+    let step = iterator.next();
+    while (!step.done) step = iterator.next();
+    return step.value;
+  }
+
+  private *prepareCompiledTree(options: TreeOptions): Generator<void, THREE.Group, void> {
     const random = createSeededRandom(options.seed);
     const scale = 1;
     const group = new THREE.Group();
     group.name = `vegetation:${options.species}`;
+    let runtimeStarted = false;
+    try {
 
     const trunkHeight = (options.species === 'palm' ? 7.4 : (options.species === 'rain_tree' ? 6.8 : options.species === 'gulmohar' ? 6.0 : 4.7) + random() * 1.5) * scale;
     const trunkRadius = (options.species === 'palm' ? 0.19 : 0.3 + random() * 0.12) * scale;
@@ -111,6 +156,7 @@ export class VegetationSystem {
     trunk.castShadow = true;
     trunk.receiveShadow = true;
     group.add(trunk);
+    yield;
 
     if (options.species === 'palm') {
       for (let frond = 0; frond < 9; frond += 1) {
@@ -134,8 +180,10 @@ export class VegetationSystem {
         // Match the indexed primitive layout used by the tree compiler.
         geometry.setIndex(Array.from({length:vertices.length/3},(_,i)=>i));
         mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);
+        yield;
       }
-      return this.compileRuntimeTree(group);
+      runtimeStarted = true;
+      return yield* this.prepareRuntimeTree(group);
     }
     const branchCount = options.species === 'rain_tree' ? 7 : 5;
     for (let i = 0; i < branchCount; i += 1) {
@@ -152,6 +200,7 @@ export class VegetationSystem {
       branch.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
       branch.castShadow = true;
       group.add(branch);
+      yield;
     }
 
     const canopyCount = options.species === 'rain_tree' ? 13 : options.species === 'gulmohar' ? 11 : 8;
@@ -174,27 +223,49 @@ export class VegetationSystem {
       for (let leaf = 0; leaf < 18; leaf += 1) {
         const azimuth = random() * Math.PI * 2;
         const reach = 0.65 + random() * 0.85;
+        const lift = random() - 0.4;
+        // Sunlit sprays crown the top, shaded ones hang beneath: an anime-style light read.
         const spray = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38 + random() * 0.25, 0),
           this.materials.get(options.species === 'gulmohar' && leaf % 9 === 0 ? 'flowerCoral'
             : options.species === 'ornamental' && leaf % 11 === 0 ? 'flowerGold'
-              : leaf % 5 === 0 ? 'foliageLight' : leaf % 3 === 0 ? 'foliageDeep' : 'foliageMid'));
-        spray.position.copy(foliage.position).add(new THREE.Vector3(Math.cos(azimuth) * reach, (random() - 0.4) * 1.1, Math.sin(azimuth) * reach));
+              : lift > 0.3 ? 'foliageLight' : lift < -0.15 ? 'foliageDeep' : 'foliageMid'));
+        // These small crown masses share a soft volume instead of separately
+        // lit triangular facets. Identical seam positions receive identical
+        // radial normals before the compiler applies the non-uniform scale.
+        const sprayNormals = spray.geometry.getAttribute('normal') as THREE.BufferAttribute;
+        sprayNormals.copy(spray.geometry.getAttribute('position') as THREE.BufferAttribute);
+        spray.geometry.normalizeNormals();
+        spray.position.copy(foliage.position).add(new THREE.Vector3(Math.cos(azimuth) * reach, lift * 1.1, Math.sin(azimuth) * reach));
         spray.scale.set(1.1, 0.32 + random() * 0.3, 0.65);
         spray.rotation.set(random() * 0.5, azimuth, random() * 0.4);
         // Consume the same seeded samples so both detail levels share their crown layout.
         if (options.lod === 'far' && leaf % 3 !== 0) { spray.geometry.dispose(); continue; }
         spray.castShadow = true; spray.receiveShadow = true; group.add(spray);
       }
+      yield;
     }
 
-    return this.compileRuntimeTree(group);
+    runtimeStarted = true;
+    return yield* this.prepareRuntimeTree(group);
+    } finally { if (!runtimeStarted) disposeAuthoringGeometry(group); }
   }
 
   private compileRuntimeTree(authoring: THREE.Group): THREE.Group {
+    const iterator = this.prepareRuntimeTree(authoring);
+    let step = iterator.next();
+    while (!step.done) step = iterator.next();
+    return step.value;
+  }
+
+  private *prepareRuntimeTree(authoring: THREE.Group): Generator<void, THREE.Group, void> {
     authoring.updateMatrixWorld(true);
     const byMaterial = new Map<string, { material: THREE.Material; geometries: THREE.BufferGeometry[] }>();
-    authoring.traverse((object) => {
-      if (!(object instanceof THREE.Mesh) || Array.isArray(object.material)) return;
+    const runtime = new THREE.Group();
+    let finished = false;
+    const meshes: THREE.Mesh[] = [];
+    authoring.traverse(object => { if (object instanceof THREE.Mesh && !Array.isArray(object.material)) meshes.push(object); });
+    try {
+    for (const object of meshes) {
       const sourceMaterial = object.material as THREE.MeshStandardMaterial;
       const painted = sourceMaterial !== this.materials.get('wood');
       const material = painted ? this.materials.get('foliagePainted') : sourceMaterial;
@@ -222,22 +293,27 @@ export class VegetationSystem {
         geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
       }
       entry.geometries.push(geometry.applyMatrix4(object.matrixWorld));
-      object.geometry.dispose();
-    });
-    const runtime = new THREE.Group();
+      yield;
+    }
     runtime.name = authoring.name;
     for (const { material, geometries } of byMaterial.values()) {
-      const geometry = mergeGeometries(geometries, false);
+      const geometry = yield* prepareMergeGeometries(geometries);
       for (const source of geometries) source.dispose();
+      geometries.length = 0;
       if (!geometry) continue;
-      geometry.computeBoundingBox();
-      geometry.computeBoundingSphere();
       const mesh = new THREE.Mesh(geometry, material);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       runtime.add(mesh);
+      yield;
     }
+    finished = true;
     return runtime;
+    } finally {
+      disposeAuthoringGeometry(authoring);
+      for (const entry of byMaterial.values()) for (const geometry of entry.geometries) geometry.dispose();
+      if (!finished) disposeAuthoringGeometry(runtime);
+    }
   }
 
   createShrub(seed: number, scale = 1): THREE.Group {
@@ -272,6 +348,12 @@ export class VegetationSystem {
     }
     return this.compileRuntimeTree(group);
   }
+}
+
+function disposeAuthoringGeometry(root: THREE.Object3D): void {
+  const geometries = new Set<THREE.BufferGeometry>();
+  root.traverse(object => { if (object instanceof THREE.Mesh && !object.geometry.userData.togetherShared) geometries.add(object.geometry); });
+  for (const geometry of geometries) geometry.dispose();
 }
 
 

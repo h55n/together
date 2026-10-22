@@ -33,6 +33,7 @@ test('two household members can own separate stations and finish one shared impe
   let session = await cooking.start(household.id, 'a', 'fried_rice', 'cook-session-coop-0001');
   session = await cooking.claimStation(household.id, 'a', session.id, 'sink');
   session = await cooking.completeStep(household.id, 'a', session.id, 'wash', false);
+  assert.equal(session.state.stationClaims.sink, undefined);
   session = await cooking.releaseStation(household.id, 'a', session.id, 'sink');
   session = await cooking.claimStation(household.id, 'b', session.id, 'counter');
   session = await cooking.completeStep(household.id, 'b', session.id, 'cut', false);
@@ -41,6 +42,7 @@ test('two household members can own separate stations and finish one shared impe
   session = await cooking.completeStep(household.id, 'a', session.id, 'boil', false);
   session = await cooking.claimStation(household.id, 'b', session.id, 'hob_b');
   session = await cooking.completeStep(household.id, 'b', session.id, 'fry', true);
+  session = await cooking.claimStation(household.id, 'b', session.id, 'hob_b');
   session = await cooking.completeStep(household.id, 'b', session.id, 'stir', false);
   session = await cooking.releaseStation(household.id, 'b', session.id, 'hob_b');
   session = await cooking.claimStation(household.id, 'b', session.id, 'table');

@@ -18,7 +18,7 @@ export function NpcPanel(props: {
   const rainy = props.weather.includes('rain') || props.weather === 'thunderstorm';
   const familiar = (props.relationship?.familiarity ?? 0) >= 2 || (props.relationship?.flags.length ?? 0) > 1;
   const line = rainy ? dialogue.weather : familiar ? dialogue.familiar : dialogue.greeting;
-  return <section className="game-panel npc-panel" aria-label={`Talk to ${npc.displayName}`}>
+  return <section className="game-panel npc-panel" role="dialog" aria-modal="true" aria-label={`Talk to ${npc.displayName}`}>
     <header className="panel-header"><div><p className="eyebrow">Amaya Bay resident</p><h2>{npc.displayName}</h2></div><button className="panel-close" onClick={props.onClose}>Close</button></header>
     <p className="muted-copy">{npc.role}</p>
     <blockquote className="npc-dialogue">“{line}”</blockquote>

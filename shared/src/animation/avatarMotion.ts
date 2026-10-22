@@ -31,6 +31,9 @@ export type AvatarMotionState = {
   action: AvatarAction;
   elapsedSeconds: number;
   speed: number;
+  directionX?: number;
+  /** Positive is forward along the avatar's -Z axis. */
+  directionZ?: number;
 };
 
 export type AvatarPoseSample = {
@@ -40,6 +43,8 @@ export type AvatarPoseSample = {
   rightArmRoll: number;
   leftLegPitch: number;
   rightLegPitch: number;
+  leftLegRoll: number;
+  rightLegRoll: number;
   torsoPitch: number;
   torsoYaw: number;
   breath: number;
@@ -58,6 +63,8 @@ const base = (): AvatarPoseSample => ({
   rightArmRoll: 0,
   leftLegPitch: 0,
   rightLegPitch: 0,
+  leftLegRoll: 0,
+  rightLegRoll: 0,
   torsoPitch: 0,
   torsoYaw: 0,
   breath: 0,
@@ -69,6 +76,8 @@ const base = (): AvatarPoseSample => ({
   rightHandZ: 0,
 });
 
+export function avatarGaitFrequency(action: 'walk' | 'jog'): number { return action === 'jog' ? 7.8 : 6.8; }
+
 export function sampleAvatarMotion(state: AvatarMotionState): AvatarPoseSample {
   const pose = base();
   const t = Math.max(0, state.elapsedSeconds);
@@ -76,16 +85,28 @@ export function sampleAvatarMotion(state: AvatarMotionState): AvatarPoseSample {
 
   if (state.action === 'walk' || state.action === 'jog') {
     const jog = state.action === 'jog';
-    const frequency = jog ? 7.8 : 6.8;
+    const speed = Number.isFinite(state.speed) ? Math.max(0, state.speed) : 0;
+    const stride = Math.min(1, speed / (jog ? 3.2 : 1.6));
+    if (stride < 0.001) return pose;
+    const x = Number.isFinite(state.directionX) ? state.directionX! : 0;
+    const z = Number.isFinite(state.directionZ) ? state.directionZ! : 1;
+    const length = Math.max(1, Math.hypot(x, z));
+    const sideways = x / length;
+    const forward = z / length;
+    const frequency = avatarGaitFrequency(state.action);
     const phase = Math.sin(t * frequency);
-    const armAmplitude = jog ? 0.65 : 0.38;
-    const legAmplitude = jog ? 0.62 : 0.42;
-    pose.leftArmPitch = phase * armAmplitude;
-    pose.rightArmPitch = -phase * armAmplitude;
-    pose.leftLegPitch = -phase * legAmplitude;
-    pose.rightLegPitch = phase * legAmplitude;
-    pose.torsoYaw = phase * (jog ? 0.045 : 0.025);
-    pose.torsoPitch = jog ? 0.08 : 0.025;
+    const armAmplitude = (jog ? 0.65 : 0.38) * stride;
+    const legAmplitude = (jog ? 0.62 : 0.42) * stride;
+    pose.leftArmPitch = phase * armAmplitude * forward;
+    pose.rightArmPitch = -phase * armAmplitude * forward;
+    pose.leftArmRoll = phase * armAmplitude * sideways * 0.25;
+    pose.rightArmRoll = -phase * armAmplitude * sideways * 0.25;
+    pose.leftLegPitch = -phase * legAmplitude * forward;
+    pose.rightLegPitch = phase * legAmplitude * forward;
+    pose.leftLegRoll = -phase * legAmplitude * sideways * 0.75;
+    pose.rightLegRoll = phase * legAmplitude * sideways * 0.75;
+    pose.torsoYaw = phase * (jog ? 0.045 : 0.025) * stride;
+    pose.torsoPitch = (jog ? 0.08 : 0.025) * forward * stride;
     return pose;
   }
 
@@ -255,7 +276,8 @@ export function sampleAvatarMotion(state: AvatarMotionState): AvatarPoseSample {
       pose.rightLegPitch = -0.04;
       return pose;
     case 'kayak': {
-      const paddle = Math.sin(t * Math.PI * 2.2);
+      const stroke = Number.isFinite(state.speed) ? Math.min(1, Math.max(0, state.speed) / 2.4) : 0;
+      const paddle = Math.sin(t * Math.PI * 2.2) * stroke;
       pose.torsoPitch = 0.1;
       pose.torsoYaw = paddle * 0.2;
       pose.leftArmPitch = -0.45 + paddle * 0.24;
@@ -264,6 +286,7 @@ export function sampleAvatarMotion(state: AvatarMotionState): AvatarPoseSample {
       pose.rightArmRoll = 0.35;
       pose.leftHandZ = -0.25 - paddle * 0.12;
       pose.rightHandZ = -0.25 + paddle * 0.12;
+      pose.leftLegPitch = pose.rightLegPitch = 1.25;
       return pose;
     }
     case 'type':

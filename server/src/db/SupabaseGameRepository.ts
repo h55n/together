@@ -1,8 +1,21 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { TransitCommit, TransitCommitResult } from './GameRepository.js';
 import type { ActivitySessionRecord, CookingSessionRecord, GameRepository, HouseholdMemberRecord, HouseholdNoteRecord, HouseholdRecord, HomeStateRecord, InventoryRecord, JobSessionRecord, MemoryRecord, NPCRelationshipRecord, StoryInstanceRecord, TransactionRecord, UserProfileRecord, VoteRecord } from './GameRepository.js';
 
 export class SupabaseGameRepository implements GameRepository {
   constructor(private readonly client: SupabaseClient) {}
+
+  async commitTransit(input: TransitCommit): Promise<TransitCommitResult> {
+    const { data, error } = await this.client.rpc('commit_transit', {
+      p_household_id: input.householdId, p_user_id: input.userId, p_from: input.from,
+      p_destination_id: input.destinationId, p_destination_name: input.destinationName,
+      p_fare: input.fare, p_key: input.idempotencyKey,
+    });
+    if (error) throw error;
+    if (!data || typeof data !== 'object' || !data.transaction || !Number.isSafeInteger(data.personalWallet))
+      throw new Error('Invalid committed transit receipt');
+    return { personalWallet: data.personalWallet as number, transaction: this.inflateTransaction(data.transaction as Record<string, unknown>) };
+  }
 
   async saveUserProfile(profile: UserProfileRecord): Promise<void> {
     const { error } = await this.client.from('users').upsert({
@@ -235,6 +248,16 @@ export class SupabaseGameRepository implements GameRepository {
     if (error) throw error;
   }
 
+  async startOrResumeJobSession(session: JobSessionRecord): Promise<JobSessionRecord> {
+    const { data, error } = await this.client.rpc('start_or_resume_job_session_v1', {
+      p_id: session.id, p_start_key: session.startIdempotencyKey, p_household_id: session.householdId,
+      p_user_id: session.userId, p_job_id: session.jobId,
+    });
+    if (error) throw error;
+    if (!data) throw new Error('Could not start or resume job session');
+    return inflateJobSession(data);
+  }
+
   async getJobSession(id: string): Promise<JobSessionRecord | null> {
     const { data, error } = await this.client.from('job_sessions').select('*').eq('id', id).maybeSingle();
     if (error) throw error;
@@ -360,6 +383,26 @@ export class SupabaseGameRepository implements GameRepository {
       updated_at: session.updatedAt,
     }, { onConflict: 'idempotency_key' });
     if (error) throw error;
+  }
+
+  async compareAndSwapActivitySession(session: ActivitySessionRecord, expectedRevision: number): Promise<boolean> {
+    const { data, error } = await this.client.rpc('compare_and_swap_activity_session', {
+      p_id: session.id, p_expected_revision: expectedRevision,
+      p_state: session.state, p_updated_at: session.updatedAt,
+    });
+    if (error) throw error;
+    return data === true;
+  }
+
+  async insertActivitySession(session: ActivitySessionRecord): Promise<ActivitySessionRecord> {
+    const { error } = await this.client.from('activity_sessions').upsert({
+      id: session.id, idempotency_key: session.idempotencyKey, household_id: session.householdId,
+      activity_id: session.activityId, state: session.state, created_at: session.createdAt, updated_at: session.updatedAt,
+    }, { onConflict: 'idempotency_key', ignoreDuplicates: true });
+    if (error) throw error;
+    const saved = await this.getActivitySessionByIdempotencyKey(session.idempotencyKey);
+    if (!saved) throw new Error('Activity creation could not be confirmed');
+    return saved;
   }
 
   async getActivitySession(id: string): Promise<ActivitySessionRecord | null> {
@@ -490,7 +533,7 @@ export class SupabaseGameRepository implements GameRepository {
   }
 
   private inflateTransaction(row: Record<string, unknown>): TransactionRecord {
-    const type = row.type === 'job_payout' || row.type === 'deposit' || row.type === 'refund' || row.type === 'inventory_consumption' || row.type === 'moving' || row.type === 'renovation' ? row.type : 'purchase';
+    const type = row.type === 'job_payout' || row.type === 'deposit' || row.type === 'refund' || row.type === 'inventory_consumption' || row.type === 'moving' || row.type === 'renovation' || row.type === 'transport' ? row.type : 'purchase';
     return {
       id: String(row.id),
       idempotencyKey: String(row.idempotency_key),
@@ -588,6 +631,7 @@ function inflateJobSession(row: Record<string, unknown>): JobSessionRecord {
   return {
     id: String(row.id),
     startIdempotencyKey: String(row.start_idempotency_key),
+    ...(typeof row.completion_idempotency_key === 'string' ? { completionIdempotencyKey: row.completion_idempotency_key } : {}),
     householdId: String(row.household_id),
     userId: String(row.user_id),
     jobId: String(row.job_id) as JobSessionRecord['jobId'],

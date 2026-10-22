@@ -1,3 +1,5 @@
+import { awaitPreparation } from './preparation';
+
 export type RendererBackend = 'webgpu' | 'webgl2' | 'unsupported';
 export type RendererCapabilities = { webgpu: boolean; webgl2: boolean };
 
@@ -25,7 +27,8 @@ export function detectRendererCapabilities(canvas: HTMLCanvasElement, probeWebgl
 }
 
 /** A navigator.gpu property alone does not guarantee an adapter. */
-export async function hasWebGpuAdapter(gpu: { requestAdapter: () => Promise<unknown> } | undefined): Promise<boolean> {
+export async function hasWebGpuAdapter(gpu: { requestAdapter: () => Promise<unknown> } | undefined, signal = new AbortController().signal): Promise<boolean> {
   if (!gpu?.requestAdapter) return false;
-  try { return Boolean(await gpu.requestAdapter()); } catch { return false; }
+  try { return Boolean(await awaitPreparation(gpu.requestAdapter(), signal, 'Graphics adapter discovery', 10_000)); }
+  catch { signal.throwIfAborted(); return false; }
 }

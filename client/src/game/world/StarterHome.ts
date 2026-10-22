@@ -38,9 +38,10 @@ export function buildStarterHome(materials: MaterialLibrary, physics: PhysicsWor
   addWall(group, physics, [4.35, 3, 0.18], [x + 3.325, y + 1.5, z - 4.5], materials);
 
   // Kitchen run and domestic objects.
-  addFurniture(group, physics, [3.7, 0.9, 0.7], [x - 2.4, y + 0.45, z + 3.75], materials.get('concrete'));
+  addFurniture(group, physics, [3.7, 0.9, 0.7], [x - 2.4, y + 0.45, z + 3.75], materials.get('mintPlaster'));
+  addBox(group, [3.78, 0.05, 0.76], [x - 2.4, y + 0.925, z + 3.75], materials.get('wood'));
   addFurniture(group, physics, [1.2, 0.08, 0.55], [x - 3.3, y + 0.94, z + 3.65], materials.get('metalDark'));
-  addFurniture(group, physics, [1.0, 1.85, 0.85], [x + 4.65, y + 0.925, z + 3.5], materials.get('warmPlaster'));
+  addFurniture(group, physics, [1.0, 1.85, 0.85], [x + 4.65, y + 0.925, z + 3.5], materials.get('pastelBlue'));
   const kettle = addBox(group, [0.22, 0.28, 0.22], [x - 0.9, y + 1.08, z + 3.55], materials.get('metalDark'));
   kettle.name = 'prop:kettle';
   const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.035, 20), materials.get('warmPlaster'));
@@ -50,7 +51,8 @@ export function buildStarterHome(materials: MaterialLibrary, physics: PhysicsWor
 
   // Bed / clothes / laundry corner.
   addFurniture(group, physics, [2.2, 0.45, 3.5], [x + 3.55, y + 0.225, z - 1.85], materials.get('wood'));
-  addBox(group, [2.05, 0.2, 3.25], [x + 3.55, y + 0.53, z - 1.85], materials.get('curtainWarm'));
+  addBox(group, [2.05, 0.2, 3.25], [x + 3.55, y + 0.53, z - 1.85], materials.get('pastelPink'));
+  addBox(group, [1.6, 0.14, 0.45], [x + 3.55, y + 0.7, z - 3.25], materials.get('creamPlaster')).name = 'prop:pillow';
   addBox(group, [0.72, 0.6, 0.72], [x + 0.9, y + 0.3, z - 3.35], materials.get('wood')).name = 'prop:laundry-basket';
 
   // Small table, seats, moving boxes and plant make the space feel occupied from day one.
@@ -61,10 +63,24 @@ export function buildStarterHome(materials: MaterialLibrary, physics: PhysicsWor
   addBox(group, [0.75, 0.68, 0.72], [x - 3.8, y + 0.34, z - 2.95], materials.get('wood')).name = 'moving-box:kitchen';
   addBox(group, [0.88, 0.78, 0.76], [x - 2.9, y + 0.39, z - 2.7], materials.get('wood')).name = 'moving-box:shared';
   addPlant(group, x + 4.55, y, z + 0.9, materials);
+  addPlant(group, x - 4.8, y, z - 0.6, materials);
+  // A woven rug and a few framed prints make the first room feel lived in.
+  addBox(group, [2.8, 0.02, 2.1], [x - 0.3, y + 0.19, z - 0.3], materials.get('creamPlaster')).name = 'decor:rug-border';
+  addBox(group, [2.5, 0.022, 1.8], [x - 0.3, y + 0.192, z - 0.3], materials.get('terracottaPlaster')).name = 'decor:rug';
+  for (const [dx, key] of [[-1.2, 'pastelYellow'], [0, 'mintPlaster'], [1.2, 'pastelBlue']] as const) {
+    addBox(group, [0.82, 0.62, 0.04], [x + dx, y + 1.75, z - 4.38], materials.get('wood')).name = 'decor:frame';
+    addBox(group, [0.68, 0.48, 0.02], [x + dx, y + 1.75, z - 4.355], materials.get(key)).name = 'decor:print';
+  }
 
   // Warm practical lamp and window composition without creating a dynamic light per fixture.
-  const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.44, 0.3, 12, 1, true), materials.get('curtainWarm'));
-  shade.position.set(x, y + 2.55, z + 0.5);
+  // A small glowing paper pendant on a cord; double-sided so its lit inside reads from below.
+  const paper = new THREE.MeshStandardMaterial({ color: 0xf6dfb0, emissive: 0xffb45e, emissiveIntensity: 0.55, roughness: 0.85, side: THREE.DoubleSide });
+  const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.3, 0.26, 28, 1, true), paper);
+  shade.name = 'decor:pendant-lamp';
+  shade.position.set(x, y + 2.72, z + 0.5);
+  const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.3, 6), materials.get('metalDark'));
+  cord.position.set(0, 0.28, 0);
+  shade.add(cord);
   group.add(shade);
   addBox(group, [3.62, 1.44, 0.06], [x - 2.2, y + 1.73, z + 4.5], materials.get('glass')).name = 'window:balcony';
   addBox(group, [3.95, 0.13, 0.38], [x - 2.2, y + 0.99, z + 4.37], materials.get('wood'));
@@ -95,8 +111,8 @@ export function buildStarterHome(materials: MaterialLibrary, physics: PhysicsWor
     interaction('home_groceries', 'Put groceries away', 'carry', x - 4.0, z - 1.7, 2.0, 4, 1.0, groceryRestockSequence, { type: 'restock_groceries', amount: 0.2 }),
     interaction('home_repair', 'Fix loose tap panel', 'point', x + 4.2, z + 2.7, 2.0, 6, 1.0, repairSequence, { type: 'repair', repairId: 'tap_panel' }),
     interaction('home_box', 'Carry moving box', 'carry', x - 3.3, z - 2.2, 2.0, 3, 2.0),
-    interaction('home_table', 'Sit at table', 'sit', x - 0.3, z - 1.3, 2.0, 2, 2.5),
-    interaction('home_plans', 'Talk about this home', 'point', x - 0.3, z - 0.3, 2.2, 7, 0.6),
+    { ...interaction('home_table', 'Play a board/card game', 'sit', x - 0.3, z - 1.3, 2.0, 3, 2.5), activityId: 'board_game' },
+    interaction('home_plans', 'Talk about this home', 'point', x - 4.0, z + 3.0, 1.5, 7, 0.6),
     interaction('home_bed', 'Rest on bed', 'sleep', x + 3.55, z - 0.8, 2.0, 3, 3.0),
   ];
 
@@ -119,7 +135,7 @@ function interaction(
 }
 
 function addWall(group: THREE.Group, physics: PhysicsWorld, size: [number, number, number], position: [number, number, number], materials: MaterialLibrary): void {
-  addBox(group, size, position, materials.get('warmPlaster'));
+  addBox(group, size, position, materials.get('interiorPlaster'));
   physics.createFixedCuboid(
     { x: position[0], y: position[1], z: position[2] },
     { x: size[0] / 2, y: size[1] / 2, z: size[2] / 2 },

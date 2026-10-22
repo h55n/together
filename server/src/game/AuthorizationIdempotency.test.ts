@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { LocalGameRepository } from '../db/LocalGameRepository';
+import { SupabaseGameRepository } from '../db/SupabaseGameRepository';
 import { ActivityService } from './ActivityService';
 import { EconomyService } from './EconomyService';
 import { HouseholdService } from './HouseholdService';
@@ -29,6 +31,46 @@ function services() {
 }
 
 describe('authorization before idempotent/cache returns', () => {
+  it('recognizes the same payment retry after reading a completed hosted database row', async () => {
+    const { households, jobs, repository } = services();
+    const household = await households.createHousehold('user-a', { name: 'Home', type: 'friends' });
+    let session = await jobs.start(household.id, 'user-a', 'cafe_roshan', 'hosted-start-0001');
+    while (session.nextAction) session = await jobs.advance(session.id, 'user-a', session.nextAction);
+    const key = `job-finish:${session.id}`;
+    const paid = await jobs.complete(session.id, 'user-a', key);
+    const row = {
+      id: session.id, household_id: household.id, user_id: 'user-a', job_id: session.jobId,
+      start_idempotency_key: session.startIdempotencyKey, completion_idempotency_key: key,
+      state: 'complete', completed_actions: session.completedActions, mistakes: 0,
+      started_at: session.startedAt, updated_at: paid.session.updatedAt,
+    };
+    const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: row, error: null }) };
+    const hosted = new SupabaseGameRepository({ from: () => query } as unknown as SupabaseClient);
+    vi.spyOn(repository, 'getJobSession').mockImplementation(id => hosted.getJobSession(id));
+    const retried = await jobs.complete(session.id, 'user-a', key);
+    expect(retried.session.completionIdempotencyKey).toBe(key);
+    expect(retried.economy.personalWallet).toBe(paid.economy.personalWallet);
+    expect(await repository.listTransactions(household.id)).toHaveLength(1);
+    await expect(jobs.complete(session.id, 'user-a', 'different-payment-key')).rejects.toThrow('already paid');
+  });
+
+  it('reuses one active job across concurrent starts and allows a new shift after payment', async () => {
+    const { households, jobs, repository } = services();
+    const household = await households.createHousehold('user-a', { name: 'Home', type: 'friends' });
+    const [first, second] = await Promise.all([
+      jobs.start(household.id, 'user-a', 'cafe_roshan', 'parallel-start-0001'),
+      jobs.start(household.id, 'user-a', 'cafe_roshan', 'parallel-start-0002'),
+    ]);
+    expect(second.id).toBe(first.id);
+    expect(await repository.listJobSessions(household.id, 'user-a')).toHaveLength(1);
+    let progress = first;
+    while (progress.nextAction) progress = await jobs.advance(first.id, 'user-a', progress.nextAction);
+    await jobs.complete(first.id, 'user-a', `job-finish:${first.id}`);
+    const next = await jobs.start(household.id, 'user-a', 'cafe_roshan', 'parallel-start-0003');
+    expect(next.id).not.toBe(first.id);
+    expect(next.completedActions).toEqual([]);
+  });
+
   it('does not expose an existing job session to a non-member reusing its start key', async () => {
     const { households, jobs } = services();
     const household = await households.createHousehold('user-a', { name: 'Home', type: 'friends' });

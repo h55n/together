@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { StreamingScheduler } from './StreamingScheduler';
 
 describe('StreamingScheduler', () => {
+  it('keeps a partially prepared job queued and spends the budget on its bounded steps', () => {
+    const scheduler = new StreamingScheduler();
+    scheduler.reconcile([{ key: '0:0', x: 0, z: 0, ring: 'active', priority: 0 }]);
+    let steps = 0;
+    const advance = () => ({ costMs: 5, complete: ++steps === 3 });
+    expect(scheduler.takeFrameBudget(8, advance, 1)).toEqual([]);
+    expect(steps).toBe(2);
+    expect(scheduler.metrics().pendingJobs).toBe(1);
+    expect(scheduler.takeFrameBudget(8, advance, 1).map(job => job.key)).toEqual(['0:0']);
+    expect(scheduler.metrics().pendingJobs).toBe(0);
+  });
   it('commits the current chunk before distant horizon work within the frame budget', () => {
     const scheduler = new StreamingScheduler();
     scheduler.reconcile([

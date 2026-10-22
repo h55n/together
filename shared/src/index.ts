@@ -46,6 +46,9 @@ export * from './world/venues.js';
 
 export * from './audio/music.js';
 export * from './animation/avatarAppearance.js';
+export * from './leisure/picnic.js';
+export * from './leisure/cafe.js';
+export * from './transport/rental.js';
 
 export * from './home/decorMode.js';
 
@@ -56,7 +59,11 @@ export * from './transport/autoRickshaw.js';
 export * from "./cooking/presentation.js";
 
 export * from './leisure/activity.js';
+export * from './leisure/miniGolf.js';
+export * from './leisure/badminton.js';
 
 export * from './settings/gamepad.js';
 
 export * from './home/domesticInteraction.js';
+
+export * from './leisure/boardGame.js';

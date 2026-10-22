@@ -22,6 +22,7 @@ describe('physics lifecycle', () => {
     const homeDecor = { dispose: vi.fn(() => order.push('home-decor')) };
     const player = { dispose: vi.fn(() => order.push('player')) };
     const physics = { dispose: vi.fn(() => order.push('physics')) };
+    const microActions = { cancel: vi.fn(() => order.push('actions')) };
     const disposable = () => ({ dispose: vi.fn() });
 
     const engine = Object.assign(Object.create(GameEngine.prototype), {
@@ -42,6 +43,7 @@ describe('physics lifecycle', () => {
       worldStreamer,
       homeDecor,
       player,
+      microActions,
       avatar: disposable(),
       materials: disposable(),
       renderer: disposable(),
@@ -52,6 +54,8 @@ describe('physics lifecycle', () => {
     engine.dispose();
 
     expect(physics.dispose).toHaveBeenCalledTimes(1);
+    expect(microActions.cancel).toHaveBeenCalledExactlyOnceWith(player);
+    expect(order.indexOf('actions')).toBeLessThan(order.indexOf('player'));
     expect(order.indexOf('physics')).toBeGreaterThan(order.indexOf('streamer'));
     expect(order.indexOf('physics')).toBeGreaterThan(order.indexOf('home-decor'));
     expect(order.indexOf('physics')).toBeGreaterThan(order.indexOf('player'));

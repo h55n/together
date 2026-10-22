@@ -1,8 +1,8 @@
-import { advanceTransportHeading, advanceTransportSpeed, constrainKayakMovement, type AvatarAction, type TransportMode } from '@together/shared';
+import { advanceTransportHeading, advanceTransportSpeed, constrainKayakMovement, KAYAK_PLAYER_SUPPORT_Y, type AvatarAction, type TransportMode } from '@together/shared';
 import type { InputSnapshot } from '../core/InputManager';
 import type { PhysicsWorld, PlayerPhysicsHandle } from '../physics/PhysicsWorld';
 import type { PlayerAvatar } from './PlayerAvatar';
-import { movementVector } from './movementMath';
+import { displacementLocomotion, movementVector } from './movementMath';
 
 export class PlayerController {
   readonly physicsHandle: PlayerPhysicsHandle;
@@ -11,12 +11,16 @@ export class PlayerController {
   private jogging = false;
   private microAction: AvatarAction | null = null;
   private microActionRemaining = 0;
-  private microActionCompletion: { promise: Promise<void>; resolve: () => void } | null = null;
+  private microActionCompletion: { promise: Promise<boolean>; resolve: (completed: boolean) => void } | null = null;
   private transportMode: TransportMode = 'on_foot';
   private transportSpeed = 0;
   private transportYaw = 0;
   private transportHeadingInitialized = false;
   private interactionLocked = false;
+  private previousVisualPosition: { x: number; z: number };
+  private footfallListener: ((speed: number) => void) | undefined;
+  private readonly footVelocity = { x: 0, z: 0 };
+  private lastFootfallSerial = 0;
 
   constructor(
     private readonly physics: PhysicsWorld,
@@ -24,33 +28,40 @@ export class PlayerController {
     spawn: { x: number; y: number; z: number },
   ) {
     this.physicsHandle = physics.createPlayer(spawn);
+    this.previousVisualPosition = { x: spawn.x, z: spawn.z };
   }
 
   setInput(input: InputSnapshot): void {
     this.lastInput = input;
-    this.moving = !this.interactionLocked && this.microAction === null && (this.transportMode === 'on_foot' ? Math.abs(input.moveX) + Math.abs(input.moveZ) > 0.01 : this.transportSpeed > 0.08 || input.moveZ > 0);
-    this.jogging = this.transportMode === 'on_foot' && this.moving && input.jog;
   }
 
-  beginMicroAction(action: Exclude<AvatarAction, 'idle' | 'walk' | 'jog'>, durationSeconds = 1.25, allowWhileLocked = false): void {
-    if (this.transportMode !== 'on_foot' || (this.interactionLocked && !allowWhileLocked)) return;
+  setFootfallListener(listener: (speed: number) => void): void {
+    this.footfallListener = listener;
+    this.lastFootfallSerial = this.avatar.getFootfallSerial();
+  }
+
+  beginMicroAction(action: Exclude<AvatarAction, 'idle' | 'walk' | 'jog'>, durationSeconds = 1.25, allowWhileLocked = false): boolean {
+    if (this.transportMode !== 'on_foot' || (this.interactionLocked && !allowWhileLocked)) return false;
     this.finishMicroAction();
-    let resolve!: () => void;
-    const promise = new Promise<void>((complete) => { resolve = complete; });
+    let resolve!: (completed: boolean) => void;
+    const promise = new Promise<boolean>((complete) => { resolve = complete; });
     this.microActionCompletion = { promise, resolve };
     this.microAction = action;
     this.microActionRemaining = Math.max(0.25, durationSeconds);
     this.moving = false;
     this.jogging = false;
+    return true;
   }
 
-  waitForMicroActionCompletion(): Promise<void> {
-    return this.microActionCompletion?.promise ?? Promise.resolve();
+  waitForMicroActionCompletion(): Promise<boolean> {
+    return this.microActionCompletion?.promise ?? Promise.resolve(false);
   }
+
+  cancelMicroAction(): void { this.finishMicroAction(); }
 
   fixedUpdate(deltaSeconds: number, cameraYaw: number): void {
     const input = this.lastInput;
-    if (!input || this.microAction || this.interactionLocked) return;
+    if (!input || this.microAction || this.interactionLocked) { this.footVelocity.x = 0; this.footVelocity.z = 0; return; }
     let movement;
     if (this.transportMode === 'bicycle' || this.transportMode === 'scooter' || this.transportMode === 'kayak') {
       const throttle = Math.max(0, input.moveZ);
@@ -64,15 +75,29 @@ export class PlayerController {
       movement = movementVector({ moveX: 0, moveZ: 1, jog: false }, this.transportYaw, this.transportSpeed);
       this.moving = this.transportSpeed > 0.08;
     } else {
-      movement = movementVector(input, cameraYaw);
+      // Ease into and out of a walk instead of snapping to full speed: quick enough to stay responsive.
+      const target = movementVector(input, cameraYaw);
+      const accelerating = Math.hypot(target.x, target.z) >= Math.hypot(this.footVelocity.x, this.footVelocity.z);
+      const blend = 1 - Math.exp(-deltaSeconds * (accelerating ? 15 : 14));
+      this.footVelocity.x += (target.x - this.footVelocity.x) * blend;
+      this.footVelocity.z += (target.z - this.footVelocity.z) * blend;
+      if (Math.hypot(this.footVelocity.x, this.footVelocity.z) < 0.03 && target.x === 0 && target.z === 0) { this.footVelocity.x = 0; this.footVelocity.z = 0; }
+      movement = this.footVelocity;
     }
     const intended = { x: movement.x * deltaSeconds, z: movement.z * deltaSeconds };
-    const horizontal = this.transportMode === 'kayak'
-      ? constrainKayakMovement(this.getPosition(), intended)
+    const kayakPosition = this.transportMode === 'kayak' ? this.getPosition() : undefined;
+    const horizontal = kayakPosition
+      ? constrainKayakMovement(kayakPosition, intended)
       : intended;
+    // Rapier still resolves shore/obstacle collision, but a floating hull must
+    // seek the waterline rather than continually walking down to the seabed.
+    // Bound correction so old saved/launch heights converge without a snap.
+    const vertical = kayakPosition
+      ? Math.max(-4.5 * deltaSeconds, Math.min(4.5 * deltaSeconds, KAYAK_PLAYER_SUPPORT_Y - kayakPosition.y))
+      : -4.5 * deltaSeconds;
     this.physics.moveCharacter(this.physicsHandle, {
       x: horizontal.x,
-      y: -4.5 * deltaSeconds,
+      y: vertical,
       z: horizontal.z,
     });
   }
@@ -84,21 +109,31 @@ export class PlayerController {
       this.transportHeadingInitialized = true;
     }
     this.avatar.setTransform(position, this.presentationYaw(yaw), deltaSeconds);
+    const locomotion = displacementLocomotion(this.previousVisualPosition, position, deltaSeconds, this.avatar.root.rotation.y);
+    this.previousVisualPosition = { x: position.x, z: position.z };
+    this.moving = !this.interactionLocked && !this.microAction && (this.transportMode === 'on_foot' ? locomotion.speed > 0 : this.transportSpeed > 0.08);
+    this.jogging = this.transportMode === 'on_foot' && this.moving && Boolean(this.lastInput?.jog) && locomotion.speed > 1.8;
     if (this.microAction) {
       this.microActionRemaining -= deltaSeconds;
-      if (this.microActionRemaining <= 0) this.finishMicroAction();
+      if (this.microActionRemaining <= 0) this.finishMicroAction(true);
     }
-    this.avatar.updateMotion(deltaSeconds, this.animationTag());
+    this.avatar.updateMotion(deltaSeconds, this.animationTag(), locomotion);
+    const serial = this.avatar.getFootfallSerial();
+    if (serial > this.lastFootfallSerial && this.footfallListener && this.moving && this.transportMode === 'on_foot' && this.physicsHandle.controller.computedGrounded()) {
+      this.footfallListener(locomotion.speed);
+    }
+    this.lastFootfallSerial = serial;
   }
 
   setInteractionLock(locked: boolean): void {
     this.interactionLocked = locked;
-    if (locked) { this.moving = false; this.jogging = false; }
+    if (locked) { this.moving = false; this.jogging = false; this.footVelocity.x = 0; this.footVelocity.z = 0; }
   }
 
   setTransportMode(mode: 'on_foot' | 'bicycle' | 'scooter' | 'kayak' | 'auto_rickshaw'): void {
     this.transportMode = mode;
     this.transportSpeed = 0;
+    this.footVelocity.x = 0; this.footVelocity.z = 0;
     this.transportHeadingInitialized = mode === 'on_foot' || mode === 'auto_rickshaw' ? false : this.transportHeadingInitialized;
     this.finishMicroAction();
     this.avatar.setTransportMode(mode);
@@ -117,6 +152,8 @@ export class PlayerController {
   setWorldPosition(position: { x: number; y: number; z: number }): void {
     this.physicsHandle.body.setTranslation(position, true);
     this.physicsHandle.body.setNextKinematicTranslation(position);
+    this.previousVisualPosition = { x: position.x, z: position.z };
+    this.moving = false; this.jogging = false;
   }
 
   getPosition(): { x: number; y: number; z: number } {
@@ -143,15 +180,16 @@ export class PlayerController {
   }
 
   dispose(): void {
+    this.footfallListener = undefined;
     this.finishMicroAction();
     this.physics.disposePlayer(this.physicsHandle);
   }
 
-  private finishMicroAction(): void {
+  private finishMicroAction(completed = false): void {
     this.microAction = null;
     this.microActionRemaining = 0;
     const completion = this.microActionCompletion;
     this.microActionCompletion = null;
-    completion?.resolve();
+    completion?.resolve(completed);
   }
 }

@@ -1,5 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
-import { playerSnapshotSchema, socketEvents, type AvatarConfig, type PlayerSnapshot, type VoiceMode } from '@together/shared';
+import { playerSnapshotSchema, socketEvents, weatherStateSchema, type WeatherState, type AvatarConfig, type PlayerSnapshot, type VoiceMode } from '@together/shared';
+import { apiUrl } from './api';
 
 export type NetworkSession = {
   userId: string;
@@ -16,6 +17,8 @@ export type HouseholdSnapshotPayload = {
 };
 
 export type NetworkCallbacks = {
+  onTimeSync?: (gameMinute: number) => void;
+  onWeatherSync?: (state: WeatherState) => void;
   onConnectionState?: (state: 'connecting' | 'connected' | 'reconnecting' | 'disconnected') => void;
   onHouseholdSnapshot?: (snapshot: HouseholdSnapshotPayload) => void;
   onPlayerSnapshot?: (userId: string, snapshot: PlayerSnapshot) => void;
@@ -35,16 +38,28 @@ export type NetworkCallbacks = {
 
 export class GameSocketClient {
   private socket: Socket | null = null;
+  private readonly session: NetworkSession;
 
   constructor(
-    private readonly session: NetworkSession,
+    session: NetworkSession,
     private readonly callbacks: NetworkCallbacks = {},
-  ) {}
+  ) { this.session = { ...session }; }
+
+  updateAccessToken(accessToken: string | undefined): void {
+    if (accessToken) this.session.accessToken = accessToken;
+    else delete this.session.accessToken;
+    if (this.socket) {
+      this.socket.auth = accessToken ? { accessToken } : { devUserId: this.session.userId };
+      // Middleware authentication rejection disables Socket.IO's automatic
+      // reconnection. Retry only that inactive state after credentials change.
+      if (!this.socket.connected && !this.socket.active) this.socket.connect();
+    }
+  }
 
   connect(): void {
     if (this.socket) return;
     this.callbacks.onConnectionState?.('connecting');
-    const url = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+    const url = (import.meta.env.VITE_SERVER_URL as string | undefined)?.trim() || window.location.origin;
     const socket = io(url, {
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -57,6 +72,16 @@ export class GameSocketClient {
       },
     });
     this.socket = socket;
+
+    socket.on(socketEvents.timeSync, (payload: unknown) => {
+      const minute = payload && typeof payload === 'object' ? (payload as { gameMinute?: unknown }).gameMinute : undefined;
+      if (typeof minute === 'number' && Number.isFinite(minute) && minute >= 0 && minute < 1440) this.callbacks.onTimeSync?.(minute);
+    });
+
+    socket.on(socketEvents.weatherSync, (payload: unknown) => {
+      const state = weatherStateSchema.safeParse(payload && typeof payload === 'object' ? (payload as { state?: unknown }).state : undefined);
+      if (state.success) this.callbacks.onWeatherSync?.(state.data);
+    });
 
     socket.on('connect', () => {
       this.callbacks.onConnectionState?.('connected');
@@ -150,11 +175,10 @@ export class GameSocketClient {
   }
 
   async fetchVoiceIceServers(): Promise<RTCIceServer[]> {
-    const baseUrl = (import.meta.env.VITE_SERVER_URL || 'http://localhost:3001').replace(/\/$/, '');
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (this.session.accessToken) headers.Authorization = `Bearer ${this.session.accessToken}`;
     else headers['x-dev-user-id'] = this.session.userId;
-    const response = await fetch(`${baseUrl}/api/voice/ice-config`, { headers, cache: 'no-store' });
+    const response = await fetch(apiUrl('/api/voice/ice-config'), { headers, cache: 'no-store' });
     if (!response.ok) throw new Error(`Voice network configuration failed (${response.status})`);
     const payload = await response.json() as { iceServers?: unknown };
     if (!Array.isArray(payload.iceServers)) throw new Error('Voice network configuration is invalid');

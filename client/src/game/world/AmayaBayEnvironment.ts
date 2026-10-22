@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { dressSimpleFacades } from './FacadeDetails';
 import { addDistrictDetails } from './DistrictDetails';
 import { createDistrictVignettes } from './DistrictVignettes';
-import { cityHeightAt, locationAnchor } from '@together/shared';
+import { BADMINTON_SURFACE_Y, MINI_GOLF_HOLES, cityHeightAt, locationAnchor } from '@together/shared';
 import { compileStaticMeshesByMaterial } from '../assets/runtime/StaticBatchCompiler';
 import type { MaterialLibrary } from './MaterialLibrary';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
@@ -158,12 +158,12 @@ export class AmayaBayEnvironment {
     }
 
     const badminton = locationAnchor('park_badminton')!;
-    const courtY = cityHeightAt(badminton.position.x, badminton.position.z);
+    const courtY = BADMINTON_SURFACE_Y;
     const courtGeometry = new THREE.PlaneGeometry(13, 6.1, 12, 6);
     courtGeometry.rotateX(-Math.PI / 2);
     const courtVertices = courtGeometry.getAttribute('position');
     for (let vertex = 0; vertex < courtVertices.count; vertex += 1) {
-      courtVertices.setY(vertex, cityHeightAt(badminton.position.x + courtVertices.getX(vertex), badminton.position.z + courtVertices.getZ(vertex)) + 0.05);
+      courtVertices.setY(vertex, courtY);
     }
     courtVertices.needsUpdate = true;
     courtGeometry.computeVertexNormals();
@@ -171,8 +171,15 @@ export class AmayaBayEnvironment {
     court.position.set(badminton.position.x, 0, badminton.position.z);
     court.receiveShadow = true;
     root.add(court);
-    addBox(root, [0.05, 0.9, 6.1], [badminton.position.x, courtY + 0.48, badminton.position.z], this.materials.get('curtainWarm'), false);
-    for (const sz of [-3, 3]) addBox(root, [0.08, 1.15, 0.08], [badminton.position.x, cityHeightAt(badminton.position.x, badminton.position.z + sz) + 0.58, badminton.position.z + sz], this.materials.get('metalDark'));
+    addBox(root, [13.2, .1, 6.3], [badminton.position.x, courtY - .055, badminton.position.z], this.materials.get('stone'), false);
+    this.physics?.createFixedCuboid({ x: badminton.position.x, y: courtY - .05, z: badminton.position.z }, { x: 6.6, y: .05, z: 3.15 });
+    for (const sz of [-3.05, 3.05]) addBox(root, [.08, 1.55, .08], [badminton.position.x, courtY + .775, badminton.position.z + sz], this.materials.get('metalDark'));
+    // Open net lets the far player and shuttle remain readable through the mesh.
+    for (let row = 0; row <= 6; row++) addBox(root, [.018, .018, 6.1], [badminton.position.x, courtY + .75 + row * .13, badminton.position.z], this.materials.get('metalDark'), false);
+    for (let column = 0; column <= 40; column++) addBox(root, [.018, .8, .018], [badminton.position.x, courtY + 1.15, badminton.position.z - 3.05 + column * 6.1 / 40], this.materials.get('metalDark'), false);
+    addBox(root, [.045, .045, 6.1], [badminton.position.x, courtY + 1.55, badminton.position.z], this.materials.get('warmPlaster'), false);
+    for (const x of [-6.5, 0, 6.5]) addBox(root, [.04, .012, 6.1], [badminton.position.x + x, courtY + .01, badminton.position.z], this.materials.get('warmPlaster'), false);
+    for (const z of [-3.05, 0, 3.05]) addBox(root, [13, .012, .04], [badminton.position.x, courtY + .01, badminton.position.z + z], this.materials.get('warmPlaster'), false);
     const picnic = locationAnchor('park_picnic_lawn')!;
     for (const offset of [[-5, 3], [4, -4], [8, 5]] as const) {
       const matX = picnic.position.x + offset[0];
@@ -249,7 +256,23 @@ export class AmayaBayEnvironment {
       ring.position.set(sideX, 1.0, -301.8);
       root.add(ring);
     }
-    const promenade = addBox(root, [220, 0.24, 22], [75, 0.22, -270], this.materials.get('concrete'), false); promenade.receiveShadow = true;
+    const promenade = addBox(root, [220, 0.24, 22], [75, 0.22, -270], this.materials.get('promenadePaving'), false); promenade.receiveShadow = true;
+    // Rubble sea wall below the railing, like the city's breakwater. One instanced draw, visual only.
+    const rubbleSpots: Array<[number, number]> = [];
+    for (let x = -34; x <= 172; x += 1.35) if (x < 50 || x > 85) rubbleSpots.push([x, -285.2], [x + 0.6, -287.1]);
+    const rubble = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.85, 0), this.materials.get('stone'), rubbleSpots.length);
+    rubble.name = 'waterfront:sea-wall-rubble';
+    const rock = new THREE.Object3D();
+    rubbleSpots.forEach(([x, z], index) => {
+      const jitter = Math.sin(index * 12.9898) * 43758.5453 % 1;
+      rock.position.set(x + jitter * 0.4, -0.25 + Math.abs(jitter) * 0.3 - (z < -286 ? 0.35 : 0), z + jitter * 0.5);
+      rock.rotation.set(jitter * 3, index * 1.7, jitter * 2);
+      rock.scale.set(0.9 + Math.abs(jitter) * 0.6, 0.7 + Math.abs(jitter) * 0.4, 0.9 + Math.abs(jitter) * 0.5);
+      rock.updateMatrix();
+      rubble.setMatrixAt(index, rock.matrix);
+    });
+    rubble.castShadow = true; rubble.receiveShadow = true;
+    root.add(rubble);
     this.physics?.createFixedCuboid({ x: 75, y: 0.22, z: -270 }, { x: 110, y: 0.12, z: 11 });
     this.physics?.createFixedCuboid({ x: 10.5, y: 0.8, z: -283 }, { x: 42.5, y: 0.5, z: 0.12 });
     this.physics?.createFixedCuboid({ x: 135.5, y: 0.8, z: -283 }, { x: 52.5, y: 0.5, z: 0.12 });
@@ -476,10 +499,9 @@ export class AmayaBayEnvironment {
       }
     }
 
-    const golf = locationAnchor('hill_minigolf')!;
-    for (let hole = 0; hole < 6; hole += 1) {
-      const hx = golf.position.x + (hole % 3) * 9 - 9;
-      const hz = golf.position.z + Math.floor(hole / 3) * 11 - 5;
+    for (const hole of MINI_GOLF_HOLES) {
+      const hx = hole.center.x;
+      const hz = hole.center.z;
       const greenGeometry = new THREE.PlaneGeometry(7.2, 3.2, 6, 2);
       greenGeometry.rotateX(-Math.PI / 2);
       const greenVertices = greenGeometry.getAttribute('position');
@@ -504,9 +526,6 @@ export class AmayaBayEnvironment {
       cup.rotation.x = -Math.PI / 2;
       cup.position.set(hx + 2.3, flagY + 0.053, hz);
       root.add(cup);
-      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), this.materials.get('warmPlaster'));
-      ball.position.set(hx - 2.3, cityHeightAt(hx - 2.3, hz) + 0.15, hz);
-      root.add(ball);
 
     }
     return root;

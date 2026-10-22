@@ -2,11 +2,13 @@ import * as THREE from 'three';
 import { CoastalWater } from '../world/CoastalWater';
 import { shorelineZAt } from '../world/CoastalShoreline';
 import type { MaterialLibrary } from '../world/MaterialLibrary';
-import { rainIntensity, targetWetness, type WeatherState } from './weatherModel';
+import { rainIntensity, targetWetness, weatherAtmosphere, type WeatherAtmosphere, type WeatherState } from './weatherModel';
 
 export class WeatherSystem {
   state: WeatherState = 'clear';
   wetness = 0;
+  /** Smoothed sky/light character so weather changes drift in rather than snap. */
+  readonly atmosphere: WeatherAtmosphere = weatherAtmosphere('clear');
   private readonly water: CoastalWater;
   private readonly rain: THREE.LineSegments;
   private readonly positions: Float32Array;
@@ -38,6 +40,8 @@ export class WeatherSystem {
     if (jumped && rainIntensity(this.state) > 0) {
       for (let index = 0; index < this.positions.length / 6; index += 1) this.resetDrop(index, Math.random() * 18);
     }
+    const goal = weatherAtmosphere(this.state), drift = 1 - Math.exp(-deltaSeconds * 0.4);
+    for (const key of ['cloudCover', 'haze', 'sunScale', 'warmth', 'wind'] as const) this.atmosphere[key] += (goal[key] - this.atmosphere[key]) * drift;
     const target = targetWetness(this.state);
     this.wetness = THREE.MathUtils.lerp(this.wetness, target, 1 - Math.exp(-deltaSeconds * 0.35));
     this.materials.setWetness(this.wetness);

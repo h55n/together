@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+**/dist
+.git
+.codex
+.agents
+.aws
+.art-review
+.env*
+**/.env*
+**/test-results
+**/coverage
+**/.runtime
+**/*.log
+**/*.tsbuildinfo
+tmp
+temp

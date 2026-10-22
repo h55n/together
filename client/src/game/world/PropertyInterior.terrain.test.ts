@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cityHeightAt } from '@together/shared';
+import { cityHeightAt, selectInteraction } from '@together/shared';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
 import { MaterialLibrary } from './MaterialLibrary';
 import { HomeDecorationRenderer } from './HomeDecorationRenderer';
@@ -9,6 +9,19 @@ import { STARTER_HOME_CENTER } from './StarterHome';
 import { propertyRoofSpec } from './propertyShell';
 
 describe('property terrain alignment', () => {
+  it('keeps the card table reachable separately from home planning in every starter property', () => {
+    const materials = new MaterialLibrary();
+    const physics = { createFixedCuboid: vi.fn(() => ({}) as never) } as unknown as PhysicsWorld;
+    for (const propertyId of ['couple_studio', 'one_bhk', 'pg_house']) {
+      const home = buildPropertyInterior(materials, physics, propertyId);
+      const table = home.interactions.find(entry => entry.activityId === 'board_game')!;
+      expect(table).toBeDefined();
+      expect(selectInteraction({ x: table.x, z: table.z + 1.2, yaw: 0 }, home.interactions)?.id).toBe(table.id);
+      const plans = home.interactions.find(entry => entry.id === 'home_plans' || entry.id.endsWith(':plans'))!;
+      expect(selectInteraction({ x: plans.x, z: plans.z - .7, yaw: Math.PI }, home.interactions)?.id).toBe(plans.id);
+    }
+    materials.dispose();
+  });
   it('places non-studio property shells, spawns and floor collision on the authored terrain height', () => {
     const materials = new MaterialLibrary();
     const createFixedCuboid = vi.fn(() => ({}) as never);

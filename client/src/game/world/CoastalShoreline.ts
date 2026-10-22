@@ -20,3 +20,22 @@ export function coastalTerrainLowering(x: number, z: number): number {
   const stairRun = Math.max(0, Math.min(1, (-291 - z) / 21));
   return Math.max(foreshore, central * 1.6 * stairRun);
 }
+
+/** Exact rendered terrain elevation; raised routes and authored floors differ. */
+export function terrainHeightAt(x: number, z: number): number {
+  return cityHeightAt(x, z) - 0.16 - coastalTerrainLowering(x, z);
+}
+
+/** Loose procedural land props never occupy water or the carved stair run. */
+export function pointAllowsLandDressing(x: number, z: number, margin = 0): boolean {
+  if (!Number.isFinite(x) || !Number.isFinite(z) || !Number.isFinite(margin) || margin < 0) return false;
+  const lowerZ = z - margin;
+  // The terrain's ten-metre shore transition is authoritative; a flat world
+  // z cutoff misses the public lookout's earlier, curved water edge.
+  for (const sampleX of [x - margin, x, x + margin]) {
+    if (lowerZ < shorelineZAt(sampleX) + 10 || coastalTerrainLowering(sampleX, lowerZ) > 0.05) return false;
+  }
+  return true;
+}
+import { cityHeightAt } from '@together/shared';
+

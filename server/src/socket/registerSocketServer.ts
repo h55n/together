@@ -18,6 +18,8 @@ import type { ProfileService } from '../game/ProfileService.js';
 import type { UserProfileRecord } from '../db/GameRepository.js';
 import { logger } from '../logging/logger.js';
 import { SocketEventLimiter } from './SocketEventLimiter.js';
+import type { ActivityService } from '../game/ActivityService.js';
+import type { WorldWeatherService } from '../game/WorldWeatherService.js';
 
 export type RemoteProfile = Pick<UserProfileRecord, 'displayName' | 'avatarConfig'>;
 
@@ -36,6 +38,8 @@ export type SocketDependencies = {
   householdService: HouseholdService;
   timeService: TimeService;
   profileService: ProfileService;
+  activityService?: ActivityService;
+  worldWeatherService?: WorldWeatherService;
 };
 
 export function projectRemoteProfile(profile: UserProfileRecord): RemoteProfile {
@@ -74,12 +78,14 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
     const voiceSignalLimiter = new SocketEventLimiter(180, 10_000);
     socket.join(rooms.user(userId));
     socket.emit(socketEvents.timeSync, dependencies.timeService.snapshot());
+    if (dependencies.worldWeatherService) socket.emit(socketEvents.weatherSync, dependencies.worldWeatherService.snapshot());
 
     socket.on(socketEvents.playerJoin, async (raw) => {
       if (!joinLimiter.allow()) return;
       try {
         const join = playerJoinSchema.parse(raw);
         const household = await dependencies.householdService.getHouseholdForMember(join.householdId, userId);
+        await dependencies.activityService?.warmTransportAuthority(join.householdId, userId);
         const previous = online.get(socket.id);
         if (previous) {
           socket.leave(rooms.household(previous.householdId));
@@ -196,6 +202,7 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
       const parsed = playerSnapshotSchema.safeParse(raw);
       const householdId = typeof socket.data.householdId === 'string' ? socket.data.householdId : undefined;
       if (!parsed.success || !householdId || !snapshotInsideAmayaBay(parsed.data)) return;
+      if (dependencies.activityService && !dependencies.activityService.transportLeaseAuthority.allows(householdId, userId, parsed.data.transport)) return;
       const presence = online.get(socket.id);
       if (!presence) return;
       presence.snapshot = parsed.data;
@@ -214,6 +221,7 @@ export function registerSocketServer(io: Server, dependencies: SocketDependencie
       delete socket.data.householdId;
       delete socket.data.shardId;
       if (hasOtherPresence(socket.id, userId, presence.householdId)) return;
+      dependencies.activityService?.transportLeaseAuthority.release(presence.householdId, userId);
       socket.to(rooms.household(presence.householdId)).emit(socketEvents.playerLeave, { userId });
       socket.to(rooms.household(presence.householdId)).emit(socketEvents.voiceLeave, { userId });
     };

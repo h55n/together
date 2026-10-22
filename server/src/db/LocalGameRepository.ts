@@ -1,4 +1,5 @@
 import type { ActivitySessionRecord, CookingSessionRecord, GameRepository, HouseholdNoteRecord, HouseholdRecord, HomeStateRecord, InventoryRecord, JobPayoutCommit, JobSessionRecord, MemoryRecord, MovingCommit, NPCRelationshipRecord, PurchaseCommit, RenovationCommit, StoryInstanceRecord, TransactionRecord, UserProfileRecord, VoteRecord } from './GameRepository.js';
+import type { TransitCommit, TransitCommitResult } from './GameRepository.js';
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -70,6 +71,36 @@ export class LocalGameRepository implements GameRepository {
     this.transactions.set(transaction.idempotencyKey, clone(transaction));
   }
 
+  async commitTransit(input: TransitCommit): Promise<TransitCommitResult> {
+    // No await: independent services share one atomic local repository section.
+    if (!Number.isSafeInteger(input.fare) || input.fare < 25 || input.fare > 220 ||
+        ![input.from.x, input.from.z].every(value => Number.isFinite(value) && Math.abs(value) <= 450) ||
+        input.idempotencyKey.trim().length < 8 || input.idempotencyKey.length > 128) throw new Error('Invalid transit request');
+    const household = this.households.get(input.householdId);
+    if (!household) throw new Error('Household not found');
+    const member = household.members.find(candidate => candidate.userId === input.userId && candidate.membershipState === 'active');
+    if (!member) throw new Error('User is not an active household member');
+    const existing = this.transactions.get(input.idempotencyKey);
+    if (existing) {
+      const from = existing.metadata.from as { x?: number; z?: number } | undefined;
+      if (existing.householdId !== input.householdId || existing.userId !== input.userId || existing.type !== 'transport' ||
+          existing.walletType !== 'personal' || existing.itemRef !== input.destinationId || existing.amount !== -input.fare ||
+          from?.x !== input.from.x || from?.z !== input.from.z) throw new Error('Idempotency key belongs to a different transit request');
+      return { personalWallet: member.personalWallet, transaction: clone(existing) };
+    }
+    if (!Number.isSafeInteger(member.personalWallet) || member.personalWallet < input.fare) throw new Error('Not enough personal funds for this auto ride');
+    const balance = member.personalWallet - input.fare;
+    const transaction: TransactionRecord = { id: crypto.randomUUID(), idempotencyKey: input.idempotencyKey,
+      householdId: input.householdId, userId: input.userId, walletType: 'personal', amount: -input.fare,
+      type: 'transport', itemRef: input.destinationId, metadata: { from: clone(input.from), destination: input.destinationName },
+      createdAt: new Date().toISOString() };
+    // Stage fallible cloning before either write; insertion precedes the infallible numeric assignment.
+    const stored = clone(transaction), result = { personalWallet: balance, transaction: clone(transaction) };
+    this.transactions.set(input.idempotencyKey, stored);
+    member.personalWallet = balance;
+    return result;
+  }
+
   async getTransactionByIdempotencyKey(key: string): Promise<TransactionRecord | null> {
     const transaction = this.transactions.get(key);
     return transaction ? clone(transaction) : null;
@@ -116,6 +147,19 @@ export class LocalGameRepository implements GameRepository {
 
   async saveJobSession(session: JobSessionRecord): Promise<void> {
     this.jobSessions.set(session.id, clone(session));
+  }
+
+  async startOrResumeJobSession(session: JobSessionRecord): Promise<JobSessionRecord> {
+    // No await between lookup and insertion: concurrent local starts share this atomic section.
+    const retry = [...this.jobSessions.values()].find(candidate => candidate.startIdempotencyKey === session.startIdempotencyKey);
+    if (retry) {
+      if (retry.householdId !== session.householdId || retry.userId !== session.userId || retry.jobId !== session.jobId) throw new Error('Idempotency key belongs to a different job session');
+      return clone(retry);
+    }
+    const active = [...this.jobSessions.values()].find(candidate => candidate.householdId === session.householdId && candidate.userId === session.userId && candidate.jobId === session.jobId && candidate.state === 'active');
+    if (active) return clone(active);
+    this.jobSessions.set(session.id, clone(session));
+    return clone(session);
   }
 
   async getJobSession(id: string): Promise<JobSessionRecord | null> {
@@ -185,6 +229,22 @@ export class LocalGameRepository implements GameRepository {
 
   async saveActivitySession(session: ActivitySessionRecord): Promise<void> {
     this.activitySessions.set(session.id, clone(session));
+  }
+
+  async compareAndSwapActivitySession(session: ActivitySessionRecord, expectedRevision: number): Promise<boolean> {
+    const current = this.activitySessions.get(session.id);
+    if (!current || (current.state.revision ?? 0) !== expectedRevision) return false;
+    const activeOwners = new Set((session.state.transportRental?.rentals ?? []).filter(rental => rental.status !== 'returned').map(rental => rental.ownerUserId));
+    if ([...this.activitySessions.values()].some(other => other.id !== session.id && other.householdId === session.householdId && other.state.transportRental?.rentals.some(rental => rental.status !== 'returned' && activeOwners.has(rental.ownerUserId)))) return false;
+    this.activitySessions.set(session.id, clone(session));
+    return true;
+  }
+
+  async insertActivitySession(session: ActivitySessionRecord): Promise<ActivitySessionRecord> {
+    const existing = [...this.activitySessions.values()].find(candidate => candidate.idempotencyKey === session.idempotencyKey);
+    if (existing) return clone(existing);
+    this.activitySessions.set(session.id, clone(session));
+    return clone(session);
   }
 
   async getActivitySession(id: string): Promise<ActivitySessionRecord | null> {

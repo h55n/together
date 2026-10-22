@@ -14,6 +14,7 @@ export type KitchenInventoryView = { itemId: string; quantity: number };
 
 export function CookingPanel(props: {
   open: boolean;
+  userId?: string | undefined;
   recipes: readonly RecipeDefinition[];
   inventory: readonly KitchenInventoryView[];
   session: CookingSessionView | null;
@@ -29,12 +30,13 @@ export function CookingPanel(props: {
   const activeRecipe = props.session ? props.recipes.find((recipe) => recipe.id === props.session?.recipeId) : undefined;
   const stock = useMemo(() => new Map(props.inventory.map((entry) => [entry.itemId, entry.quantity])), [props.inventory]);
   if (!props.open) return null;
+  const dishes = props.inventory.filter((entry) => entry.itemId.startsWith('dish:') && entry.quantity > 0);
 
   const missing = selected?.ingredients.filter((ingredient) => !ingredient.optional && (stock.get(ingredient.itemId) ?? 0) < ingredient.quantity) ?? [];
   const availableSteps = activeRecipe?.steps.filter((step) => props.session?.state.availableStepIds.includes(step.id)) ?? [];
   const completed = props.session?.state.status === 'completed';
 
-  return <section className="game-panel cooking-panel" aria-label="Cook at home">
+  return <section className="game-panel cooking-panel" role="dialog" aria-modal="true" aria-label="Cook at home">
     <header className="panel-header"><div><p className="eyebrow">Home · shared kitchen</p><h2>{props.session && !completed ? activeRecipe?.displayName ?? 'Cooking' : 'Cook together'}</h2></div><button className="panel-close" onClick={props.onClose}>Close</button></header>
     {!props.session ? <RecipeStarter recipes={props.recipes} selected={selected} recipeId={recipeId} setRecipeId={setRecipeId} stock={stock} missing={missing} busy={props.busy} onStart={props.onStart} /> : <>
       <div className="cooking-progress"><span>{props.session.state.completedStepIds.length} / {activeRecipe?.steps.length ?? 0} actions</span><span>{props.session.state.participants.length} participant{props.session.state.participants.length === 1 ? '' : 's'}</span></div>
@@ -49,10 +51,15 @@ export function CookingPanel(props: {
         <button className="primary-action" disabled={props.busy || !selected || missing.length > 0} onClick={() => selected && void props.onStart(selected.id)}>{props.busy ? 'Preparing…' : 'Cook another meal'}</button>
       </> : <>
         <p className="panel-copy">Choose one available physical step. Its station is claimed to you while the action is performed, so another player can work another branch.</p>
-        <div className="cooking-step-list">{availableSteps.map((step) => { const presentation = cookingActionPresentation(step.action); const holder = props.session?.state.stationClaims[step.station]; return <button className="cooking-step" key={step.id} disabled={props.busy || Boolean(holder)} onClick={() => void props.onStep(step, allowMistake)}><strong>{presentation.label} · {humanize(step.id)}</strong><span>{humanize(step.station)}{holder ? ' · occupied' : ''}</span></button>; })}</div>
+        <div className="cooking-step-list">{availableSteps.map((step) => { const presentation = cookingActionPresentation(step.action); const holder = props.session?.state.stationClaims[step.station]; const heldByYou = Boolean(holder && holder === props.userId); return <button className="cooking-step" key={step.id} disabled={props.busy || Boolean(holder && !heldByYou)} onClick={() => void props.onStep(step, allowMistake)}><strong>{presentation.label} · {humanize(step.id)}</strong><span>{humanize(step.station)}{heldByYou ? ' · your station' : holder ? ' · occupied' : ''}</span></button>; })}</div>
         <label className="mistake-toggle"><input type="checkbox" checked={allowMistake} onChange={(event) => setAllowMistake(event.target.checked)} />DEV · allow an imperfect attempt</label>
       </>}
     </>}
+    {dishes.length > 0 && <div className="ingredient-list" aria-label="Cooked food on the shelf">
+      <p className="eyebrow">On the shelf · ready to share</p>
+      {dishes.map((dish) => <div key={dish.itemId} className="ingredient-row"><span>{humanize(dish.itemId.slice(5))}</span><span>× {dish.quantity}</span></div>)}
+      <p className="muted-copy">Home-cooked food goes into a picnic basket before raw groceries do.</p>
+    </div>}
     {props.message && <p className="status-copy">{props.message}</p>}
   </section>;
 }

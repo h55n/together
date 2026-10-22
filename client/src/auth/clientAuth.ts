@@ -25,7 +25,12 @@ export function resolveAuthStrategy(environment: AuthEnvironment): 'supabase' | 
 }
 
 export function resolveClientIdentity(): Promise<ClientIdentity> {
-  identityPromise ??= createClientIdentity();
+  identityPromise ??= createClientIdentity().catch((error: unknown) => {
+    // Share in-flight/successful requests, but do not permanently cache a
+    // transient sign-in failure: the arrival screen's retry must try again.
+    identityPromise = null;
+    throw error;
+  });
   return identityPromise;
 }
 
@@ -33,11 +38,13 @@ export function subscribeClientIdentity(listener: (identity: ClientIdentity) => 
   if (!supabase) return () => undefined;
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
     if (!session) return;
-    listener({
+    const identity: ClientIdentity = {
       userId: session.user.id,
       accessToken: session.access_token,
       mode: 'supabase',
-    });
+    };
+    identityPromise = Promise.resolve(identity);
+    listener(identity);
   });
   return () => data.subscription.unsubscribe();
 }

@@ -5,16 +5,19 @@ import { StaticGeometryCache } from '../assets/runtime/StaticGeometryCache';
 const facadeGeometry = new StaticGeometryCache();
 
 /** Shared architectural vocabulary, authored on a local +X-facing facade. */
-export function dressFacade(root: THREE.Group, materials: MaterialLibrary, width: number, depth: number, height: number, seed = 0): void {
+export function dressFacade(root: THREE.Group, materials: MaterialLibrary, width: number, depth: number, height: number, seed = 0, flatRoof = true): void {
   function box(size: [number,number,number], p: [number,number,number], key: WorldMaterialKey): THREE.Mesh {
     const mesh = new THREE.Mesh(facadeGeometry.box(...size),materials.get(key));mesh.position.set(...p);mesh.castShadow=true;mesh.receiveShadow=true;root.add(mesh);return mesh;
   }
   const face=width/2, roof=height+0.25;
   // Roof cap, raised parapet, corner piers and a shaded entry recess.
-  box([width+0.65,0.18,depth+0.65],[0,roof,0],'warmPlaster');
+  // Pitched-roof buildings carry their own eaves; only flat roofs get the cap and parapet.
+  if(flatRoof)box([width+0.65,0.18,depth+0.65],[0,roof,0],'warmPlaster');
   for(const side of [-1,1]){
-    box([0.18,0.7,depth+0.3],[side*(face+0.08),roof+0.35,0],'warmPlaster');
-    box([width,0.7,0.18],[0,roof+0.35,side*(depth/2+0.08)],'warmPlaster');
+    if(flatRoof){
+      box([0.18,0.7,depth+0.3],[side*(face+0.08),roof+0.35,0],'warmPlaster');
+      box([width,0.7,0.18],[0,roof+0.35,side*(depth/2+0.08)],'warmPlaster');
+    }
     box([0.19,height,0.25],[face+0.08,height/2,side*(depth/2-0.2)],'concrete');
     box([0.11,height+0.15,0.11],[face+0.24,height/2,side*(depth/2-0.5)],'metalDark');
   }
@@ -54,7 +57,7 @@ export function dressFacade(root: THREE.Group, materials: MaterialLibrary, width
     const ac=box([0.48,0.55,0.95],[face+0.3,y+0.15,depth*0.4],'concrete');ac.name='air-conditioning';
     for(let j=0;j<4;j+=1)box([0.015,0.035,0.75],[face+0.55,y-0.02+j*0.1,depth*0.4],'metalDark');
   }
-  const tank=new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.75,1.3,10),materials.get('metalDark'));tank.position.set(-width*0.2,roof+0.7,depth*0.22);root.add(tank);
+  if(flatRoof){const tank=new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.75,1.3,10),materials.get('metalDark'));tank.position.set(-width*0.2,roof+0.7,depth*0.22);root.add(tank);}
 }
 
 /** One draw per surface family gives visible-ring buildings readable massing from every street. */
@@ -142,4 +145,31 @@ export function dressSimpleFacades(root: THREE.Group, materials: MaterialLibrary
     mesh.receiveShadow = true;
     root.add(mesh);
   }
+}
+
+/** A hip roof whose ridge runs along the longer side; faces are flat-shaded and wound outward. */
+export function hipRoofGeometry(width: number, depth: number, rise: number): THREE.BufferGeometry {
+  const alongZ = depth >= width;
+  const halfShort = (alongZ ? width : depth) / 2, halfLong = (alongZ ? depth : width) / 2;
+  const ridge = Math.max(0, halfLong - halfShort);
+  // Local frame: u runs along the ridge, v across it.
+  const corner = (u: number, v: number, y: number): THREE.Vector3 => alongZ ? new THREE.Vector3(v, y, u) : new THREE.Vector3(u, y, v);
+  const a = corner(-halfLong, -halfShort, 0), b = corner(halfLong, -halfShort, 0), c = corner(halfLong, halfShort, 0), d = corner(-halfLong, halfShort, 0);
+  const r0 = corner(-ridge, 0, rise), r1 = corner(ridge, 0, rise);
+  const faces: Array<[THREE.Vector3, THREE.Vector3, THREE.Vector3]> = [[a, r0, r1], [a, r1, b], [c, r1, r0], [c, r0, d], [b, r1, c], [d, r0, a]];
+  const positions: number[] = [];
+  const edge1 = new THREE.Vector3(), edge2 = new THREE.Vector3();
+  for (const [p, q, w] of faces) {
+    if (p.distanceTo(q) < 1e-6 || q.distanceTo(w) < 1e-6 || w.distanceTo(p) < 1e-6) continue;
+    // Every roof face looks upward; flip any triangle whose normal points down.
+    const up = edge1.subVectors(q, p).cross(edge2.subVectors(w, p)).y >= 0;
+    for (const point of up ? [p, q, w] : [p, w, q]) positions.push(point.x, point.y, point.z);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  const uv: number[] = [];
+  for (let i = 0; i < positions.length; i += 3) uv.push((positions[i]! + positions[i + 2]!) / 4, positions[i + 1]! / 1.5);
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return geometry;
 }

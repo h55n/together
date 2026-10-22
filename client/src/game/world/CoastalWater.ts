@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { COASTAL_WATERLINE_Y } from '@together/shared';
 import { shorelineZAt } from './CoastalShoreline';
 import type { MaterialLibrary } from './MaterialLibrary';
 
@@ -6,6 +7,8 @@ import type { MaterialLibrary } from './MaterialLibrary';
 export class CoastalWater {
   readonly mesh: THREE.Mesh;
   private readonly foam: THREE.Mesh;
+  private readonly waveBasis: Float32Array;
+  private readonly foamBasis: Float32Array;
   private elapsed = 0;
 
   constructor(scene: THREE.Scene, materials: MaterialLibrary) {
@@ -26,8 +29,11 @@ export class CoastalWater {
     positions.needsUpdate = true;
     geometry.computeVertexNormals();
     geometry.computeBoundingSphere();
+    this.waveBasis = waveBasis(positions);
+    (positions as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
+    (geometry.getAttribute('normal') as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
     this.mesh = new THREE.Mesh(geometry, materials.get('water'));
-    this.mesh.position.set(0, -0.05, 0);
+    this.mesh.position.set(0, COASTAL_WATERLINE_Y, 0);
     this.mesh.name = 'coastal-water';
     this.mesh.receiveShadow = true;
     scene.add(this.mesh);
@@ -48,38 +54,50 @@ export class CoastalWater {
     foamGeometry.setAttribute('position', new THREE.Float32BufferAttribute(foamPositions, 3));
     foamGeometry.setAttribute('color', new THREE.Float32BufferAttribute(foamColors, 3));
     foamGeometry.computeVertexNormals();
+    const foamAttribute = foamGeometry.getAttribute('position');
+    this.foamBasis = waveBasis(foamAttribute);
+    (foamAttribute as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
     this.foam = new THREE.Mesh(foamGeometry, new THREE.MeshBasicMaterial({ color: 0xe6f1df, vertexColors: true, transparent: true, opacity: 0.48, depthWrite: false }));
     this.foam.name = 'coastal-shore-foam';
     scene.add(this.foam);
   }
 
   update(delta: number, wetness: number, animateGeometry = true): void {
-    this.elapsed += delta;
+    this.elapsed += Number.isFinite(delta) ? Math.max(0, delta) : 0;
     if (!animateGeometry) return;
+    const rain = Number.isFinite(wetness) ? THREE.MathUtils.clamp(wetness, 0, 1) : 0;
     const positions = this.mesh.geometry.getAttribute('position');
     const normals = this.mesh.geometry.getAttribute('normal');
-    const amplitude = 0.045 + wetness * 0.025;
+    const amplitude = 0.045 + rain * 0.025;
+    const broadSin = Math.sin(this.elapsed * 0.7), broadCos = Math.cos(this.elapsed * 0.7);
+    const rippleSin = Math.sin(-this.elapsed * 0.9), rippleCos = Math.cos(-this.elapsed * 0.9);
+    const positionArray = positions.array as Float32Array, normalArray = normals.array as Float32Array;
     for (let i = 0; i < positions.count; i += 1) {
-      const x = positions.getX(i);
-      const z = positions.getZ(i);
-      const broadPhase = x * 0.095 + z * 0.16 + this.elapsed * 0.7;
-      const ripplePhase = z * 0.42 - this.elapsed * 0.9;
-      positions.setY(i, Math.sin(broadPhase) * amplitude + Math.sin(ripplePhase) * 0.018);
-      const dx = Math.cos(broadPhase) * 0.095 * amplitude;
-      const dz = Math.cos(broadPhase) * 0.16 * amplitude + Math.cos(ripplePhase) * 0.42 * 0.018;
+      const basis = i * 4, vertex = i * 3;
+      const broad = this.waveBasis[basis]! * broadCos + this.waveBasis[basis + 1]! * broadSin;
+      const ripple = this.waveBasis[basis + 2]! * rippleCos + this.waveBasis[basis + 3]! * rippleSin;
+      const broadSlope = this.waveBasis[basis + 1]! * broadCos - this.waveBasis[basis]! * broadSin;
+      const rippleSlope = this.waveBasis[basis + 3]! * rippleCos - this.waveBasis[basis + 2]! * rippleSin;
+      positionArray[vertex + 1] = broad * amplitude + ripple * 0.018;
+      const dx = broadSlope * 0.095 * amplitude;
+      const dz = broadSlope * 0.16 * amplitude + rippleSlope * 0.42 * 0.018;
       const inverseLength = 1 / Math.sqrt(dx * dx + 1 + dz * dz);
-      normals.setXYZ(i, -dx * inverseLength, inverseLength, -dz * inverseLength);
+      normalArray[vertex] = -dx * inverseLength;
+      normalArray[vertex + 1] = inverseLength;
+      normalArray[vertex + 2] = -dz * inverseLength;
     }
     positions.needsUpdate = true;
     normals.needsUpdate = true;
     const foamPositions = this.foam.geometry.getAttribute('position');
+    const foamArray = foamPositions.array as Float32Array;
     for (let i = 0; i < foamPositions.count; i += 1) {
-      const x = foamPositions.getX(i), z = foamPositions.getZ(i);
-      foamPositions.setY(i, -0.05 + Math.sin(x * 0.095 + z * 0.16 + this.elapsed * 0.7) * amplitude
-        + Math.sin(z * 0.42 - this.elapsed * 0.9) * 0.018 + 0.015);
+      const basis = i * 4;
+      const broad = this.foamBasis[basis]! * broadCos + this.foamBasis[basis + 1]! * broadSin;
+      const ripple = this.foamBasis[basis + 2]! * rippleCos + this.foamBasis[basis + 3]! * rippleSin;
+      foamArray[i * 3 + 1] = -0.035 + broad * amplitude + ripple * 0.018;
     }
     foamPositions.needsUpdate = true;
-    (this.foam.material as THREE.MeshBasicMaterial).opacity = 0.36 + 0.12 * Math.sin(this.elapsed * 0.55) ** 2 + wetness * 0.1;
+    (this.foam.material as THREE.MeshBasicMaterial).opacity = 0.36 + 0.12 * Math.sin(this.elapsed * 0.55) ** 2 + rain * 0.1;
   }
 
   dispose(): void {
@@ -89,4 +107,16 @@ export class CoastalWater {
     this.foam.geometry.dispose();
     (this.foam.material as THREE.Material).dispose();
   }
+}
+
+/** Shoreline x/z coordinates are fixed; cache their phases once, then rotate by time. */
+function waveBasis(positions: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): Float32Array {
+  const basis = new Float32Array(positions.count * 4);
+  for (let i = 0; i < positions.count; i++) {
+    const broad = positions.getX(i) * 0.095 + positions.getZ(i) * 0.16;
+    const ripple = positions.getZ(i) * 0.42;
+    basis[i * 4] = Math.sin(broad); basis[i * 4 + 1] = Math.cos(broad);
+    basis[i * 4 + 2] = Math.sin(ripple); basis[i * 4 + 3] = Math.cos(ripple);
+  }
+  return basis;
 }

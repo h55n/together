@@ -24,7 +24,8 @@ it('reuses compiled facade geometry for equal building dimensions without sharin
   expect(meshA.geometry === meshB.geometry).toBe(true);
   const meshes: THREE.Mesh[] = [];
   first.traverse(object => { if (object instanceof THREE.Mesh) meshes.push(object); });
-  expect(meshes.length).toBeLessThanOrEqual(12);
+  // Pitched styles add one tiled-roof batch and one per-lot wall-colour batch to the facade families.
+  expect(meshes.length).toBeLessThanOrEqual(14);
   expect(first.children[0]?.position.x).not.toBe(second.children[0]?.position.x);
   materials.dispose();
 });

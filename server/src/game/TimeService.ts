@@ -34,7 +34,9 @@ export class TimeService {
     this.initialDay = options.initialDay ?? 1;
   }
 
-  static async create(nowMs = Date.now()): Promise<TimeService> {
+  static async create(nowMs = Date.now(), startMinute = parseStartMinute(process.env.CITY_START_MINUTE)): Promise<TimeService> {
+    // Acceptance runs start from a known hour and leave the persisted city clock untouched.
+    if (startMinute !== null) return new TimeService({ nowMs, initialGameMinute: startMinute });
     const store = createCityTimeStore();
     try {
       const persisted = await store.load();
@@ -64,6 +66,12 @@ export class TimeService {
     const snapshot = this.snapshot(nowMs);
     await this.store.save({ gameMinute: snapshot.gameMinute, day: snapshot.day, savedAt: nowMs });
   }
+}
+
+function parseStartMinute(value: string | undefined): number | null {
+  if (!value) return null;
+  const minute = Number(value);
+  return Number.isFinite(minute) && minute >= 0 && minute < GAME_MINUTES_PER_DAY ? minute : null;
 }
 
 function createCityTimeStore(): CityTimeStore {

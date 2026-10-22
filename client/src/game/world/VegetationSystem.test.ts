@@ -3,13 +3,62 @@ import { describe, expect, it, vi } from 'vitest';
 import { VegetationSystem } from './VegetationSystem';
 
 const materialByKey = new Map<string, THREE.MeshStandardMaterial>();
-const materials = { get: (key: string) => {
+const getMaterial = (key: string) => {
   let material = materialByKey.get(key);
   if (!material) { material = new THREE.MeshStandardMaterial(); materialByKey.set(key, material); }
   return material;
-} } as never;
+};
+const materials = { get: getMaterial } as never;
 
 describe('VegetationSystem', () => {
+  it('smooths duplicate leaf-spray normals without changing authored geometry or detail counts', () => {
+    const originalClone = THREE.BufferGeometry.prototype.clone;
+    const samples: Array<{ geometry: THREE.BufferGeometry; radius: number }> = [];
+    const clone = vi.spyOn(THREE.BufferGeometry.prototype, 'clone').mockImplementation(function(this: THREE.BufferGeometry) {
+      if (this instanceof THREE.IcosahedronGeometry && this.parameters.detail === 0) {
+        samples.push({ geometry: originalClone.call(this), radius: this.parameters.radius });
+      }
+      return originalClone.call(this);
+    });
+    try {
+      const vegetation = new VegetationSystem({ get: getMaterial } as never);
+      vegetation.createTree({ species: 'rain_tree', seed: 2, lod: 'near' });
+      const nearCount = samples.length;
+      vegetation.createTree({ species: 'rain_tree', seed: 2, lod: 'far' });
+      expect(nearCount).toBe(13 * 18);
+      expect(samples.length - nearCount).toBe(13 * 6);
+      const radial = new THREE.Vector3(), normal = new THREE.Vector3();
+      for (const { geometry, radius } of samples) {
+        const authored = new THREE.IcosahedronGeometry(radius, 0);
+        try {
+          const positions = geometry.getAttribute('position'), normals = geometry.getAttribute('normal');
+          expect(Array.from(positions.array)).toEqual(Array.from(authored.getAttribute('position').array));
+          expect(geometry.index?.array).toEqual(authored.index?.array);
+          expect(normals.count).toBe(positions.count);
+          for (let i = 0; i < positions.count; i += 1) {
+            radial.fromBufferAttribute(positions, i).normalize();
+            normal.fromBufferAttribute(normals, i);
+            expect(normal.length()).toBeCloseTo(1, 5);
+            expect(normal.dot(radial)).toBeGreaterThan(0.99999);
+          }
+        } finally { authored.dispose(); }
+      }
+    } finally { clone.mockRestore(); for (const sample of samples) sample.geometry.dispose(); }
+  });
+  it('can cancel cold tree preparation without publishing a partial shared asset', () => {
+    const freshMaterials = { get: getMaterial } as never;
+    const vegetation = new VegetationSystem(freshMaterials);
+    const preparation = vegetation.prepareTree({ species: 'rain_tree', seed: 3 });
+    expect(preparation.next().done).toBe(false);
+    expect(vegetation.metrics().compiledAssets).toBe(0);
+    preparation.return(undefined as never);
+    expect(vegetation.metrics().compiledAssets).toBe(0);
+    const retry = vegetation.prepareTree({ species: 'rain_tree', seed: 3 });
+    let step = retry.next();
+    while (!step.done) step = retry.next();
+    expect(vegetation.metrics().compiledAssets).toBe(1);
+    expect(step.value.children).toHaveLength(2);
+  });
   it('reuses compiled geometry for deterministic tree variants', () => {
     const vegetation = new VegetationSystem(materials);
     const first = vegetation.createTree({ species: 'rain_tree', seed: 1 });
@@ -48,6 +97,37 @@ describe('VegetationSystem', () => {
     expect(cluster.children.length).toBeLessThanOrEqual(4);
     const firstMesh = cluster.children[0] as THREE.Mesh;
     expect(firstMesh.castShadow).toBe(true);
+  });
+
+  it('keeps whole trees in tighter spatial batches while preserving their geometry and shared source ownership', () => {
+    const vegetation = new VegetationSystem(materials);
+    const placements = [2, 5, 80, 83].map(x => ({ species: 'rain_tree' as const, seed: 1, position: { x, y: 0, z: 3 } }));
+    const baseline = vegetation.createTreeCluster(placements, true);
+    const source = vegetation.createTree({ species: 'rain_tree', seed: 1 });
+    const disposed = vi.fn();
+    for (const child of source.children as THREE.Mesh[]) child.geometry.addEventListener('dispose', disposed);
+    const cluster = vegetation.createTreeCluster(placements, true, { cellSize: 64 });
+    expect(cluster.children).toHaveLength(4);
+    const vertexCount = (root: THREE.Group) => (root.children as THREE.Mesh[]).reduce((sum, mesh) => sum + mesh.geometry.attributes.position!.count, 0);
+    expect(vertexCount(cluster)).toBe(vertexCount(baseline));
+    const bounds = new THREE.Box3().setFromObject(cluster), expected = new THREE.Box3().setFromObject(baseline);
+    expect(bounds.min.distanceTo(expected.min)).toBeLessThan(0.0001);
+    expect(bounds.max.distanceTo(expected.max)).toBeLessThan(0.0001);
+    for (const mesh of cluster.children as THREE.Mesh[]) {
+      expect(mesh.geometry.boundingBox!.getSize(new THREE.Vector3()).x).toBeLessThan(20);
+      mesh.geometry.dispose();
+    }
+    expect(disposed).not.toHaveBeenCalled();
+  });
+
+  it('splits dense crowns while keeping their sparse trunks in one batch', () => {
+    const vegetation = new VegetationSystem(materials);
+    const placements = [2, 5, 80, 83].map(x => ({ species: 'rain_tree' as const, seed: 1, position: { x, y: 0, z: 3 } }));
+    const cluster = vegetation.createTreeCluster(placements, true, { cellSize: 64, minVertices: 8192 });
+    const meshes = cluster.children as THREE.Mesh[];
+    expect(meshes).toHaveLength(3);
+    expect(meshes.filter(mesh => mesh.geometry.hasAttribute('color'))).toHaveLength(2);
+    expect(meshes.filter(mesh => !mesh.geometry.hasAttribute('color'))).toHaveLength(1);
   });
 
   it('batches mixed indexed and non-indexed species without Three.js merge errors', () => {

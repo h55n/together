@@ -60,6 +60,23 @@ function deps(repository = new LocalGameRepository(), householdService = new Hou
 }
 
 describe('app', () => {
+  it('lists saved shifts only for the authenticated household member', async () => {
+    const dependencies = deps();
+    const household = await dependencies.householdService.createHousehold('user-a', { name: 'Shift Home', type: 'friends' });
+    await dependencies.householdService.joinHousehold('user-b', household.inviteCode);
+    await dependencies.jobSessionService.start(household.id, 'user-a', 'cafe_roshan', 'resume-shift-a');
+    await dependencies.jobSessionService.start(household.id, 'user-b', 'market_helper', 'resume-shift-b');
+    const app = createApp(dependencies);
+    const response = await request(app).get(`/api/households/${household.id}/jobs`).set('x-dev-user-id', 'user-a');
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0].userId).toBe('user-a');
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    const outsider = await request(app).get(`/api/households/${household.id}/jobs`).set('x-dev-user-id', 'outsider');
+    expect(outsider.status).toBe(400);
+    const anonymous = await request(app).get(`/api/households/${household.id}/jobs`);
+    expect(anonymous.status).toBe(401);
+  });
   it('reports canonical runtime health', async () => {
     const app = createApp(deps());
     const response = await request(app).get('/api/health');

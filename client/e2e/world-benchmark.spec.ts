@@ -13,7 +13,9 @@ type ReviewWindow = Window & {
   __amayaReviewMetrics: (reset?: boolean) => PerformanceSnapshot;
 };
 
-test.use({ viewport: { width: 960, height: 540 }, video: 'on', launchOptions: { args: ['--use-angle=d3d11'] } });
+const viewport = process.env.AMAYA_BENCHMARK_LARGE === '1' ? { width: 1280, height: 720 } : { width: 960, height: 540 };
+const quality = process.env.AMAYA_BENCHMARK_QUALITY === 'low' ? 'low' : 'medium';
+test.use({ viewport, video: 'on', launchOptions: { args: ['--use-angle=d3d11'] } });
 test('captures fixed district frames and separates warm rendering from streaming', async ({ page }, info) => {
   test.skip(process.env.AMAYA_BENCHMARK !== '1', 'Opt-in visual/performance capture');
   test.setTimeout(480_000);
@@ -21,7 +23,7 @@ test('captures fixed district frames and separates warm rendering from streaming
   await mkdir(output, { recursive: true });
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(process.env.TOGETHER_E2E_URL ?? 'http://127.0.0.1:5188/?renderer=webgl2&worldReview=1');
+  await page.goto('/?renderer=webgl2&worldReview=1');
   await page.getByLabel('Display name').fill('World visual review');
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Explore Amaya Bay solo' }).click();
@@ -29,6 +31,13 @@ test('captures fixed district frames and separates warm rendering from streaming
   await expect(page.getByLabel('Amaya Bay 3D world')).toBeVisible();
   await page.waitForFunction(() => typeof (window as ReviewWindow).__amayaReviewMetrics === 'function');
   await page.getByRole('button', { name: 'Dismiss first day guide' }).click();
+  if (quality === 'low') {
+    await page.getByLabel('Amaya Bay 3D world').click();
+    await page.keyboard.press('KeyO');
+    const settings = page.getByRole('dialog', { name: 'Together settings' });
+    await settings.getByRole('combobox', { name: 'Quality', exact: true }).selectOption('low', { timeout: 10_000 });
+    await settings.getByRole('button', { name: 'Close', exact: true }).click();
+  }
   const records: unknown[] = [];
   await expect(page.getByTestId('debug-overlay')).toContainText(/WEBGL2|WEBGPU/);
   const backend = (await page.getByTestId('debug-overlay').innerText()).split(' ')[0];
@@ -68,14 +77,16 @@ test('captures fixed district frames and separates warm rendering from streaming
     expect(Number(positionMatch?.[1])).toBeCloseTo(destination.position.x, 0);
     expect(Number(positionMatch?.[2])).toBeCloseTo(destination.position.z, 0);
     await page.screenshot({ path: path.join(output, `${name}-day.png`) });
-    records.push({ name, yaw, loading, warm });
-    await writeFile(path.join(output, 'metrics.json'), JSON.stringify({ capturedAt: new Date().toISOString(), resolution: [960, 540], renderer: backend, gpu, environment: 'Automated browser; not a hardware acceptance benchmark', records, errors }, null, 2));
+    const canvasSize = await page.getByLabel('Amaya Bay 3D world').evaluate((canvas: HTMLCanvasElement) => ({ backing: [canvas.width, canvas.height], css: [canvas.clientWidth, canvas.clientHeight], devicePixelRatio: window.devicePixelRatio }));
+    records.push({ name, yaw, loading, warm, canvasSize });
+    await writeFile(path.join(output, 'metrics.json'), JSON.stringify({ capturedAt: new Date().toISOString(), quality, resolution: [viewport.width, viewport.height], renderer: backend, gpu, environment: 'Automated browser; not a hardware acceptance benchmark', records, errors }, null, 2));
     console.log(name, JSON.stringify({ loading, warm }));
   }
   for (const [name, x, z, yaw] of [
     ['lantern-cafe', -30, 60, Math.PI / 2],
     ['mogra-street', -205, 181, Math.PI / 2],
     ['bay-shore', 67, -293, 0],
+    ['supported-land-bench', -275.14, 196.03, 4.302209465687195 + Math.PI],
   ] as const) {
     await page.evaluate(({ x, z, yaw }) => {
       const review = window as ReviewWindow;
@@ -103,7 +114,7 @@ test('captures fixed district frames and separates warm rendering from streaming
   expect(endZ).toBeLessThan(130);
   records.push({ name: 'normal-walk-across-chunk', start: [-30, 144], endZ, seconds: 20, walk });
   await page.screenshot({ path: path.join(output, 'normal-walk-end.png') });
-  await writeFile(path.join(output, 'metrics.json'), JSON.stringify({ capturedAt: new Date().toISOString(), resolution: [960, 540], renderer: backend, gpu, environment: 'Automated browser; not a hardware acceptance benchmark', records, errors }, null, 2));
+  await writeFile(path.join(output, 'metrics.json'), JSON.stringify({ capturedAt: new Date().toISOString(), quality, resolution: [viewport.width, viewport.height], renderer: backend, gpu, environment: 'Automated browser; not a hardware acceptance benchmark', records, errors }, null, 2));
   for (const [name, id, minutes, weather, yaw] of [
     ['bay-sunset', 'auto_bay_steps', 17.8 * 60, 'clear', 0],
     ['lantern-rain', 'auto_lantern_street', 16 * 60, 'light_rain', Math.PI],

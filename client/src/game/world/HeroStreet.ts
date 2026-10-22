@@ -53,20 +53,20 @@ export function buildLanternStreetHero(
     patch.rotation.y = z * 0.017;
   }
   for (let z = -52; z <= 52; z += 8) {
-    meshBox(group, [0.08, 0.012, 3.2], [0, 0.018, z], materials.get('stone'), false);
+    meshBox(group, [0.14, 0.012, 3.2], [0, 0.018, z], materials.get('roadPaint'), false);
   }
 
   // Café Roshan: layered facade rather than a flat box.
   createCafeRoshan(group, materials, -14.2, -15);
-  createResidentialFacade(group, materials, 14.8, -27, 0x849582, 3);
-  createResidentialFacade(group, materials, 15.6, 17, 0xd7c8ae, 4);
+  createResidentialFacade(group, materials, 14.8, -27, 0xb7dcc0, 3);
+  createResidentialFacade(group, materials, 15.6, 17, 0xf3d98e, 4);
   createShopRow(group, materials, -15.5, 26);
   createStreetFoodStall(group, materials, 11.35, 43.5, -Math.PI / 2);
 
   // Pedestrian markings and drain grates make the roadway read at walking height.
   for (const crossingZ of [-37, 45]) {
     for (let stripe = -3; stripe <= 3; stripe += 1) {
-      meshBox(group, [1.05, 0.018, 2.35], [stripe * 1.65, 0.028, crossingZ], materials.get('stone'), false);
+      meshBox(group, [1.05, 0.018, 2.35], [stripe * 1.65, 0.028, crossingZ], materials.get('roadLine'), false);
     }
   }
   for (const side of [-1, 1]) {
@@ -130,12 +130,14 @@ export function buildLanternStreetHero(
 function createCafeRoshan(group: THREE.Group, materials: MaterialLibrary, x: number, z: number): void {
   const facade = new THREE.Group();
   facade.position.set(x, 0, z);
-  meshBox(facade, [8.8, 6.8, 12.5], [0, 3.4, 0], materials.get('warmPlaster'));
+  meshBox(facade, [8.8, 6.8, 12.5], [0, 3.4, 0], materials.get('pastelYellow'));
   meshBox(facade, [9.3, 0.45, 13], [0, 0.22, 0], materials.get('stone'));
-  meshBox(facade, [0.35, 3.0, 2.2], [4.55, 1.55, -2.7], materials.get('terracottaPlaster'));
-  meshBox(facade, [0.35, 3.0, 2.2], [4.55, 1.55, 2.7], materials.get('terracottaPlaster'));
+  meshBox(facade, [0.35, 3.0, 2.2], [4.55, 1.55, -2.7], materials.get('mintPlaster'));
+  meshBox(facade, [0.35, 3.0, 2.2], [4.55, 1.55, 2.7], materials.get('mintPlaster'));
   meshBox(facade, [0.18, 2.4, 3.4], [4.76, 1.35, 0], materials.get('glass'), false);
   meshBox(facade, [1.25, 0.18, 5.4], [5.12, 3.12, 0], materials.get('terracottaPlaster'));
+  // Candy-striped café awning bands, a classic painted-street accent.
+  for (let stripe = 0; stripe < 9; stripe += 2) meshBox(facade, [1.27, 0.02, 0.6], [5.12, 3.22, -2.4 + stripe * 0.6], materials.get('creamPlaster'), false);
   meshBox(facade, [0.18, 0.84, 5.2], [5.0, 4.5, 0], materials.get('wood'));
   for (const y of [4.3, 5.65]) {
     for (const zz of [-3.8, 0, 3.8]) {
@@ -158,7 +160,7 @@ function createCafeRoshan(group: THREE.Group, materials: MaterialLibrary, x: num
 function createResidentialFacade(group: THREE.Group, materials: MaterialLibrary, x: number, z: number, _tone: number, floors: number): void {
   const building = new THREE.Group();
   building.position.set(x, 0, z);
-  const material = z > 0 ? materials.get('warmPlaster') : materials.get('sagePlaster');
+  const material = z > 0 ? materials.get('pastelBlue') : materials.get('pastelPink');
   meshBox(building, [9, floors * 3.15, 18], [0, floors * 1.575, 0], material);
   meshBox(building, [9.5, 0.5, 18.5], [0, 0.25, 0], materials.get('stone'));
   for (let floor = 0; floor < floors; floor += 1) {
@@ -170,7 +172,9 @@ function createResidentialFacade(group: THREE.Group, materials: MaterialLibrary,
     }
     if (floor > 0) {
       meshBox(building, [1.5, 0.18, 5.2], [-5.25, y - 0.45, 0], materials.get('concrete'));
-      meshBox(building, [0.1, 0.8, 5.2], [-5.95, y - 0.05, 0], materials.get('metalDark'));
+      // A slim painted top rail on balusters, so the balcony reads open rather than as a dark slab.
+      meshBox(building, [0.08, 0.07, 5.2], [-5.95, y + 0.32, 0], materials.get('creamPlaster'));
+      for (let baluster = -2.5; baluster <= 2.5; baluster += 0.42) meshBox(building, [0.04, 0.72, 0.04], [-5.95, y - 0.05, baluster], materials.get('creamPlaster'));
     }
   }
   const details = new THREE.Group();
@@ -183,7 +187,7 @@ function createResidentialFacade(group: THREE.Group, materials: MaterialLibrary,
 function createShopRow(group: THREE.Group, materials: MaterialLibrary, x: number, z: number): void {
   const row = new THREE.Group();
   row.position.set(x, 0, z);
-  meshBox(row, [8.5, 6.1, 20], [0, 3.05, 0], materials.get('terracottaPlaster'));
+  meshBox(row, [8.5, 6.1, 20], [0, 3.05, 0], materials.get('creamPlaster'));
   const bays = [
     { z: -6, sign: 'LANTERN MARKET', accent: 'sagePlaster' as const },
     { z: 0, sign: 'FILTER HOUSE', accent: 'curtainWarm' as const },
@@ -304,7 +308,7 @@ function createScooter(group: THREE.Group, materials: MaterialLibrary, x: number
     wheel.position.set(0, 0.34, wheelZ);
     scooter.add(wheel);
   }
-  meshBox(scooter, [0.5, 0.19, 1.52], [0, 0.57, 0], materials.get('sagePlaster'));
+  meshBox(scooter, [0.5, 0.19, 1.52], [0, 0.57, 0], materials.get('pastelBlue'));
   meshBox(scooter, [0.62, 0.72, 0.16], [0, 0.92, -0.57], materials.get('terracottaPlaster'));
   meshBox(scooter, [0.48, 0.12, 0.74], [0, 1.03, 0.35], materials.get('wood'));
   meshBox(scooter, [0.72, 0.07, 0.07], [0, 1.39, -0.6], materials.get('metalDark'));
@@ -322,10 +326,10 @@ function createAutoRickshaw(group: THREE.Group, materials: MaterialLibrary, x: n
     wheel.rotation.z = Math.PI / 2;
     wheel.position.set(wheelX, 0.36, wheelZ); auto.add(wheel);
   }
-  meshBox(auto, [1.66, 0.72, 2.85], [0, 0.74, 0], materials.get('sagePlaster'));
+  meshBox(auto, [1.66, 0.72, 2.85], [0, 0.74, 0], materials.get('roofTeal'));
   meshBox(auto, [1.7, 0.18, 1.36], [0, 1.1, -0.68], materials.get('wood'));
   meshBox(auto, [1.55, 0.76, 0.11], [0, 1.56, -0.7], materials.get('glass'), false);
-  meshBox(auto, [1.82, 0.14, 2.15], [0, 2.08, -0.12], materials.get('curtainWarm'));
+  meshBox(auto, [1.82, 0.14, 2.15], [0, 2.08, -0.12], materials.get('pastelYellow'));
   for (const side of [-1, 1]) {
     meshBox(auto, [0.08, 1.22, 0.08], [side * 0.82, 1.5, -0.94], materials.get('metalDark'));
     meshBox(auto, [0.08, 1.22, 0.08], [side * 0.82, 1.5, 0.7], materials.get('metalDark'));

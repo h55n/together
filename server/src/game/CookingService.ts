@@ -1,4 +1,5 @@
 import {
+  cookedDishItemId,
   claimCookingStation,
   completeCookingStep,
   createCookingSession,
@@ -67,7 +68,14 @@ export class CookingService {
   async completeStep(householdId: string, userId: string, sessionId: string, stepId: string, mistake: boolean): Promise<CookingSessionRecord> {
     return this.withSessionMutation(sessionId, async () => {
       const session = await this.sessionForMember(householdId, userId, sessionId);
-      session.state = completeCookingStep(this.recipe(session.recipeId), session.state, userId, stepId, mistake);
+      const recipe = this.recipe(session.recipeId);
+      const wasComplete = session.state.status === 'completed';
+      session.state = completeCookingStep(recipe, session.state, userId, stepId, mistake);
+      if (!wasComplete && session.state.status === 'completed') {
+        // Grant the dish before saving; the keyed grant is replay-safe if the save must be retried.
+        await this.inventory.addProvisions(householdId, userId, [{ itemId: cookedDishItemId(recipe.id), quantity: recipe.servings }],
+          `${session.id}:dish`, { sessionId: session.id, outcome: session.state.outcome?.id ?? null }, recipe.id);
+      }
       return this.save(session);
     });
   }

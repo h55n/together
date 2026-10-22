@@ -22,24 +22,25 @@ test('activity sessions are household-authoritative, idempotent and joinable by 
   await assert.rejects(() => service.join(first.id, 'outsider'), /active household member/i);
 });
 
-test('activity sessions only advance through authored embodied steps and complete without payout', async () => {
+test('photography framing remains active and checklist capture cannot replace a real image', async () => {
   const { service, household } = await setup();
   const session = await service.start(household.id, 'u1', 'photography', 'activity-start-0002');
-  await assert.rejects(() => service.advance(session.id, 'u1', 'capture'), /next activity step/i);
+  await assert.rejects(() => service.advance(session.id, 'u1', 'capture'), /photography capture/i);
   const framed = await service.advance(session.id, 'u1', 'frame');
   assert.equal(framed.state.status, 'active');
-  const completed = await service.advance(session.id, 'u1', 'capture');
-  assert.equal(completed.state.status, 'complete');
-  assert.equal(completed.state.score, undefined);
+  await assert.rejects(() => service.advance(session.id, 'u1', 'capture'), /photography capture/i);
+  assert.equal(framed.state.score, undefined);
 });
 
-test('activities with a minimum household presence cannot advance early', async () => {
+test('card tables reject checklist bypass before and after a household member joins', async () => {
   const { service, household } = await setup();
   const session = await service.start(household.id, 'u1', 'board_game', 'activity-board-minimum-0001');
-  await assert.rejects(() => service.advance(session.id, 'u1', 'deal'), /requires at least 2 household members/i);
+  await assert.rejects(() => service.advance(session.id, 'u1', 'deal'), /sports commands/i);
   await service.join(session.id, 'u2');
-  const advanced = await service.advance(session.id, 'u1', 'deal');
-  assert.deepEqual(advanced.state.completedStepIds, ['deal']);
+  await assert.rejects(() => service.advance(session.id, 'u1', 'deal'), /sports commands/i);
+  const advanced = await service.boardGameCommand(session.id, 'u1', { key: 'card-flip-first', expectedRevision: 0, kind: 'flip', index: 0 });
+  assert.deepEqual(advanced.state.boardGame?.revealed, [0]);
+  assert.equal(advanced.state.status, 'active');
 });
 
 test('concurrent activity join and progress preserve both authoritative changes', async () => {
@@ -47,9 +48,12 @@ test('concurrent activity join and progress preserve both authoritative changes'
   const session = await service.start(household.id, 'u1', 'picnic', 'activity-concurrent-0001');
   await Promise.all([
     service.join(session.id, 'u2'),
-    service.advance(session.id, 'u1', 'place_mat'),
+    service.picnicCommand(session.id, 'u1', { key: 'concurrent-mat', expectedRevision: 0, kind: 'place_mat', x: 0.5, z: -0.5 }),
   ]);
   const saved = (await service.list(household.id, 'u1')).find((entry) => entry.id === session.id);
   assert.deepEqual(new Set(saved?.state.participants), new Set(['u1', 'u2']));
-  assert.deepEqual(saved?.state.completedStepIds, ['place_mat']);
+  assert.deepEqual(saved?.state.picnic?.participants, ['u1', 'u2']);
+  assert.deepEqual(saved?.state.picnic?.mat, { x: 0.5, z: -0.5, placedBy: 'u1' });
+  assert.equal(saved?.state.picnic?.revision, 1);
+  assert.equal(saved?.state.status, 'active');
 });

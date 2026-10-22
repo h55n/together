@@ -10,7 +10,7 @@ export function AutoRickshawPanel(props: {
   onClose: () => void;
 }): ReactElement | null {
   if (!props.open) return null;
-  return <section className="game-panel auto-panel" aria-label="Auto-rickshaw destinations">
+  return <section className="game-panel auto-panel" role="dialog" aria-modal="true" aria-label="Auto-rickshaw destinations">
     <header className="panel-header"><div><p className="eyebrow">City transport</p><h2>Where to?</h2></div><button className="panel-close" onClick={props.onClose}>Close</button></header>
     <p className="panel-copy">Autos are a small convenience, not a progression gate. Ride through the city or skip after boarding.</p>
     <div className="auto-destinations">
