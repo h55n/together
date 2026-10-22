@@ -7,3 +7,7 @@ Folders: `models/characters`, `models/animations`, `models/environment/amaya`, `
 `models/props`, `models/furniture`, `models/food`, `models/vehicles`.
 
 Do not commit `.blend` working files here; keep them in your art Drive.
+
+After adding or changing files, run `node tools/asset-index.mjs` from the repo root. It validates names and
+source notes and regenerates `index.json`, which the game reads at startup (missing assets just use the
+code-built fallback).

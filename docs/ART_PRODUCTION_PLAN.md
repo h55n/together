@@ -73,10 +73,10 @@ Pick these on day 1 and write them in `docs/ART_STYLE_BIBLE.md` (I will add the 
 
 ## 5. Phases (build order = biggest visible win first)
 
-### Phase 0 — Pipeline (me, ~1 day) — *I do this first*
-- Asset manifest (`client/src/game/assets/manifest.ts`) mapping stable ID → GLB path, LOD and fallback.
-- Loader hook so every system uses the GLB when present and **keeps the current procedural model as fallback**
-  (so the game never breaks while art is half done).
+### Phase 0 — Pipeline (me) — *DONE for loading; per-system hookups happen as each asset arrives*
+- **Done:** `tools/asset-index.mjs` scans `client/public/assets/models`, validates names (lowercase `a-z0-9_`), a `<id>.source.md` note and a 12 MB cap, and writes `client/public/assets/index.json`. Run `node tools/asset-index.mjs` after adding files.
+- **Done:** `client/src/game/assets/ArtAssets.ts` reads that index at runtime and `tryLoad(id)` returns the GLB or `null`; a missing index, unknown id or broken file means the caller keeps its code-built model (covered by `ArtAssets.test.ts`).
+- **Next, per asset family as files arrive:** each system (avatar, buildings, trees, props, furniture) calls `tryLoad` and falls back to today's procedural model (so the game never breaks while art is half done).
 - Export optimiser script (Meshopt + KTX2) and a validation check in the gate.
 - Folders + README in `client/public/assets/` (done in this commit).
 
