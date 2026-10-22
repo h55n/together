@@ -46,6 +46,11 @@
 - **Integrated automated gate passed:** 855 checks (172 shared, 8 content, 58 server, 320 client, 53 camera/player, 244 pure), all four typechecks, lint with zero errors/four existing warnings, content/repository validation, migration packaging and production builds. Final log above ends with exit 0 and `Complete project gate passed`. Four rental Chromium flows are now running against frozen source; new browser acceptance is pending.
 - **Fresh browser acceptance passed:** all four rental scenarios passed in one clean run (1.6 minutes), exit 0. Actual kayak waterline/keyboard travel/return, checked-out reload and safety carry-over, uncertain departure reconciliation and combined bicycle/kayak travel/owned return passed. Evidence: `.art-review/production-readiness-2026-10-13-rental-conditions-browser.log`; captures preserved in `.art-review/2026-10-13-verified-rental-conditions`. Runner and owned development servers exited; no worker is still building. The 855-check + four-browser checkpoint is now the latest verified dirty candidate.
 
+### Commit checkpoint — October 22, 2026
+
+- All work above is committed on branch `art/painterly-anime-pass` (commit `6c19258`, parent `c77de71` on `build/amaya-bay-v1`); the working tree was clean after it. Not pushed; no hosted migration or deployment. `.gitignore` now excludes `.runtime/`, `.claude/`, `runtime-temp/`, `server/server/` and `test-results/`.
+- Still open: user art review against the references, a human check of WebGPU townsfolk limb swing on a visible WebGPU browser, hosted Supabase migrations 014–016, cross-network TURN voice, real-device/performance acceptance and deployment.
+
 ### Workspace and coordination
 
 - Workspace: `D:\ANTIGRAVITY\together`; PowerShell, Node 24, installed workspace toolchain.
