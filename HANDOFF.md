@@ -1,6 +1,15 @@
 # Together V1 — Amaya Bay Handoff
 
-## Live handoff — October 13, 2026
+## Live handoff — October 22, 2026
+
+### Painterly-anime art build — Phase 1 step 1: Blender-scripted skinned character GLBs
+
+- Deliverable shipped: `tools/blender/meshgen.py` + `tools/blender/build_character.py` generate all 21 character GLBs documented in `docs/ART_PRODUCTION_PLAN.md` into `client/public/assets/models/characters/` — bodies `body_{average,slim,broad}`, faces `face_01..03`, hair `hair_01..04`, outfits `outfit_{terracotta,blue,sage,mustard,home,sleep}`, crowd `crowd_01..05` — each with its `.source.md` staring "code-modelled, procedural, no external base mesh" per the build brief.
+- One shared armature (`avatar-rig`, 29 deform bones: 5 spine chain + shoulder/upper_arm/forearm/hand/thumb/finger01–04/thigh/shin/foot per side) per GLB; `body_*` and `crowd_*` files carry baked clips `idle`/`walk`/`jog`/`sit`; face/hair/outfit files reuse the same armature (no clips) so PlayerAvatar can later sync bone rotations by name. glTF export confirmed with `export_animation_mode='ACTIONS'` on Blender 5.2.2 LTS.
+- Skinning is distance-to-bone-segment Gaussians (`BONE_SIGMAS`); finish uses a single vertex-colour material `amaya-vertex-color` (COLOR_0, double-sided). Character faces +Y in Blender → game −Z; thighs ±0.44 walk stride, jog ±0.62, sit folds legs and drops hips −0.4 (baked as a location key on the hips bone, which points up its local +Y).
+- Debugging notes recorded for the save: (1) pose-bone fcurve evaluation never reached the renderer in background mode — solved by applying preview poses directly from shared keyframe tables; (2) the fcurve API needs the slotted-action channelbag; (3) a latent bug where `assign_weights` filtered bones by `BONE_SIGMAS` (no `.L`/`.R` keys) made every limb fall back to `hips` weights — rendering showed rigid legs/arms; fixed by expanding sigma keys per side and sanity-checking every deform bone is covered.
+- **Known imperfections (not claimed fixed):** stylized wide stride; stubby "banana" feet; fingers sculpted in a splayed fan at rest; slight crotch-gap between legs; skinning spikes near pelvis/knee joints. All are mesh/keyframe-level candidates for the next tuning pass.
+- Verification: every GLB validated (binary header + JSON) in-process with report lines (`GLB_REPORT … 1 mesh, 1 armature, animations=['idle','jog','sit','walk']` for bodies/crowds); rig-sanity previews (rest/walk/jog/sit; front + side) generated to `.art-review/rig-preview/` (untracked) and visually inspected — sit shows folded legs on the ground, walk shows alternating stride with arm swing; `node tools/asset-index.mjs` indexed all 21; `node .art-review/verify-sports-candidate.mjs` passes (`Complete project gate passed`) after fixing a pre-existing `no-undef` lint error in `tools/asset-index.mjs` (`URL` → `dirname(fileURLToPath(import.meta.url))`); `world-art-review.spec.ts` passes 1/1 and its freshly captured frames keep the previous procedural look (GLBs are not wired into `PlayerAvatar`/`AmbientNPCSystem` yet — no runtime behaviour changed, `ArtAssets` resolution still falls back procedurally for ids it can't materialize).
 
 ### Active next build — ambient picnic/café persistence
 

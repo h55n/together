@@ -3,10 +3,10 @@
 // Run after adding art:  node tools/asset-index.mjs
 // Asset id = file name without extension; the folder is the family (characters, vegetation, ...).
 import { readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
-import { join, relative, sep, basename, extname } from 'node:path';
+import { join, relative, sep, basename, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = fileURLToPath(new URL('..', import.meta.url));
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = join(root, 'client', 'public');
 const modelsDir = join(publicDir, 'assets', 'models');
 

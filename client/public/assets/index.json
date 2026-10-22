@@ -1,4 +1,110 @@
 {
   "version": 1,
-  "assets": {}
+  "assets": {
+    "body_average": {
+      "url": "/assets/models/characters/body_average.glb",
+      "family": "characters",
+      "bytes": 382664
+    },
+    "body_broad": {
+      "url": "/assets/models/characters/body_broad.glb",
+      "family": "characters",
+      "bytes": 382660
+    },
+    "body_slim": {
+      "url": "/assets/models/characters/body_slim.glb",
+      "family": "characters",
+      "bytes": 382656
+    },
+    "crowd_01": {
+      "url": "/assets/models/characters/crowd_01.glb",
+      "family": "characters",
+      "bytes": 513744
+    },
+    "crowd_02": {
+      "url": "/assets/models/characters/crowd_02.glb",
+      "family": "characters",
+      "bytes": 528432
+    },
+    "crowd_03": {
+      "url": "/assets/models/characters/crowd_03.glb",
+      "family": "characters",
+      "bytes": 542680
+    },
+    "crowd_04": {
+      "url": "/assets/models/characters/crowd_04.glb",
+      "family": "characters",
+      "bytes": 556032
+    },
+    "crowd_05": {
+      "url": "/assets/models/characters/crowd_05.glb",
+      "family": "characters",
+      "bytes": 513744
+    },
+    "face_01": {
+      "url": "/assets/models/characters/face_01.glb",
+      "family": "characters",
+      "bytes": 107428
+    },
+    "face_02": {
+      "url": "/assets/models/characters/face_02.glb",
+      "family": "characters",
+      "bytes": 107428
+    },
+    "face_03": {
+      "url": "/assets/models/characters/face_03.glb",
+      "family": "characters",
+      "bytes": 107428
+    },
+    "hair_01": {
+      "url": "/assets/models/characters/hair_01.glb",
+      "family": "characters",
+      "bytes": 35640
+    },
+    "hair_02": {
+      "url": "/assets/models/characters/hair_02.glb",
+      "family": "characters",
+      "bytes": 50328
+    },
+    "hair_03": {
+      "url": "/assets/models/characters/hair_03.glb",
+      "family": "characters",
+      "bytes": 64576
+    },
+    "hair_04": {
+      "url": "/assets/models/characters/hair_04.glb",
+      "family": "characters",
+      "bytes": 77940
+    },
+    "outfit_blue": {
+      "url": "/assets/models/characters/outfit_blue.glb",
+      "family": "characters",
+      "bytes": 60444
+    },
+    "outfit_home": {
+      "url": "/assets/models/characters/outfit_home.glb",
+      "family": "characters",
+      "bytes": 109176
+    },
+    "outfit_mustard": {
+      "url": "/assets/models/characters/outfit_mustard.glb",
+      "family": "characters",
+      "bytes": 60448
+    },
+    "outfit_sage": {
+      "url": "/assets/models/characters/outfit_sage.glb",
+      "family": "characters",
+      "bytes": 60444
+    },
+    "outfit_sleep": {
+      "url": "/assets/models/characters/outfit_sleep.glb",
+      "family": "characters",
+      "bytes": 105088
+    },
+    "outfit_terracotta": {
+      "url": "/assets/models/characters/outfit_terracotta.glb",
+      "family": "characters",
+      "bytes": 60456
+    }
+  }
 }
