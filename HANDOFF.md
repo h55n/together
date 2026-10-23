@@ -1,6 +1,7 @@
 ﻿# Together V1 — Amaya Bay Handoff
 
 ## Live handoff — October 23, 2026
+- In-game sit verification closed (temporary spec, deleted after): __amayaReviewPlace at (-40.2, 77.6) 1.4m south of the street_bench_west anchor plus __amayaReviewFace(pi) - two constraints found the hard way: selectInteraction skips a candidate at distance 0 (distance < 1e-6) and requires camera-yaw alignment >= 0.5, so review captures must stand just off the anchor and face it. Third-person frames mid (0.9s) and late (1.8s) into the 2.2s completed action show the authored sit pose held on the bench with the 'E - Sit on bench' prompt visible and zero console errors. The authored sit contact against the bench seat is close but approximate; seat-height grading across benches stays a polish item.
 
 ### Phase 1 accessories and job uniforms delivered
 
