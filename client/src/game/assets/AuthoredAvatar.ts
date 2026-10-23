@@ -24,6 +24,12 @@ const OUTFIT_IDS_BY_CONTEXT: Record<string, string> = {
   outdoor: 'outfit_terracotta',
 };
 
+/**
+ * Job uniform keywords from the shared wardrobe naming; matched by substring so
+ * ids like job_cafe_barista map onto their authored uniform asset.
+ */
+const UNIFORM_KEYWORDS = ['barista', 'garden', 'delivery', 'market'];
+
 function outfitIdFor(appearance: AvatarAppearance): string {
   const explicit = appearance.outfitId ?? '';
   if (explicit.startsWith('outfit_')) return explicit;
@@ -36,6 +42,8 @@ function outfitIdFor(appearance: AvatarAppearance): string {
     case 'home': return 'outfit_home';
     default: break;
   }
+  const uniform = UNIFORM_KEYWORDS.find((keyword) => explicit.includes(keyword));
+  if (uniform) return `outfit_${uniform}`;
   return OUTFIT_IDS_BY_CONTEXT[appearance.outfitContext ?? 'outdoor'] ?? 'outfit_terracotta';
 }
 
@@ -66,12 +74,24 @@ function collectBones(id: string, group: Group): Map<string, THREE.Bone> {
 }
 
 /**
+ * Optional accessories ride on the same rig but never block the avatar: a missing
+ * or unrecognized asset is simply skipped.
+ */
+function accessoryIdsFor(appearance: AvatarAppearance): string[] {
+  const ids: string[] = [];
+  if (appearance.facialHair === 'beard_short') ids.push(appearance.facialHair);
+  if (appearance.glasses === 'glasses_round') ids.push(appearance.glasses);
+  return ids;
+}
+
+/**
  * Loads the authored skinned character pieces (body with clips plus face / hair / outfit)
  * for one avatar appearance. Returns null when any piece is missing so the caller keeps
  * its procedural body. The pieces share one rig layout and follow the pose bone by bone.
  */
 export async function loadAuthoredAvatar(source: AuthoredAvatarSource, appearance: AvatarAppearance): Promise<AuthoredAvatarRig | null> {
   const ids = [bodyIdFor(appearance), faceIdFor(appearance), hairIdFor(appearance), outfitIdFor(appearance)];
+  const accessoryIds = accessoryIdsFor(appearance);
   try {
     const groups: Group[] = [];
     let clips: THREE.AnimationClip[] = [];
@@ -92,12 +112,20 @@ export async function loadAuthoredAvatar(source: AuthoredAvatarSource, appearanc
     if (groups.length < 4) return null;
     const [bodyRoot = null, facePart = null, hairPart = null, outfitPart = null] = groups;
     if (!bodyRoot || !facePart || !hairPart || !outfitPart) return null;
-    const bones = collectBones(ids[0] ?? 'body', bodyRoot);
+    const accessoryParts: Group[] = [];
     const accessoryBones = [
       collectBones(ids[1] ?? 'face', facePart),
       collectBones(ids[2] ?? 'hair', hairPart),
       collectBones(ids[3] ?? 'outfit', outfitPart),
     ];
+    const bones = collectBones(ids[0] ?? 'body', bodyRoot);
+    for (const id of accessoryIds) {
+      const group = await source.tryLoad(id);
+      if (!group) continue;
+      groups.push(group);
+      accessoryParts.push(group);
+      accessoryBones.push(collectBones(id, group));
+    }
     const head = bones.get('head');
     bodyRoot.updateWorldMatrix(true, true);
     const eyeHeight = head ? head.getWorldPosition(new THREE.Vector3()).y + 0.12 : 1.64;
@@ -105,7 +133,7 @@ export async function loadAuthoredAvatar(source: AuthoredAvatarSource, appearanc
     for (const clip of clips) clipRecord[clip.name] = clip;
     return {
       root: bodyRoot,
-      partRoots: [facePart, hairPart, outfitPart],
+      partRoots: [facePart, hairPart, outfitPart, ...accessoryParts],
       clips: clipRecord,
       bones,
       accessoryBones,

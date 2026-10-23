@@ -41,6 +41,18 @@ PALETTE = {
     'brow': (0.20, 0.15, 0.12),
     'mouth': (0.45, 0.26, 0.24),
     'hair_band': (0.85, 0.62, 0.55),
+    'barista': (0.95, 0.93, 0.89),
+    'barista_trouser': (0.23, 0.25, 0.29),
+    'garden': (0.50, 0.68, 0.42),
+    'garden_trouser': (0.35, 0.29, 0.22),
+    'delivery': (0.89, 0.41, 0.24),
+    'delivery_trouser': (0.18, 0.24, 0.34),
+    'market': (0.91, 0.77, 0.42),
+    'market_trouser': (0.29, 0.33, 0.41),
+    'apron': (0.24, 0.22, 0.21),
+    'stripe': (0.82, 0.92, 0.55),
+    'lens': (0.90, 0.93, 0.95),
+    'rim': (0.13, 0.11, 0.10),
 }
 SKINS = {
     'average': (0.86, 0.62, 0.47),
@@ -473,6 +485,36 @@ def build_hair_mesh(builder: MeshBuilder, hair_key: str) -> MeshBuilder:
     return builder
 
 
+# ---------------------------------------------------------------- accessories
+def build_accessory_mesh(builder: MeshBuilder, key: str) -> MeshBuilder:
+    """beard_short and glasses_round ride the head bone like the hair pieces."""
+    if key == 'beard_short':
+        hairc = ao_color(HAIRS['dark'], 0.45)
+        # blob order here is (x half, z vertical half, y depth half)
+        # one smooth shell over the lower face; the mouth stroke (front y ~0.146)
+        # pokes through its y 0.141 front face so the lips stay visible
+        builder.blob(Vec3((0.0, 0.070, 1.578)), 0.118, 0.056, 0.086, hairc, segments=14, divisions=9)
+        # mustache under the nose (nose front y ~0.188 shades its center)
+        builder.blob(Vec3((0.0, 0.130, 1.621)), 0.068, 0.015, 0.046, hairc, segments=12, divisions=7)
+        # jaw chops bridging the shell up toward the ears
+        for s in (-1.0, 1.0):
+            builder.blob(Vec3((s * 0.105, 0.060, 1.592)), 0.048, 0.034, 0.058, hairc, segments=12, divisions=7)
+            # faint sideburns in front of the ears
+            builder.blob(Vec3((s * 0.128, 0.045, 1.665)), 0.022, 0.030, 0.030, hairc, segments=10, divisions=6)
+    if key == 'glasses_round':
+        # stylized round shades: one dark disc per eye plus temple arms and a
+        # bridge. A pale lens layering proved view-dependent, so the disc is
+        # deliberately opaque and reads correctly from every angle.
+        rim_c = ao_color(PALETTE['rim'], 0.6)
+        for s in (-1.0, 1.0):
+            eye_x = s * 0.063
+            builder.blob(Vec3((eye_x, 0.162, 1.662)), 0.046, 0.038, 0.026, rim_c, segments=12, divisions=7)
+            # temple arms back to the ears
+            builder.limb(Vec3((eye_x + s * 0.046, 0.162, 1.668)), Vec3((s * 0.148, 0.008, 1.680)), 0.0045, 0.0045, rim_c, segments=7)
+        builder.limb(Vec3((-0.020, 0.164, 1.668)), Vec3((0.020, 0.164, 1.668)), 0.004, 0.004, rim_c, segments=7)
+    return builder
+
+
 # ---------------------------------------------------------------- outfits
 def build_outfit_mesh(builder: MeshBuilder, outfit_key: str, frame_key: str = 'average') -> MeshBuilder:
     frame = BODY_FRAMES[frame_key]
@@ -490,6 +532,10 @@ def build_outfit_mesh(builder: MeshBuilder, outfit_key: str, frame_key: str = 'a
     if outfit_key == 'outfit_sleep':
         hem_y = 0.92
         sleeve_z = 1.02
+        leg_style = 'full'
+    if outfit_key.startswith('outfit_') and outfit_key.split('_')[1] in ('barista', 'garden', 'delivery', 'market'):
+        hem_y = 0.96
+        sleeve_z = 1.22
         leg_style = 'full'
     bands = []
     for i in range(15):
@@ -538,6 +584,22 @@ def build_outfit_mesh(builder: MeshBuilder, outfit_key: str, frame_key: str = 'a
                         radius = lerp(0.072, 0.058, t)
                         lower.append((Vec3((s * 0.114, 0.004, y)), radius, radius))
                     builder.lathe(lower, 14, trouser_color, round_caps=False)
+    kind = outfit_key.split('_')[1] if outfit_key.startswith('outfit_') else ''
+    if kind == 'barista':
+        # dark apron panel riding proud of the chest front with two shoulder straps
+        apron_c = ao_color(PALETTE['apron'], 0.55)
+        builder.blob(Vec3((0.0, 0.142, 1.16)), 0.028, 0.19, 0.150, apron_c, segments=14, divisions=8)
+        builder.blob(Vec3((0.0, 0.132, 1.02)), 0.026, 0.09, 0.128, apron_c, segments=14, divisions=7)
+        for s in (-1.0, 1.0):
+            builder.limb(Vec3((s * 0.070, 0.118, 1.412)), Vec3((s * 0.098, 0.128, 1.336)), 0.011, 0.011, apron_c, segments=7)
+    if kind == 'delivery':
+        # pale hi-vis band across the chest
+        builder.blob(Vec3((0.0, 0.128, 1.30)), 0.030, 0.030, 0.140, ao_color(PALETTE['stripe'], 0.8), segments=14, divisions=7)
+    if kind == 'market':
+        # suspenders from the waist to the shoulders
+        suspender_c = ao_color(PALETTE['apron'], 0.6)
+        for s in (-1.0, 1.0):
+            builder.limb(Vec3((s * 0.062, 0.140, 1.30)), Vec3((s * 0.070, 0.108, 1.02)), 0.013, 0.013, suspender_c, segments=7)
     return builder
 
 
@@ -918,7 +980,10 @@ OUT_ID_ORDER = (
     'body_average', 'body_slim', 'body_broad',
     'face_01', 'face_02', 'face_03',
     'hair_01', 'hair_02', 'hair_03', 'hair_04',
-    'outfit_terracotta', 'outfit_blue', 'outfit_sage', 'outfit_mustard', 'outfit_home', 'outfit_sleep',
+    'beard_short', 'glasses_round',
+    'outfit_terracotta', 'outfit_blue', 'outfit_sage', 'outfit_mustard',
+    'outfit_home', 'outfit_sleep',
+    'outfit_barista', 'outfit_garden', 'outfit_delivery', 'outfit_market',
     'crowd_01', 'crowd_02', 'crowd_03', 'crowd_04', 'crowd_05',
 )
 CLIP_NAMES = ('idle', 'walk', 'jog', 'sit')
@@ -934,6 +999,8 @@ def build_single_asset(asset_id: str, out_dir: str, with_clips: bool, do_preview
         build_head_mesh(builder, asset_id)
     elif asset_id.startswith('hair_'):
         build_hair_mesh(builder, asset_id)
+    elif asset_id in ('beard_short', 'glasses_round'):
+        build_accessory_mesh(builder, asset_id)
     elif asset_id.startswith('outfit_'):
         build_outfit_mesh(builder, asset_id, frame_key='broad' if False else 'average')
     elif asset_id.startswith('crowd_'):

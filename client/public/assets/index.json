@@ -1,6 +1,11 @@
 {
   "version": 1,
   "assets": {
+    "beard_short": {
+      "url": "/assets/models/characters/beard_short.glb",
+      "family": "characters",
+      "bytes": 48172
+    },
     "body_average": {
       "url": "/assets/models/characters/body_average.glb",
       "family": "characters",
@@ -56,6 +61,11 @@
       "family": "characters",
       "bytes": 107428
     },
+    "glasses_round": {
+      "url": "/assets/models/characters/glasses_round.glb",
+      "family": "characters",
+      "bytes": 35260
+    },
     "hair_01": {
       "url": "/assets/models/characters/hair_01.glb",
       "family": "characters",
@@ -76,15 +86,35 @@
       "family": "characters",
       "bytes": 77940
     },
+    "outfit_barista": {
+      "url": "/assets/models/characters/outfit_barista.glb",
+      "family": "characters",
+      "bytes": 152080
+    },
     "outfit_blue": {
       "url": "/assets/models/characters/outfit_blue.glb",
       "family": "characters",
       "bytes": 60444
     },
+    "outfit_delivery": {
+      "url": "/assets/models/characters/outfit_delivery.glb",
+      "family": "characters",
+      "bytes": 135140
+    },
+    "outfit_garden": {
+      "url": "/assets/models/characters/outfit_garden.glb",
+      "family": "characters",
+      "bytes": 127548
+    },
     "outfit_home": {
       "url": "/assets/models/characters/outfit_home.glb",
       "family": "characters",
       "bytes": 109176
+    },
+    "outfit_market": {
+      "url": "/assets/models/characters/outfit_market.glb",
+      "family": "characters",
+      "bytes": 135952
     },
     "outfit_mustard": {
       "url": "/assets/models/characters/outfit_mustard.glb",
