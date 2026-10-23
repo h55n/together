@@ -1,3 +1,4 @@
+import type * as THREE from 'three';
 import type { Group } from 'three';
 import { AssetLoader } from './AssetLoader';
 
@@ -45,6 +46,17 @@ export class ArtAssets {
     const entry = this.index?.assets[id];
     if (!entry || this.failed.has(id)) return null;
     try { return await this.loader.loadModel({ id, url: entry.url, kind: 'model' }); }
+    catch { this.failed.add(id); return null; }
+  }
+
+  /** Authored model plus its animation clips; null when the loader errors. */
+  async tryLoadWithClips(id: string): Promise<{ group: Group; clips: THREE.AnimationClip[] } | null> {
+    await this.load();
+    const entry = this.index?.assets[id];
+    if (!entry || this.failed.has(id)) return null;
+    const loader = this.loader as { loadModelWithClips?: (asset: { id: string; url: string; kind: 'model' }) => Promise<{ group: Group; clips: THREE.AnimationClip[] }> };
+    if (!loader.loadModelWithClips) return null;
+    try { return await loader.loadModelWithClips({ id, url: entry.url, kind: 'model' }); }
     catch { this.failed.add(id); return null; }
   }
 

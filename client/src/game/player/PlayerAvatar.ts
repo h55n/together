@@ -4,6 +4,7 @@ import { gazeAngles } from './gazeMath';
 import type { LocomotionSample } from './movementMath';
 import { createClothTextures } from '../world/ClothTextures';
 import { TransportSafetyEquipment } from './TransportSafetyEquipment';
+import { loadAuthoredAvatar, type AuthoredAvatarRig, type AuthoredAvatarSource } from '../assets/AuthoredAvatar';
 
 export type AvatarAppearance = {
   skinTone?: THREE.ColorRepresentation;
@@ -30,7 +31,7 @@ export class PlayerAvatar {
   readonly head = new THREE.Group();
   readonly torso = new THREE.Group();
   readonly hands: { left: THREE.Object3D; right: THREE.Object3D };
-  private readonly standingEyeHeight: number;
+  private standingEyeHeight: number;
   private readonly body = new THREE.Group();
   private readonly safetyEquipment = new TransportSafetyEquipment();
   get eyeHeight(): number { return this.standingEyeHeight + this.body.position.y * this.root.scale.y; }
@@ -88,6 +89,14 @@ export class PlayerAvatar {
   private readonly forearmOrientation = new THREE.Quaternion();
   private readonly autoRickshaw = new THREE.Group();
   private readonly basketItems: THREE.Mesh[] = [];
+  private transportMode: 'on_foot' | 'bicycle' | 'scooter' | 'kayak' | 'auto_rickshaw' = 'on_foot';
+  private authored: AuthoredAvatarRig | null = null;
+  private authoredMixer: THREE.AnimationMixer | null = null;
+  private authoredAction: THREE.AnimationAction | null = null;
+  private handProxyRest: {
+    left: { parent: THREE.Object3D; position: THREE.Vector3; quaternion: THREE.Quaternion };
+    right: { parent: THREE.Object3D; position: THREE.Vector3; quaternion: THREE.Quaternion };
+  } | null = null;
 
   constructor(appearance: AvatarAppearance = {}) {
     this.outfitContext = appearance.outfitContext ?? inferOutfitContext(appearance.outfitId);
@@ -204,9 +213,12 @@ export class PlayerAvatar {
 
   setFirstPerson(firstPerson: boolean): void {
     this.head.visible = !firstPerson;
+    const headBone = this.authored?.bones.get('head');
+    if (headBone) headBone.scale.setScalar(firstPerson ? 0.001 : 1);
   }
 
   setTransportMode(mode: 'on_foot' | 'bicycle' | 'scooter' | 'kayak' | 'auto_rickshaw'): void {
+    this.transportMode = mode;
     if (this.safetyEquipment.lifeJacketRoot.parent !== this.body) {
       this.safetyEquipment.lifeJacketRoot.position.set(0, 1.18, 0);
       this.body.add(this.safetyEquipment.lifeJacketRoot);
@@ -218,6 +230,111 @@ export class PlayerAvatar {
     this.scooter.visible = mode === 'scooter';
     this.kayak.visible = mode === 'kayak';
     this.autoRickshaw.visible = mode === 'auto_rickshaw';
+  }
+
+  /**
+   * Opt-in swap from the procedural body to the authored skinned GLB pieces.
+   * All-or-nothing: any missing piece keeps the procedural body. Returns false
+   * when nothing was attached (no index, missing file, load error).
+   */
+  async attachAuthored(source: AuthoredAvatarSource, appearance: AvatarAppearance = {}): Promise<boolean> {
+    const rig = await loadAuthoredAvatar(source, appearance);
+    if (!rig) return false;
+    this.authoredSetup(rig);
+    return true;
+  }
+
+  private authoredSetup(rig: AuthoredAvatarRig): void {
+    this.authored = rig;
+    rig.root.name = 'avatar:authored-body';
+    rig.root.scale.setScalar(THREE.MathUtils.clamp(this.standingEyeHeight / Math.max(0.5, rig.eyeHeight), 0.85, 1.1));
+    this.root.add(rig.root);
+    for (const [index, part] of rig.partRoots.entries()) {
+      part.name = `avatar:authored-part-${index}`;
+      part.scale.copy(rig.root.scale);
+      this.root.add(part);
+      part.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.castShadow = true;
+          object.receiveShadow = true;
+        }
+      });
+    }
+    this.authoredMixer = new THREE.AnimationMixer(rig.root);
+    rig.root.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        object.castShadow = true;
+        object.receiveShadow = true;
+      }
+    });
+    const restOf = (proxy: THREE.Object3D) => ({
+      parent: proxy.parent ?? this.body,
+      position: proxy.position.clone(),
+      quaternion: proxy.quaternion.clone(),
+    });
+    this.handProxyRest = { left: restOf(this.hands.left), right: restOf(this.hands.right) };
+    const leftHandBone = rig.bones.get('hand.L');
+    const rightHandBone = rig.bones.get('hand.R');
+    if (leftHandBone && rightHandBone) {
+      leftHandBone.add(this.hands.left);
+      rightHandBone.add(this.hands.right);
+      this.hands.left.position.set(0, 0, 0);
+      this.hands.right.position.set(0, 0, 0);
+      this.hands.left.quaternion.identity();
+      this.hands.right.quaternion.identity();
+    }
+    this.body.visible = false;
+  }
+
+  /** Shows or hides the authored rig, and routes the hand proxies between authored bones and the procedural arms. */
+  private setAuthoredMode(active: boolean): void {
+    const rig = this.authored;
+    if (!rig) return;
+    rig.root.visible = active;
+    for (const part of rig.partRoots) part.visible = active;
+    this.body.visible = !active;
+    if (this.handProxyRest) {
+      for (const side of ['left', 'right'] as const) {
+        const rest = this.handProxyRest[side];
+        const proxy = this.hands[side];
+        const bone = rig.bones.get(side === 'left' ? 'hand.L' : 'hand.R');
+        const wantsParent = active && bone ? bone : rest.parent;
+        if (proxy.parent !== wantsParent && wantsParent) {
+          wantsParent.add(proxy);
+          proxy.position.copy(active && bone ? new THREE.Vector3() : rest.position);
+          proxy.quaternion.copy(active && bone ? new THREE.Quaternion() : rest.quaternion);
+        }
+      }
+    }
+  }
+
+  /** Plays the matching authored clip and copies the pose onto the accessory rigs. False when no clip exists. */
+  private authoredPose(delta: number, action: AvatarAction, speed: number, referenceSpeed: number): boolean {
+    const rig = this.authored;
+    const mixer = this.authoredMixer;
+    if (!rig || !mixer) return false;
+    const clipName = action === 'walk' ? 'walk' : action === 'jog' ? 'jog' : action === 'sit' ? 'sit' : 'idle';
+    const clip = rig.clips[clipName];
+    if (!clip) return false;
+    const next = mixer.clipAction(clip);
+    if (this.authoredAction !== next) {
+      next.reset().fadeIn(0.18).play();
+      if (this.authoredAction) this.authoredAction.fadeOut(0.18);
+      this.authoredAction = next;
+    }
+    const gait = clipName === 'walk' || clipName === 'jog' ? avatarGaitFrequency(clipName) : 0;
+    next.timeScale = gait > 0 ? gait * Math.min(1.5, Math.max(0.2, speed / referenceSpeed)) * clip.duration : 1;
+    mixer.update(delta);
+    for (const accessory of rig.accessoryBones) {
+      for (const [name, bone] of accessory) {
+        const lead = rig.bones.get(name);
+        if (lead) {
+          bone.quaternion.copy(lead.quaternion);
+          bone.position.copy(lead.position);
+        }
+      }
+    }
+    return true;
   }
 
   setTransform(position: { x: number; y: number; z: number }, yaw: number, deltaSeconds = 0): void {
@@ -245,6 +362,12 @@ export class PlayerAvatar {
     const referenceSpeed = action === 'jog' ? 3.2 : 1.6;
     const requestedSpeed = locomotion?.speed ?? (action === 'jog' ? 3.2 : action === 'walk' ? 1.6 : 0);
     const speed = Number.isFinite(requestedSpeed) ? Math.max(0, requestedSpeed) : 0;
+    // Authored mode covers the on-foot basics; every other action or transport keeps the procedural body.
+    const authoredActive = !!this.authored && this.transportMode === 'on_foot'
+      && (action === 'idle' || action === 'walk' || action === 'jog' || action === 'sit');
+    this.setAuthoredMode(authoredActive);
+    if (authoredActive && this.authoredPose(delta, action, speed, referenceSpeed)) return;
+    if (authoredActive) this.setAuthoredMode(false);
     let motionElapsed = action === 'idle' ? this.elapsed : this.actionElapsed;
     if (action === 'walk' || action === 'jog') {
       const frequency = avatarGaitFrequency(action);

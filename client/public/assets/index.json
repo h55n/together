@@ -64,12 +64,12 @@
     "hair_02": {
       "url": "/assets/models/characters/hair_02.glb",
       "family": "characters",
-      "bytes": 50328
+      "bytes": 53976
     },
     "hair_03": {
       "url": "/assets/models/characters/hair_03.glb",
       "family": "characters",
-      "bytes": 64576
+      "bytes": 54124
     },
     "hair_04": {
       "url": "/assets/models/characters/hair_04.glb",

@@ -23,6 +23,7 @@ import { WorldStreamer } from './world/WorldStreamer';
 import { amayaBayBoundaryCuboids, createAmayaBayChunkFactory } from './world/AmayaBayChunkFactory';
 import type { FirstSessionAction } from './core/FirstSession';
 import { PlayerAvatar } from './player/PlayerAvatar';
+import { ArtAssets } from './assets/ArtAssets';
 import { PlayerController } from './player/PlayerController';
 import { CameraController } from './camera/CameraController';
 import { LightingSystem } from './lighting/LightingSystem';
@@ -241,6 +242,8 @@ export class GameEngine {
       ...(localAppearance.glasses ? { glasses: localAppearance.glasses } : {}),
     } : {});
     scene.add(avatar.root);
+    const artAssets = new ArtAssets();
+    void avatar.attachAuthored(artAssets, localAppearance ?? {}).catch((error) => { console.warn('authored avatar unavailable', error); });
     // Household members arrive side by side rather than inside one another at the same spawn point.
     const spawnLane = options.networkSession ? memberSpawnLane(options.networkSession.userId) : 0;
     const player = new PlayerController(physics, avatar, { ...home.spawn, x: home.spawn.x + spawnLane * 0.75 });

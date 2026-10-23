@@ -437,45 +437,39 @@ def build_head_mesh(builder: MeshBuilder, face_key: str, skin_color=None) -> Mes
 
 # ---------------------------------------------------------------- hair
 def build_hair_mesh(builder: MeshBuilder, hair_key: str) -> MeshBuilder:
-    color = HAIRS['black'] if hair_key == 'hair_01' else HAIRS.get(hair_key.replace('hair_', 'hair_'), HAIRS['dark'])
-    # hair silhouettes are per variant:
+    colors = {'hair_01': 'dark', 'hair_02': 'brown', 'hair_03': 'black', 'hair_04': 'auburn'}
+    hairc = ao_color(HAIRS[colors.get(hair_key, 'dark')], 0.5)
+    # blob radii order: (y-depth, z-vertical, x-width).
+    # scalp shell: wraps the cranium, recedes behind the face so the
+    # forehead/eyes stay clear. Emerges above the hairline only.
+    builder.blob(Vec3((0.0, -0.015, 1.688)), 0.150, 0.128, 0.157, hairc, segments=16, divisions=9)
+    # nape volume at the back of the head (protrudes past the cap so it
+    # reads as hair mass rather than a flush patch)
+    builder.blob(Vec3((0.0, -0.108, 1.636)), 0.082, 0.092, 0.112, hairc, segments=14, divisions=8)
     if hair_key == 'hair_01':
-        color = HAIRS['dark']
+        # short crop: soft round tuft on top
+        builder.blob(Vec3((0.0, 0.0, 1.774)), 0.108, 0.050, 0.125, hairc, segments=14, divisions=6)
     if hair_key == 'hair_02':
-        color = HAIRS['brown']
+        # swept fringe across the upper forehead to one side
+        builder.blob(Vec3((0.045, 0.062, 1.762)), 0.072, 0.056, 0.105, hairc, segments=14, divisions=7)
+        builder.blob(Vec3((0.108, 0.086, 1.742)), 0.052, 0.048, 0.070, hairc, segments=12, divisions=7)
+        # long lock hanging on the swept side
+        builder.blob(Vec3((0.136, 0.020, 1.640)), 0.038, 0.062, 0.034, hairc, segments=10, divisions=7)
+        builder.blob(Vec3((0.140, 0.012, 1.552)), 0.032, 0.056, 0.030, hairc, segments=10, divisions=7)
     if hair_key == 'hair_03':
-        color = HAIRS['black']
-    if hair_key == 'hair_04':
-        color = HAIRS['auburn']
-    hairc = ao_color(color, 0.5)
-    # base cap over the skull
-    builder.blob(Vec3((0.0, 0.008, 1.668)), 0.160, 0.100, 0.148, hairc, segments=16, divisions=9)
-    # back volume protects the nape
-    builder.blob(Vec3((0.0, -0.052, 1.615)), 0.140, 0.105, 0.092, hairc, segments=14, divisions=8)
-    side_sway = hair_key == 'hair_02'
-    if hair_key == 'hair_01':
-        builder.blob(Vec3((0.0, 0.115, 1.718)), 0.105, 0.030, 0.068, hairc, segments=14, divisions=6)
-    if hair_key == 'hair_02':
-        # swept fringe over one eye and a long lock on that side
-        builder.blob(Vec3((0.052, 0.120, 1.724)), 0.115, 0.034, 0.078, hairc, segments=14, divisions=6)
-        builder.blob(Vec3((0.128, 0.118, 1.66)), 0.034, 0.115, 0.030, hairc, segments=10, divisions=7)
-        builder.blob(Vec3((0.132, 0.112, 1.556)), 0.030, 0.115, 0.026, hairc, segments=10, divisions=7)
-        builder.blob(Vec3((-0.126, 0.10, 1.70)), 0.028, 0.03, 0.03, hairc, segments=8, divisions=6)
-    if hair_key == 'hair_03':
-        builder.blob(Vec3((0.0, 0.108, 1.716)), 0.108, 0.048, 0.070, hairc, segments=14, divisions=6)
-        builder.blob(Vec3((0.0, -0.085, 1.595)), 0.108, 0.13, 0.076, hairc, segments=14, divisions=8)
-        builder.blob(Vec3((0.0, -0.09, 1.50)), 0.092, 0.13, 0.066, hairc, segments=12, divisions=8)
-        builder.blob(Vec3((0.0, -0.08, 1.386)), 0.062, 0.11, 0.066, hairc, segments=10, divisions=7)
-        builder.blob(Vec3((0.0, -0.062, 1.318)), 0.030, 0.07, 0.038, hairc, segments=8, divisions=6)
-        builder.blob(Vec3((0.0, -0.045, 1.615)), 0.028, 0.018, 0.044, ao_color(PALETTE['hair_band'], 0.7), segments=8, divisions=6)
+        # long hair: thick fall down the back along -y
+        builder.blob(Vec3((0.0, -0.118, 1.600)), 0.062, 0.098, 0.082, hairc, segments=14, divisions=8)
+        builder.blob(Vec3((0.0, -0.120, 1.480)), 0.056, 0.096, 0.076, hairc, segments=12, divisions=8)
+        builder.blob(Vec3((0.0, -0.104, 1.360)), 0.048, 0.082, 0.062, hairc, segments=10, divisions=7)
+        builder.blob(Vec3((0.0, -0.088, 1.270)), 0.036, 0.052, 0.042, hairc, segments=8, divisions=6)
     if hair_key == 'hair_04':
         curl_spots = [
-            (-0.118, 0.075, 1.742), (-0.045, 0.078, 1.756), (0.038, 0.072, 1.752),
-            (0.118, 0.058, 1.726), (-0.138, 0.02, 1.676), (0.138, 0.02, 1.668),
-            (-0.098, 0.082, 1.768), (0.09, 0.088, 1.764), (0.0, 0.02, 1.775),
+            (-0.112, -0.010, 1.786), (-0.038, -0.035, 1.820), (0.040, -0.035, 1.818),
+            (0.114, -0.030, 1.774), (-0.140, -0.075, 1.716), (0.142, -0.078, 1.712),
+            (-0.096, -0.008, 1.802), (0.092, -0.006, 1.800), (0.0, -0.130, 1.688),
         ]
         for (x, y, z) in curl_spots:
-            builder.blob(Vec3((x, y, z)), 0.046, 0.046, 0.042, hairc, segments=10, divisions=7)
+            builder.blob(Vec3((x, y, z)), 0.048, 0.044, 0.048, hairc, segments=10, divisions=7)
     return builder
 
 
