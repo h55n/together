@@ -287,6 +287,11 @@ export class AmbientNPCSystem {
     this.nodeBodyMaterial = material;
   }
 
+  /** Development visual review only: which walkers currently wear an authored townie. */
+  crowdForWorldReview(): { lodReady: boolean; assigned: number[] } {
+    return { lodReady: !!this.lod, assigned: this.lod ? this.lod.assignedIndices() : [] };
+  }
+
   dispose(): void {
     this.disposed = true;
     this.nodeBodyMaterial?.dispose();

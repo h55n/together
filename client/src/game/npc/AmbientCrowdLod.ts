@@ -129,6 +129,9 @@ export class AmbientCrowdLod {
 
   isAssigned(index: number): boolean { return this.slots.has(index); }
 
+  /** Development visual review only: which walkers currently wear an authored townie. */
+  assignedIndices(): number[] { return [...this.slots.keys()]; }
+
   dispose(): void {
     for (const slot of this.slots.values()) {
       slot.mixer.stopAllAction();

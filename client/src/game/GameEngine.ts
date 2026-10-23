@@ -499,6 +499,12 @@ export class GameEngine {
     return { position: { x: position.x, y: position.y, z: position.z }, transport: this.player.getTransportMode(), outingReady: this.transportOuting?.ready ?? false, outingState: this.transportOuting?.runtime.snapshot().state ?? null };
   }
 
+  /** Development visual review only: which ambient walkers currently show the authored townies. */
+  ambientCrowdForWorldReview(): { lodReady: boolean; assigned: number[] } {
+    if (!import.meta.env.DEV || new URLSearchParams(window.location.search).get('worldReview') !== '1') throw new Error('World crowd review is unavailable');
+    return this.npcs.crowdForWorldReview();
+  }
+
   /** Development visual review only; placement never enters production gameplay. */
   placeForWorldReview(x: number, z: number): void {
     this.transportOuting?.runtime.cancel('relocated');

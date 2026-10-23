@@ -1349,6 +1349,8 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
           () => engine.reviewWalkHeroRoute();
         (window as Window & { __amayaReviewPlayer?: () => unknown }).__amayaReviewPlayer =
           () => engine.playerForWorldReview();
+        (window as Window & { __amayaReviewCrowd?: () => unknown }).__amayaReviewCrowd =
+          () => engine.ambientCrowdForWorldReview();
         (window as Window & { __amayaReviewLeisure?: () => unknown }).__amayaReviewLeisure = () => engine.leisureForWorldReview();
         (window as Window & { __amayaReviewMovingBoxes?: () => number }).__amayaReviewMovingBoxes = () => engine.movingBoxesForWorldReview();
         (window as Window & { __amayaReviewMetrics?: (reset?: boolean) => unknown }).__amayaReviewMetrics =
@@ -1371,6 +1373,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       cancelled = true;
       preparation.abort();
       delete (window as Window & { __amayaReviewPlayer?: () => unknown }).__amayaReviewPlayer;
+      delete (window as Window & { __amayaReviewCrowd?: () => unknown }).__amayaReviewCrowd;
       delete (window as Window & { __amayaReviewLeisure?: () => unknown }).__amayaReviewLeisure;
       delete (window as Window & { __amayaReviewMovingBoxes?: () => number }).__amayaReviewMovingBoxes;
       delete (window as Window & { __amayaReviewRide?: (destinationId: string) => void }).__amayaReviewRide;
