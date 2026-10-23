@@ -255,7 +255,7 @@ export class GameEngine {
     const lighting = new LightingSystem(scene);
     const weather = new WeatherSystem(scene, materials);
     weather.setState(options.initialWeather ?? 'clear');
-    const npcs = new AmbientNPCSystem(96, (from, to) => physics.canTraversePedestrian(from, to));
+    const npcs = new AmbientNPCSystem(96, (from, to) => physics.canTraversePedestrian(from, to), artAssets);
     if (renderer.info.backend === 'webgpu') void npcs.enableNodeLimbSwing().catch(() => undefined);
     scene.add(npcs.root);
     const namedNpcs = new NamedNPCSystem((from, to) => physics.canTraversePedestrian(from, to));

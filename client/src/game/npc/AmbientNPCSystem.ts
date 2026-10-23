@@ -1,26 +1,7 @@
 import * as THREE from 'three';
 import { AMAYA_BAY_CITY, AMAYA_BAY_VENUES, cityHeightAt, createSeededRandom, createAmayaBayPatrolPath, venueFrontApproach, type SurfacePoint } from '@together/shared';
-
-type AmbientWalker = {
-  position: THREE.Vector3;
-  speed: number;
-  path: readonly SurfacePoint[];
-  lengths: readonly number[];
-  pathLength: number;
-  direction: 1 | -1;
-  phase: number;
-  patrolDistance: number;
-  yaw: number;
-  /** Stride phase in radians, advanced by measured displacement so blocked walkers stop stepping. */
-  stride: number;
-  swing: number;
-  /** Smoothed sidestep (metres, right-positive) around people just ahead; presentation only. */
-  dodge: number;
-  /** Patrol ends that sit at a shop front: 1 = path end, -1 = path start. */
-  doorEnds: Array<1 | -1>;
-  indoorsUntil: number;
-  lastDirection: 1 | -1;
-};
+import { AmbientCrowdLod, type AuthoredCrowdSource } from './AmbientCrowdLod';
+import type { AmbientWalker } from './ambient-walker';
 
 const SHOP_FRONTS = AMAYA_BAY_VENUES.map(venue => venueFrontApproach(venue));
 const DOOR_REACH = 10;
@@ -93,6 +74,10 @@ export class AmbientNPCSystem {
   private nodeBodyMaterial: THREE.Material | null = null;
   private disposed = false;
   private readonly heads: THREE.InstancedMesh;
+  private lod: AmbientCrowdLod | null = null;
+  private readonly lodRoot = new THREE.Group();
+  /** Per-walker stand-in visibility for the frame; the authored LOD reuses it to pick candidates. */
+  private readonly visibleFlags: Uint8Array;
   private readonly bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, vertexColors: true });
   private readonly skinMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, vertexColors: true });
   private readonly bodyMatrix = new THREE.Matrix4();
@@ -107,8 +92,16 @@ export class AmbientNPCSystem {
   private readonly yAxis = new THREE.Vector3(0, 1, 0);
   private readonly zAxis = new THREE.Vector3(0, 0, 1);
 
-  constructor(count = 32, private readonly canTraverse?: (from: SurfacePoint, to: SurfacePoint) => boolean) {
+  constructor(count = 32, private readonly canTraverse?: (from: SurfacePoint, to: SurfacePoint) => boolean, source?: AuthoredCrowdSource) {
     this.root.name = 'ambient-city-npcs-development';
+    this.visibleFlags = new Uint8Array(count);
+    // Optional proximity LOD: nearby walkers show the authored townies when the GLBs load.
+    if (source) {
+      this.lod = new AmbientCrowdLod(source);
+      this.lodRoot.name = 'ambient-npcs-authored';
+      this.root.add(this.lodRoot);
+      void this.lod.attach().catch(() => undefined);
+    }
     // WebGL limb swing; renderers that skip onBeforeCompile simply show the standing pose.
     this.bodyMaterial.onBeforeCompile = injectLimbSwing;
     this.root.userData.blockedWalkerIndices = this.blockedWalkerIndices;
@@ -243,12 +236,19 @@ export class AmbientNPCSystem {
       // A stable per-walker threshold means the same hardy few stay out as the rain builds.
       const sheltering = shelter > 0 && (index * 0.618034) % 1 < shelter * 0.8;
       const inside = walker.indoorsUntil > now;
-      this.writeWalkerMatrices(index, walker, !sheltering && !inside && walker.position.distanceTo(playerPosition) <= CULL_DISTANCE, now);
+      const visible = !sheltering && !inside && walker.position.distanceTo(playerPosition) <= CULL_DISTANCE;
+      this.visibleFlags[index] = visible ? 1 : 0;
+      this.writeWalkerMatrices(index, walker, visible, now);
     }
 
     this.bodies.instanceMatrix.needsUpdate = true;
     this.heads.instanceMatrix.needsUpdate = true;
     this.gait.needsUpdate = true;
+    if (this.lod) {
+      const change = this.lod.update(playerPosition, this.walkers, this.visibleFlags, dt);
+      for (const index of change.hidden) this.writeWalkerMatrices(index, this.walkers[index]!, false, now);
+      for (const index of change.shown) this.writeWalkerMatrices(index, this.walkers[index]!, true, now);
+    }
     this.root.userData.navigationMode = this.blockedWalkerIndices.length ? 'blocked' : 'surface_patrol';
   }
 
@@ -295,6 +295,7 @@ export class AmbientNPCSystem {
     this.bodyMaterial.dispose();
     this.bodies.customDepthMaterial?.dispose();
     this.skinMaterial.dispose();
+    this.lod?.dispose();
     this.root.clear();
   }
 
