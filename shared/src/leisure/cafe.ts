@@ -9,6 +9,12 @@ export type CafeCommand =
 export type CafeReceipt = { key: string; actor: string; fingerprint: string; revision: number };
 export type CafeState = { participants: string[]; revision: number; phase: 'active' | 'finished'; seats: Record<string, number>; orders: CafeOrder[]; receipts: CafeReceipt[] };
 
+export const CAFE_MENU: Record<CafeDrink, number> = { chai: 30, filter_coffee: 45, cold_coffee: 90, lemon_soda: 60 };
+
+export function cafeDrinkItemId(drink: CafeDrink): string { return `drink:${drink}`; }
+
+export const CAFE_DRINK_COLORS: Record<CafeDrink, number> = { chai: 0x96603d, filter_coffee: 0x70442e, cold_coffee: 0x9f6d4e, lemon_soda: 0xb5c95e };
+
 const DRINKS: readonly CafeDrink[] = ['chai', 'filter_coffee', 'cold_coffee', 'lemon_soda'];
 const validId = (value: string) => typeof value === 'string' && value.trim().length > 0 && value.length <= 128;
 

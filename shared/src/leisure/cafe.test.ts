@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { acceptCafeCommand, createCafeState } from './cafe.js';
+import { acceptCafeCommand, createCafeState, CAFE_MENU, cafeDrinkItemId } from './cafe.js';
+
+test('every café drink has a positive menu price and a shelf item id', () => {
+  for (const drink of ['chai', 'filter_coffee', 'cold_coffee', 'lemon_soda'] as const) {
+    assert.ok(Number.isInteger(CAFE_MENU[drink]), `${drink} menu price must be an integer`);
+    assert.ok(CAFE_MENU[drink] > 0, `${drink} menu price must be positive`);
+    assert.equal(cafeDrinkItemId(drink), `drink:${drink}`);
+  }
+});
 
 test('cafe guests choose seats, order drinks, serve and sip together', () => {
   let state = createCafeState(['a', 'b']);

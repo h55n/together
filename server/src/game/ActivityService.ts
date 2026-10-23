@@ -2,7 +2,7 @@ import { acceptBoardGameCommand, createBoardGame, type BoardGameCommand, acceptG
 import type { ActivitySessionRecord, GameRepository, HouseholdRecord } from '../db/GameRepository.js';
 import { createPicnicState, createCafeState, acceptPicnicCommand, acceptCafeCommand, type PicnicCommand, type CafeCommand } from '@together/shared';
 import { createTransportRentalState, joinTransportRentalState, acceptTransportRentalCommand, isTransportRentalActivity, type TransportRentalCommand } from '@together/shared';
-import { PICNIC_PROVISIONS, cookedDishItemId } from '@together/shared';
+import { PICNIC_PROVISIONS, cookedDishItemId, CAFE_MENU, cafeDrinkItemId } from '@together/shared';
 import type { InventoryService } from './InventoryService.js';
 import { TransportLeaseAuthority } from './TransportLeaseAuthority.js';
 
@@ -181,10 +181,24 @@ export class ActivityService {
   }
 
   async cafeCommand(sessionId: string, userId: string, command: CafeCommand): Promise<ActivitySessionRecord> {
-    return this.sportsMutation(sessionId, userId, 'cafe_hangout', command.key, JSON.stringify(command), session => {
+    return this.sportsMutation(sessionId, userId, 'cafe_hangout', command.key, JSON.stringify(command), async session => {
       const state = session.state.cafe ?? createCafeState(session.state.participants);
+      const target = command.kind === 'serve_drink' || command.kind === 'sip_drink'
+        ? state.orders.find(item => item.id === command.orderId)
+        : undefined;
       session.state.cafe = acceptCafeCommand(state, userId, session.state.participants, command);
       if (session.state.cafe.phase === 'finished') session.state.status = 'complete';
+      if (!this.inventory || !target) return;
+      if (command.kind === 'serve_drink') {
+        await this.inventory.purchaseCafeDrink(session.householdId, target.orderedBy, {
+          itemId: cafeDrinkItemId(target.drink), price: CAFE_MENU[target.drink],
+          idempotencyKey: `cafe-drink-${session.id}-${command.key}`.slice(0, 128),
+          metadata: { sessionId: session.id, orderId: target.id, servedTo: command.recipientId },
+        });
+      } else if (command.kind === 'sip_drink') {
+        await this.inventory.consumeProvisions(session.householdId, userId, [{ itemId: cafeDrinkItemId(target.drink), quantity: 1 }],
+          `cafe-sip-${session.id}-${command.key}`.slice(0, 128), { sessionId: session.id, orderId: target.id }, `cafe:${target.drink}`);
+      }
     });
   }
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ActivityStep } from '@together/shared';
-import { MINI_GOLF_HOLES, type ActivityState } from '@together/shared';
+import { MINI_GOLF_HOLES, type ActivityState, type CafeDrink, type CafeState } from '@together/shared';
 import { GolfPresentation } from './interaction/GolfPresentation';
 import { BadmintonPresentation } from './interaction/BadmintonPresentation';
 import { CAFE_PRESENTATION_CENTER, cafeSeatTransform } from './interaction/CafePresentation';
@@ -759,6 +759,8 @@ export class GameEngine {
       }
       this.sports.state = state; this.sports.serverNow = serverNow; this.sports.receivedAt = performance.now();
     }
+    const cafe = state.cafe;
+    if (cafe) { this.carriedCafe.set(id, this.carriedDrinkForCafe(cafe)); this.applyCarriedDrink(); }
     this.avatar.setFirstPerson(false);
   }
 
@@ -795,19 +797,52 @@ export class GameEngine {
   /** Fresh groceries on the household shelf ride home in the bicycle basket. */
   setBasketLoad(groceryCount: number): void { this.avatar.setBasketLoad(groceryCount); }
 
+  /** A served café drink rides in the left hand until it is sipped. */
+  private carriedCafeStore: Map<string, CafeDrink | null> | null = null;
+  private carriedDrinkState: CafeDrink | null = null;
+  private get carriedCafe(): Map<string, CafeDrink | null> { return this.carriedCafeStore ??= new Map(); }
+
   setGolfAim(angle: number, power: number): void { this.sports?.golf?.setAim(angle, power); }
 
   syncAmbientActivities(sessions: readonly AmbientLeisureSession[]): void {
     if (this.disposed) return;
     this.ambientLeisure ??= new AmbientLeisurePresentation(this.scene);
     this.ambientLeisure.sync(sessions);
+    const present = new Set(sessions.map(session => session.id));
+    for (const session of sessions) {
+      const cafe = session.state.cafe;
+      if (cafe) this.carriedCafe.set(session.id, this.carriedDrinkForCafe(cafe));
+    }
+    for (const id of [...this.carriedCafe.keys()]) if (!present.has(id)) this.carriedCafe.delete(id);
+    this.applyCarriedDrink();
   }
 
   upsertAmbientActivity(session: AmbientLeisureSession): void {
     if (this.disposed) return;
     this.ambientLeisure ??= new AmbientLeisurePresentation(this.scene);
     this.ambientLeisure.upsert(session);
+    const cafe = session.state.cafe;
+    if (cafe) { this.carriedCafe.set(session.id, this.carriedDrinkForCafe(cafe)); this.applyCarriedDrink(); }
   }
+
+  /** Authoritative hydration of a session is also a chance to refresh carried drinks. */
+  private carriedDrinkForCafe(cafe: CafeState): CafeDrink | null {
+    const userId = this.localUserId;
+    if (!userId || cafe.phase !== 'active' || !cafe.participants.includes(userId)) return null;
+    let next: CafeDrink | null = null;
+    for (const order of cafe.orders) if (order.servedTo === userId && !order.sippedBy) next = order.drink;
+    return next;
+  }
+
+  private applyCarriedDrink(): void {
+    let next: CafeDrink | null = null;
+    for (const state of this.carriedCafe.values()) if (state) next = state;
+    if (next === this.carriedDrinkState) return;
+    this.carriedDrinkState = next;
+    this.avatar.setCarriedDrink(next);
+  }
+
+  carriedDrinkForWorldReview(): string | null { return this.carriedDrinkState; }
 
   leisureForWorldReview(): Array<{ kind: string; objects: number }> {
     return this.scene.children.filter(child => child.name === 'picnic-presentation' || child.name === 'cafe-presentation')
@@ -873,6 +908,7 @@ export class GameEngine {
     this.clearSports();
     this.ambientLeisure?.dispose(); this.ambientLeisure = null;
     this.disposed = true;
+    this.carriedCafeStore = null;
     this.microActions.cancel(this.player);
     cancelAnimationFrame(this.animationFrame);
     window.removeEventListener('resize', this.onResize);

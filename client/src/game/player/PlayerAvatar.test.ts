@@ -298,3 +298,23 @@ test('releases every owned body, action and transport material exactly once on d
   avatar.dispose();
   assert.ok([...released.values()].every(count => count === 1), 'disposal must be idempotent');
 });
+
+
+test('a served cafe drink rides in the left hand across action changes', () => {
+  const avatar = new PlayerAvatar();
+  try {
+    const cup = avatar.root.getObjectByName('avatar:prop:carried-drink');
+    assert.ok(cup);
+    assert.equal(cup!.visible, false);
+    avatar.setCarriedDrink('chai');
+    assert.equal(cup!.visible, true);
+    const liquid = avatar.root.getObjectByName('avatar:prop:carried-drink:liquid') as THREE.Mesh;
+    assert.equal((liquid.material as THREE.MeshStandardMaterial).color.getHex(), 0x96603d);
+    avatar.updateMotion(0.1, 'cut');
+    assert.equal(cup!.visible, true);
+    avatar.setCarriedDrink(null);
+    assert.equal(cup!.visible, false);
+  } finally {
+    avatar.dispose();
+  }
+});

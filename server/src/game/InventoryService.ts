@@ -63,6 +63,31 @@ export class InventoryService {
     return this.snapshot(householdId, userId, transaction);
   }
 
+  /** Charges the payer's personal wallet once per key and adds the purchased item to household shelves. */
+  async purchaseCafeDrink(householdId: string, userId: string, request: { itemId: string; price: number; idempotencyKey: string; metadata?: Record<string, unknown> }): Promise<InventorySnapshot> {
+    if (request.idempotencyKey.length < 8) throw new Error('Invalid idempotency key');
+    if (!Number.isFinite(request.price) || request.price <= 0 || !Number.isInteger(request.price)) throw new Error('Invalid café price');
+    const existing = await this.repository.getTransactionByIdempotencyKey(request.idempotencyKey);
+    if (existing) return this.snapshot(householdId, userId, existing);
+    const household = await this.authorize(householdId, userId);
+    const member = household.members.find((candidate) => candidate.userId === userId)!;
+    const result = applyWalletTransaction(member.personalWallet, -request.price);
+    if (!result.ok) throw new Error('Insufficient personal funds');
+    member.personalWallet = result.balance;
+    const current = await this.repository.listInventory('household', householdId);
+    const stacks: InventoryStack[] = current.map((record) => ({ itemId: record.itemId, quantity: record.quantity, metadata: record.metadata }));
+    const updated = addInventoryQuantity(stacks, request.itemId, 1);
+    await this.repository.saveHousehold(household);
+    await this.persistHouseholdInventory(householdId, current, updated);
+    const transaction: TransactionRecord = {
+      id: crypto.randomUUID(), idempotencyKey: request.idempotencyKey, householdId, userId,
+      walletType: 'personal', amount: -request.price, type: 'purchase', itemRef: request.itemId,
+      metadata: { category: 'cafe', ...request.metadata }, createdAt: new Date().toISOString(),
+    };
+    await this.repository.saveTransaction(transaction);
+    return this.snapshot(householdId, userId, transaction);
+  }
+
   async consumeRecipeIngredients(householdId: string, userId: string, recipeId: string, idempotencyKey: string): Promise<InventorySnapshot> {
     const recipe = this.catalog.recipes.find((candidate) => candidate.id === recipeId);
     if (!recipe) throw new Error('Unknown recipe');

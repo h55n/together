@@ -1353,6 +1353,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
           () => engine.ambientCrowdForWorldReview();
         (window as Window & { __amayaReviewLeisure?: () => unknown }).__amayaReviewLeisure = () => engine.leisureForWorldReview();
         (window as Window & { __amayaReviewMovingBoxes?: () => number }).__amayaReviewMovingBoxes = () => engine.movingBoxesForWorldReview();
+        (window as Window & { __amayaReviewCarriedDrink?: () => string | null }).__amayaReviewCarriedDrink = () => engine.carriedDrinkForWorldReview();
         (window as Window & { __amayaReviewMetrics?: (reset?: boolean) => unknown }).__amayaReviewMetrics =
           (reset) => { if (reset) engine.performance.resetFrameSamples(); return structuredClone(engine.performance.read()); };
       }
@@ -1376,6 +1377,7 @@ export function GameCanvas({ networkSession, avatarConfig, propertyId, onPropert
       delete (window as Window & { __amayaReviewCrowd?: () => unknown }).__amayaReviewCrowd;
       delete (window as Window & { __amayaReviewLeisure?: () => unknown }).__amayaReviewLeisure;
       delete (window as Window & { __amayaReviewMovingBoxes?: () => number }).__amayaReviewMovingBoxes;
+      delete (window as Window & { __amayaReviewCarriedDrink?: () => string | null }).__amayaReviewCarriedDrink;
       delete (window as Window & { __amayaReviewRide?: (destinationId: string) => void }).__amayaReviewRide;
 delete (window as Window & { __amayaReviewTravel?: (destinationId: string) => void }).__amayaReviewTravel; delete (window as Window & { __amayaReviewPlace?: (x: number, z: number) => void }).__amayaReviewPlace; delete (window as Window & { __amayaReviewFace?: (yaw: number) => void }).__amayaReviewFace; delete (window as Window & { __amayaReviewWeather?: (weather: WeatherState) => void }).__amayaReviewWeather; delete (window as Window & { __amayaReviewTime?: (minutes: number) => void }).__amayaReviewTime; delete (window as Window & { __amayaReviewWalkRoute?: () => unknown }).__amayaReviewWalkRoute; delete (window as Window & { __amayaReviewMetrics?: (reset?: boolean) => unknown }).__amayaReviewMetrics;
       if (!ownedEngine) return;

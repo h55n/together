@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { avatarGaitFrequency, sampleAvatarMotion, type AvatarAction } from '@together/shared';
+import { avatarGaitFrequency, sampleAvatarMotion, type AvatarAction, type CafeDrink, CAFE_DRINK_COLORS } from '@together/shared';
 import { gazeAngles } from './gazeMath';
 import type { LocomotionSample } from './movementMath';
 import { createClothTextures } from '../world/ClothTextures';
@@ -89,6 +89,9 @@ export class PlayerAvatar {
   private readonly forearmOrientation = new THREE.Quaternion();
   private readonly autoRickshaw = new THREE.Group();
   private readonly basketItems: THREE.Mesh[] = [];
+  private readonly carriedDrink = new THREE.Group();
+  private readonly carriedDrinkLiquid = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+  private carriedDrinkKind: CafeDrink | null = null;
   private transportMode: 'on_foot' | 'bicycle' | 'scooter' | 'kayak' | 'auto_rickshaw' = 'on_foot';
   private authored: AuthoredAvatarRig | null = null;
   private authoredMixer: THREE.AnimationMixer | null = null;
@@ -185,6 +188,7 @@ export class PlayerAvatar {
     this.hands.left.add(this.leftActionProps);
     this.hands.right.add(this.rightActionProps);
     this.buildActionProps();
+    this.buildCarriedDrink();
 
     const hipX = 0.14 * bodyWidth;
     this.createLeg(this.leftLegPivot, this.leftKneePivot, this.leftAnklePivot, -hipX, 'left');
@@ -861,12 +865,39 @@ export class PlayerAvatar {
     }
   }
 
+  private buildCarriedDrink(): void {
+    const [ceramic] = this.propMaterials;
+    this.carriedDrink.name = 'avatar:prop:carried-drink';
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.05, 0.11, 10), ceramic);
+    body.name = 'avatar:prop:carried-drink:cup';
+    const liquid = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.042, 0.022, 10), this.carriedDrinkLiquid);
+    liquid.name = 'avatar:prop:carried-drink:liquid';
+    liquid.position.y = 0.052;
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.028, 0.009, 6, 12, Math.PI * 1.15), ceramic);
+    handle.rotation.x = Math.PI / 2;
+    handle.rotation.z = Math.PI * 0.82;
+    handle.position.set(-0.062, 0.005, 0);
+    this.carriedDrink.add(body, liquid, handle);
+    this.carriedDrink.position.set(0.02, -0.02, -0.09);
+    this.carriedDrink.visible = false;
+    this.hands.left.add(this.carriedDrink);
+  }
+
+  /** Holds a served café drink in the left hand until it is sipped. */
+  setCarriedDrink(kind: CafeDrink | null): void {
+    if (kind === this.carriedDrinkKind) return;
+    this.carriedDrinkKind = kind;
+    this.carriedDrink.visible = kind !== null;
+    if (kind) this.carriedDrinkLiquid.color.set(CAFE_DRINK_COLORS[kind]);
+  }
+
   private updateActionProps(action: AvatarAction): void {
     if (this.lastPropAction === action) return;
     this.lastPropAction = action;
     for (const root of [this.leftActionProps, this.rightActionProps]) {
       for (const child of root.children) child.visible = false;
     }
+    this.carriedDrink.visible = this.carriedDrinkKind !== null;
 
     const show = (name: string) => {
       const prop = this.root.getObjectByName(name);

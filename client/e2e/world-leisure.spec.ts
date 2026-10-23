@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { CAFE_MENU } from '@together/shared';
 import type { ActivitySessionView } from '../src/ui/game/ActivityPanel';
 
 test.use({ viewport: { width: 1280, height: 800 } });
@@ -10,12 +11,16 @@ async function arrangementObjects(page: Page, picnic: boolean): Promise<number> 
   }, picnic ? 'picnic-presentation' : 'cafe-presentation');
 }
 
+function carriedDrink(page: Page): Promise<string | null> {
+  return page.evaluate(() => (window as Window & { __amayaReviewCarriedDrink?: () => string | null }).__amayaReviewCarriedDrink?.() ?? null);
+}
+
 
 type HouseholdAccess = { base: string; householdId: string; headers: Record<string, string> };
 function watchHouseholdAccess(page: Page): () => HouseholdAccess {
   let access: HouseholdAccess | undefined;
   page.on('request', request => {
-    const match = /^(.*)\/api\/households\/([0-9a-f-]{36})\//.exec(request.url());
+    const match = /^(.*)\/api\/households\/([0-9a-f-]{36})(\/|$)/.exec(request.url());
     const headers = request.headers(), auth: Record<string, string> = {};
     if (headers.authorization) auth.authorization = headers.authorization;
     if (headers['x-dev-user-id']) auth['x-dev-user-id'] = headers['x-dev-user-id'];
@@ -170,8 +175,29 @@ for (const outing of ['picnic', 'cafe_hangout'] as const) {
     expect(saved!.id).toBe(id);
     expect(picnic ? saved!.state.picnic!.portions.length : saved!.state.cafe!.orders.length).toBe(1);
     await dialog.getByRole('button', { name: /^Serve / }).first().click();
+    if (!picnic) {
+      const served = access();
+      await expect.poll(() => saved?.state.cafe?.orders[0]?.servedTo).toBeTruthy();
+      const stock = await page.request.get(`${served.base}/api/households/${served.householdId}/inventory`, { headers: served.headers });
+      const inventory = await stock.json() as { itemId: string; quantity: number }[];
+      expect(inventory.find(entry => entry.itemId === 'drink:chai')?.quantity).toBe(1);
+      const ledger = await page.request.get(`${served.base}/api/households/${served.householdId}/transactions`, { headers: served.headers });
+      const transactions = await ledger.json() as Array<{ type: string; itemRef?: string; amount: number; userId: string }>;
+      const purchase = transactions.find(entry => entry.type === 'purchase' && entry.itemRef === 'drink:chai');
+      expect(purchase?.amount).toBe(-CAFE_MENU.chai);
+      expect(purchase?.userId).toBeTruthy();
+      await page.screenshot({ path: info.outputPath('cafe-carried.png') });
+      await expect.poll(() => carriedDrink(page)).toBe('chai');
+    }
     await dialog.getByRole('button', { name: picnic ? /^Eat / : /^Sip / }).click();
     await expect.poll(() => picnic ? saved?.state.picnic?.portions[0]?.eatenBy : saved?.state.cafe?.orders[0]?.sippedBy).toBeTruthy();
+    if (!picnic) {
+      await expect.poll(() => carriedDrink(page)).toBe(null);
+      const sipped = access();
+      const stock = await page.request.get(`${sipped.base}/api/households/${sipped.householdId}/inventory`, { headers: sipped.headers });
+      const inventory = await stock.json() as { itemId: string; quantity: number }[];
+      expect(inventory.find(entry => entry.itemId === 'drink:chai')?.quantity ?? 0).toBe(0);
+    }
     expect(saved!.state.status).toBe('active');
     await dialog.getByRole('button', { name: picnic ? 'Finish picnic' : 'Finish café visit', exact: true }).click();
     await expect.poll(() => saved?.state.status).toBe('complete');

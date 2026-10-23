@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { cityHeightAt, type CafeState } from '@together/shared';
+import { cityHeightAt, type CafeState, CAFE_DRINK_COLORS } from '@together/shared';
 
 // The main building sits farther up the block. This is its accessible outdoor frontage.
 export const CAFE_PRESENTATION_CENTER = { x: -36.5, z: 60 } as const;
@@ -15,7 +15,7 @@ export function cafeSeatTransform(seat: number): { x: number; z: number; seatTop
   const x = CENTER.x + point.x, z = CENTER.z + point.z;
   return { x, z, seatTop: cityHeightAt(x, z) + 0.535, yaw: Math.atan2(point.x, point.z) };
 }
-const DRINK_COLORS = { chai: 0x96603d, filter_coffee: 0x70442e, cold_coffee: 0x9f6d4e, lemon_soda: 0xb5c95e } as const;
+const DRINK_COLORS = CAFE_DRINK_COLORS;
 
 /** Shows saved seat choices and drinks on Café Roshan's shared table. */
 export class CafePresentation {
